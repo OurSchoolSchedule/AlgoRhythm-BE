@@ -4,10 +4,10 @@ server:
 spring:
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/oss}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:1234}
+    driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
@@ -15,23 +15,50 @@ spring:
     show-sql: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
   data:
     redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
-      timeout: 6000ms
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 60000 # 연결 타임아웃 60초
+      lettuce:
+        pool:
+          max-active: 8 # 최대 활성 연결 수
+          max-idle: 8 # 최대 유휴 연결 수
+          min-idle: 0 # 최소 유휴 연결 수
+
+  mail:
+    properties:
+      mail:
+        smtp:
+          starttls:
+            enable: 'true'
+            required: 'true'
+          timeout: '5000'
+          auth: 'true'
+          connectiontimeout: '5000'
+          writetimeout: '5000'
+    host: smtp.gmail.com
+    username: ${MAIL_USERNAME:admin@example.com}
+    password: ${MAIL_PASSWORD:default_password}
+    port: '587'
+email:
+  verification:
+    expiration: '5'
+    allowed-domains:
+      - ewha.ac.kr
+      - gmail.com  # 테스트용
 
 
 oauth:
   kakao:
-    client-id: ${KAKAO_CLIENT_ID}
-    client-secret: ${KAKAO_CLIENT_SECRET}
-    redirect-uri: ${KAKAO_REDIRECT_URI}
+    client-id: ${KAKAO_CLIENT_ID:default_client_id}
+    client-secret: ${KAKAO_CLIENT_SECRET:default_client_secret}
+    redirect-uri: ${KAKAO_REDIRECT_URI:http://localhost:8080/api/auth/kakao/callback}
 
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:default_secret_key_change_in_production}
 
 logging:
   level:
