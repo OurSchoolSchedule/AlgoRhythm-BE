@@ -47,7 +47,7 @@ VALUES
 (7, '교사5', 'teacher5@korea.kr', 2),
 (8, '교사6', 'teacher6@korea.kr', 2);
 
---3. 이메일 인증번호 관리 테이블 (Spring Boot Verification 용도)
+-- 3. 이메일 인증번호 관리 테이블 (Spring Boot Verification 용도)
 CREATE TABLE email_verification (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(100) NOT NULL COMMENT '인증 요청을 한 이메일',
