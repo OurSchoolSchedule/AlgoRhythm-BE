@@ -8,6 +8,7 @@ public class RssolPlanApplication {
 
 	public static void main(String[] args) {
 		SpringApplication.run(RssolPlanApplication.class, args);
+		System.out.println(System.getenv("SPRING_DATASOURCE_URL"));
 
 	}
 

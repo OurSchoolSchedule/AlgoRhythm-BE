@@ -41,13 +41,14 @@ public class SecurityConfig {
                     // preflight(options)의 요청은 전역으로 허용해둠
                     auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
 
-                    // 로그인, 콜백, 회원가입만 허용
+                    // 로그인, 콜백, 회원가입, 이메일 인증만 허용
                     auth.requestMatchers(
                             "/",
                             "/actuator/health",
                             "/api/auth/login",
                             "/api/auth/kakao/**",
                             "/api/auth/register",
+                            "/api/auth/email-verification/**", // 교사용 이메일 인증 엔드포인트
                             "/error",
                             // Swagger 관련 경로 모두 허용
                             "/swagger-ui/**",

@@ -2,9 +2,11 @@ package com.rssolplan.edu;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
-class UnisRssolApplicationTests {
+@ActiveProfiles("test")
+class RssolPlanApplicationTests {
 
 	@Test
 	void contextLoads() {
