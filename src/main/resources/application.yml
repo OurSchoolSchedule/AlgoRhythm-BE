@@ -19,10 +19,36 @@ spring:
         format_sql: false
   data:
     redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
-      timeout: 6000ms
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 60000 # 연결 타임아웃 60초
+      lettuce:
+        pool:
+          max-active: 8 # 최대 활성 연결 수
+          max-idle: 8 # 최대 유휴 연결 수
+          min-idle: 0 # 최소 유휴 연결 수
 
+  mail:
+    properties:
+      mail:
+        smtp:
+          starttls:
+            enable: 'true'
+            required: 'true'
+          timeout: '5000'
+          auth: 'true'
+          connectiontimeout: '5000'
+          writetimeout: '5000'
+    host: smtp.gmail.com
+    username: ${MAIL_USERNAME:admin@example.com}
+    password: ${MAIL_PASSWORD:default_password}
+    port: '587'
+email:
+  verification:
+    expiration: '5'
+    allowed-domains:
+      - ewha.ac.kr
+      - gmail.com  # 테스트용
 
 oauth:
   kakao:
