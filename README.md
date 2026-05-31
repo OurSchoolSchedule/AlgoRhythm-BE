@@ -29,8 +29,7 @@
 
 ### 🔑 **주요 기능**  
 1. 사용자 관리:  
-
-- 회원가입, 로그인 (JWT 기반 인증/인가, OAuth2.0 kakao 소셜 로그인)
+- 회원가입, 로그인 (JWT 기반 인증/인가)  
 
 2. 스케줄 자동 배정:
 - 알바생 근무 가능 일정 입력 → 근무표(WorkShift) 자동 생성  
@@ -49,6 +48,3 @@
 - 관리자 대시보드  
 
 ### 🔗 **API 명세서**  
-
-[Swagger UI](https://api.rssolplan.com/swagger-ui/index.html#)
-
