@@ -87,7 +87,9 @@ public class SecurityConfig {
                 "http://localhost:5173",
                 "http://localhost:8080",
                 "https://rssolplan.com",
-                "https://www.rssolplan.com"
+                "https://www.rssolplan.com",
+                "https://edu.rssolplan.com",
+                "ourschoolschedule.vercel.app"
         ));
 
         // 허용 메서드

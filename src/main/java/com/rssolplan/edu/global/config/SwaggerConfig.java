@@ -27,9 +27,9 @@ public class SwaggerConfig {
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("RSSOL-BE API")
+                        .title("OurSchoolSchedule-BE API")
                         .version("v1")
-                        .description("RSSOL-BE API 명세서" +
+                        .description("OurSchoolSchedule-BE API 명세서" +
                                 "모든 에러 응답은 GlobalExceptionHandler를 통해 공통 포맷(ApiResponse)으로 반환됩나다.\n" +
                                 "따라서 모든 error 분류와, message는 상황에 따라 다르게 출력됩니다."))
 
@@ -42,7 +42,7 @@ public class SwaggerConfig {
                                 .bearerFormat("JWT")))
                 .addSecurityItem(new SecurityRequirement().addList("bearerAuth"))
                 .servers(List.of(
-                        new Server().url("https://api.rssolplan.com"), // 실제 API 서버 주소
+                        new Server().url("https://oss-ewha.up.railway.app/"), // 실제 API 서버 주소
                         new Server().url("http://localhost:8080") // 실제 API 서버 주소
                 ));
     }
