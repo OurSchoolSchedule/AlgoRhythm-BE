@@ -50,6 +50,13 @@ email:
       - ewha.ac.kr
       - gmail.com  # 테스트용
 
+# application.yml 예시
+springdoc:
+  swagger-ui:
+    enabled: false
+  api-docs:
+    enabled: false
+
 
 oauth:
   kakao:
