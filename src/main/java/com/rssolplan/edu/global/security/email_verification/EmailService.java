@@ -21,6 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
+import jakarta.annotation.PostConstruct;
+import java.net.InetAddress;
+
+
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -46,13 +50,16 @@ public class EmailService {
     private String allowedDomainsConfig;
 
     private static final String AUTH_PREFIX = "EMAIL_AUTH:";
-    
-    @PostConstruct
-    public void test() throws Exception {
-        InetAddress addr = InetAddress.getByName("smtp.gmail.com");
-        log.info("SMTP IP = {}", addr.getHostAddress());
-    }
 
+    @PostConstruct
+    public void testDns() {
+        try {
+            InetAddress addr = InetAddress.getByName("smtp.gmail.com");
+            log.info("SMTP IP = {}", addr.getHostAddress());
+        } catch (Exception e) {
+            log.error("DNS 조회 실패", e);
+        }
+    }
 
     
 
