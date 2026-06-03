@@ -36,10 +36,10 @@ spring:
           starttls:
             enable: 'true'
             required: 'true'
-          timeout: '5000'
+          timeout: '30000'
           auth: 'true'
-          connectiontimeout: '5000'
-          writetimeout: '5000'
+          connectiontimeout: '30000'
+          writetimeout: '30000'
     host: smtp.gmail.com
     username: ${MAIL_USERNAME:admin@example.com}
     password: ${MAIL_PASSWORD:default_password}
