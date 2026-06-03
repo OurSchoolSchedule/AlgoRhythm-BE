@@ -89,7 +89,7 @@ public class EmailService {
             log.info("[EmailService] 인증 코드 이메일 발송 완료: {}", email);
 
         } catch (MessagingException e) {
-            log.error("메일 발송 실패: {}", e.getMessage());
+            log.error("메일 발송 실패: {}", e); //.getMessage()
             throw new RuntimeException("이메일 발송 중 오류가 발생했습니다.");
         }
     }
