@@ -57,7 +57,17 @@ public class EmailService {
         String code = String.valueOf((int)(Math.random() * 899999) + 100000);
 
         // 3. Redis에 저장 (5분간 유효, TTL 자동 관리)
-        redisTemplate.opsForValue().set(AUTH_PREFIX + email, code, Duration.ofMinutes(5));
+        //redisTemplate.opsForValue().set(AUTH_PREFIX + email, code, Duration.ofMinutes(5));
+        try {
+    redisTemplate.opsForValue().set(
+        AUTH_PREFIX + email,
+        code,
+        Duration.ofMinutes(5)
+    );
+} catch (Exception e) {
+    log.error("REDIS 저장 실패", e);
+    throw e;
+}
 
         // 4. DB에 발송 기록 저장
         EmailVerificationHistory history = EmailVerificationHistory.builder()
