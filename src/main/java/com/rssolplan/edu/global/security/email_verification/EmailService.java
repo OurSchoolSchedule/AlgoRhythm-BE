@@ -182,6 +182,12 @@ public class EmailService {
                 .build();
     }
 
+    @PostConstruct
+public void test() throws Exception {
+    InetAddress addr = InetAddress.getByName("smtp.gmail.com");
+    log.info("SMTP IP = {}", addr.getHostAddress());
+}
+
     private String extractUsernameFromEmail(String email) {
         int atIndex = email.indexOf('@');
         if (atIndex <= 0) {
