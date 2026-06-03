@@ -46,6 +46,15 @@ public class EmailService {
     private String allowedDomainsConfig;
 
     private static final String AUTH_PREFIX = "EMAIL_AUTH:";
+    
+    @PostConstruct
+    public void test() throws Exception {
+        InetAddress addr = InetAddress.getByName("smtp.gmail.com");
+        log.info("SMTP IP = {}", addr.getHostAddress());
+    }
+
+
+    
 
     public void sendVerificationEmail(String email) {
         // 1. 도메인 체크 (설정 가능한 도메인)
@@ -182,11 +191,6 @@ public class EmailService {
                 .build();
     }
 
-    @PostConstruct
-public void test() throws Exception {
-    InetAddress addr = InetAddress.getByName("smtp.gmail.com");
-    log.info("SMTP IP = {}", addr.getHostAddress());
-}
 
     private String extractUsernameFromEmail(String email) {
         int atIndex = email.indexOf('@');
