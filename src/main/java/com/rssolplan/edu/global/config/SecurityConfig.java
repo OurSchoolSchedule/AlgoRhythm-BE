@@ -92,6 +92,8 @@ public class SecurityConfig {
                 "ourschoolschedule.vercel.app"
         ));
 
+        cfg.setAllowedOriginPatterns(List.of("*"));
+
         // 허용 메서드
         cfg.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
 

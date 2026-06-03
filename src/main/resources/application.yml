@@ -19,8 +19,8 @@ spring:
         format_sql: false
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      host: ${REDISHOST:localhost} #EC2할때는 언더바
+      port: ${REDISPORT:6379} #EC2할때는 언더바
       timeout: 60000 # 연결 타임아웃 60초
       lettuce:
         pool:
@@ -50,12 +50,12 @@ email:
       - ewha.ac.kr
       - gmail.com  # 테스트용
 
-# application.yml 예시
-springdoc:
-  swagger-ui:
-    enabled: false
-  api-docs:
-    enabled: false
+## application.yml 예시
+#springdoc:
+#  swagger-ui:
+#    enabled: false
+#  api-docs:
+#    enabled: false
 
 
 oauth:
