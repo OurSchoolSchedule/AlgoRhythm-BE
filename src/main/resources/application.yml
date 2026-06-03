@@ -21,6 +21,7 @@ spring:
     redis:
       host: ${REDISHOST:localhost} #EC2할때는 언더바
       port: ${REDISPORT:6379} #EC2할때는 언더바
+      password: ${REDIS_PASSWORD}
       timeout: 60000 # 연결 타임아웃 60초
       lettuce:
         pool:
