@@ -2,6 +2,12 @@ package com.rssolplan.edu.global.security.email_verification;
 
 import com.rssolplan.edu.domain.auth.EmailVerificationHistory;
 import com.rssolplan.edu.domain.auth.EmailVerificationHistoryRepository;
+import com.rssolplan.edu.domain.auth.UserRefreshToken;
+import com.rssolplan.edu.domain.auth.UserRefreshTokenRepository;
+import com.rssolplan.edu.domain.user.User;
+import com.rssolplan.edu.domain.user.UserRepository;
+import com.rssolplan.edu.global.config.JwtTokenProvider;
+import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificationToken;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +17,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
@@ -18,7 +25,6 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +35,9 @@ public class EmailService {
     private final StringRedisTemplate redisTemplate; // Redis 활용
     private final SpringTemplateEngine templateEngine; // Thymeleaf 활용
     private final EmailVerificationHistoryRepository historyRepository; // DB 기록
+    private final UserRepository users;
+    private final UserRefreshTokenRepository refreshRepo;
+    private final JwtTokenProvider jwt;
 
     @Value("${spring.mail.username}")
     private String fromEmail;
@@ -126,5 +135,48 @@ public class EmailService {
         return allowedDomains.stream()
                 .map(String::trim)
                 .anyMatch(domain -> email.endsWith("@" + domain));
+    }
+
+    @Transactional
+    public EmailVerificationToken issueTokensForVerifiedEmail(String email) {
+        User user = users.findByEmail(email).orElse(null);
+        boolean isNewUser = false;
+
+        if (user == null) {
+            user = users.save(User.builder()
+                    .provider("email")
+                    .providerId(email)
+                    .username(extractUsernameFromEmail(email))
+                    .email(email)
+                    .profileImageUrl("")
+                    .build());
+            isNewUser = true;
+            log.info("[EmailService] 신규 이메일 유저 생성: {} (ID: {})", email, user.getId());
+        }
+
+        String accessToken = jwt.generateAccess(user.getId());
+        String refreshToken = jwt.generateRefresh(user.getId());
+
+        refreshRepo.deleteByUser(user);
+        refreshRepo.save(UserRefreshToken.builder()
+                .user(user)
+                .refreshToken(refreshToken)
+                .expiresAt(LocalDateTime.now().plusDays(14))
+                .build());
+
+        return EmailVerificationToken.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .userId(user.getId())
+                .isNewUser(isNewUser)
+                .build();
+    }
+
+    private String extractUsernameFromEmail(String email) {
+        int atIndex = email.indexOf('@');
+        if (atIndex <= 0) {
+            return "사용자";
+        }
+        return email.substring(0, atIndex);
     }
 }

@@ -1,7 +1,9 @@
 package com.rssolplan.edu.global.security.email_verification;
 
+import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificationAuthResponse;
 import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificationRequest;
 import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificationResponse;
+import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificationToken;
 import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificationVerifyRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -71,25 +73,30 @@ public class EmailVerificationController {
      * @return 검증 결과
      */
     @PostMapping("/verify")
-    public ResponseEntity<EmailVerificationResponse> verifyCode(
+    public ResponseEntity<EmailVerificationAuthResponse> verifyCode(
             @Valid @RequestBody EmailVerificationVerifyRequest request) {
         try {
             log.info("[EmailVerification] 인증 코드 검증 요청: {}", request.getEmail());
-            
+
             boolean isValid = emailService.verifyCode(request.getEmail(), request.getCode());
-            
+
             if (isValid) {
+                EmailVerificationToken token = emailService.issueTokensForVerifiedEmail(request.getEmail());
                 log.info("[EmailVerification] 인증 성공: {}", request.getEmail());
                 return ResponseEntity.ok(
-                        EmailVerificationResponse.builder()
+                        EmailVerificationAuthResponse.builder()
                                 .success(true)
                                 .message("이메일 인증이 완료되었습니다.")
+                                .accessToken(token.getAccessToken())
+                                .refreshToken(token.getRefreshToken())
+                                .userId(token.getUserId())
+                                .isNewUser(token.isNewUser())
                                 .build()
                 );
             } else {
                 log.warn("[EmailVerification] 인증 코드 불일치 또는 만료: {}", request.getEmail());
                 return ResponseEntity.badRequest()
-                        .body(EmailVerificationResponse.builder()
+                        .body(EmailVerificationAuthResponse.builder()
                                 .success(false)
                                 .message("인증 코드가 일치하지 않거나 만료되었습니다.")
                                 .build()
@@ -98,7 +105,7 @@ public class EmailVerificationController {
         } catch (Exception e) {
             log.error("[EmailVerification] 인증 검증 중 오류 발생: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(EmailVerificationResponse.builder()
+                    .body(EmailVerificationAuthResponse.builder()
                             .success(false)
                             .message("인증 검증 중 오류가 발생했습니다.")
                             .build()
@@ -106,4 +113,3 @@ public class EmailVerificationController {
         }
     }
 }
-
