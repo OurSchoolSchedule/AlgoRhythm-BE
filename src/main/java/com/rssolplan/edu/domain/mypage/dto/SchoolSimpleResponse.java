@@ -6,7 +6,7 @@ import java.time.LocalDate;
 
 @Getter @Setter @Builder
 @AllArgsConstructor @NoArgsConstructor
-public class StoreSimpleResponse {
+public class SchoolSimpleResponse {
     private Long schoolId;
     private String schoolCode;
     private String name;

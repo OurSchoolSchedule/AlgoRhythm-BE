@@ -6,8 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter @Setter @AllArgsConstructor @NoArgsConstructor
-public class OwnerStoreUpdateRequest {
-    private String name;
-    private String address;
-    private String phoneNumber;
+public class TeacherProfileUpdateRequest {
+    private String username;
+    private String email;
 }

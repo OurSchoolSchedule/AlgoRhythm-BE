@@ -4,7 +4,7 @@ import lombok.*;
 
 @Getter @Setter @Builder
 @AllArgsConstructor @NoArgsConstructor
-public class StaffProfileResponse {
+public class TeacherProfileResponse {
     private Long userId;
     private String username;
     private String email;

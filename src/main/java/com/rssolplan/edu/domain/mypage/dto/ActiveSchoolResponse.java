@@ -4,7 +4,7 @@ import lombok.*;
 
 @Getter @Setter @Builder
 @AllArgsConstructor @NoArgsConstructor
-public class ActiveStoreResponse {
+public class ActiveSchoolResponse {
     private Long schoolId;
     private String schoolCode;
     private String name;

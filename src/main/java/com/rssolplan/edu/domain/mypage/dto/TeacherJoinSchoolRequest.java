@@ -8,9 +8,7 @@ import lombok.Setter;
 import java.time.LocalDate;
 
 @Getter @Setter @AllArgsConstructor @NoArgsConstructor
-public class OwnerCreateStoreRequest {
-    private String name;
-    private String address;
-    private String phoneNumber;
+public class TeacherJoinSchoolRequest {
+    private String schoolCode;
     private LocalDate hireDate;
 }
