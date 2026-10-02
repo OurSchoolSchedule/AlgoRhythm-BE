@@ -1,8 +1,6 @@
 package com.rssolplan.edu.global.exception;
 
 import com.rssolplan.edu.domain.auth.dto.ApiResponse;
-import com.rssolplan.edu.global.exception.DraftExpiredException;
-import com.rssolplan.edu.global.exception.IntentParseException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
