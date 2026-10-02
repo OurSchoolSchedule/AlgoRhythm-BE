@@ -9,23 +9,14 @@ public class StaffProfileResponse {
     private String username;
     private String email;
     private String profileImageUrl;
-    private String position;           // STAFF
-    private String employmentStatus;   // 활성 매장 기준
-
-    private CurrentStore currentStore; // 활성 매장 간단 정보
-    private BankAccount bankAccount;   // 대표 계좌
+    private String position;
+    private String employmentStatus;
+    private CurrentSchool currentSchool;
 
     @Getter @Setter @AllArgsConstructor @NoArgsConstructor @Builder
-    public static class CurrentStore {
-        private Long storeId;
+    public static class CurrentSchool {
+        private Long schoolId;
         private String name;
-        private String storeCode;
-    }
-
-    @Getter @Setter @AllArgsConstructor @NoArgsConstructor @Builder
-    public static class BankAccount {
-        private Integer bankId;
-        private String bankName;
-        private String accountNumber;
+        private String schoolCode;
     }
 }

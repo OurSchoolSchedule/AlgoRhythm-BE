@@ -1,6 +1,6 @@
 package com.rssolplan.edu.domain.notification;
 
-import com.rssolplan.edu.domain.store.Store;
+import com.rssolplan.edu.domain.school.School;
 import com.rssolplan.edu.domain.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -14,8 +14,8 @@ import java.time.LocalDateTime;
 @Table(
         name = "notifications",
         indexes = {
-                @Index(name="idx_notifications_user_created", columnList = "user_id, created_at"),
-                @Index(name="idx_notifications_target", columnList = "target_type, target_id")
+                @Index(name = "idx_notifications_user_created", columnList = "user_id, created_at"),
+                @Index(name = "idx_notifications_target", columnList = "target_type, target_id")
         }
 )
 public class Notification {
@@ -27,33 +27,29 @@ public class Notification {
     private Long userId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "store_id", nullable = true)
-    private Store store;
+    @JoinColumn(name = "school_id", nullable = true)
+    private School school;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "requester_id")
     private User requester;
 
-    // 공통 타겟 (딥링크/라우팅용)
     @Enumerated(EnumType.STRING)
     @Column(name = "target_type", length = 32)
-    private TargetType targetType; // SHIFT_SWAP_REQUEST | EXTRA_SHIFT_REQUEST | EXTRA_SHIFT_RESPONSE
+    private TargetType targetType;
 
     @Column(name = "target_id")
     private Long targetId;
 
-    // 대타 요청 참조
-    @Column(name = "shift_swap_request_id")
-    private Long shiftSwapRequestId;
+    @Column(name = "timetable_swap_request_id")
+    private Long timetableSwapRequestId;
 
-    // 추가 인력 요청 참조 (DB 컬럼 그대로 유지)
-    @Column(name = "extra_shift_request_id")
-    private Long extraShiftRequestId;
+    @Column(name = "substitute_request_id")
+    private Long substituteRequestId;
 
-    // 카테고리 (프론트 필터/아이콘용)
     @Enumerated(EnumType.STRING)
     @Column(length = 16, nullable = false)
-    private Category category; // SHIFT_SWAP | EXTRA_SHIFT | SCHEDULE_INPUT_REQUEST
+    private Category category;
 
     @Enumerated(EnumType.STRING)
     @Column(length = 64, nullable = false)
@@ -70,39 +66,32 @@ public class Notification {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    // ==========================
-    // ENUMS
-    // ==========================
-
     public enum Category {
         SCHEDULE_INPUT,
-        SHIFT_SWAP,
-        EXTRA_SHIFT
+        TIMETABLE_SWAP,
+        SUBSTITUTE
     }
 
     public enum TargetType {
-        SHIFT_SWAP_REQUEST,
-        EXTRA_SHIFT_REQUEST,
-        EXTRA_SHIFT_RESPONSE
+        TIMETABLE_SWAP_REQUEST,
+        SUBSTITUTE_REQUEST,
+        SUBSTITUTE_RESPONSE
     }
 
     public enum Type {
-        //근무표입력요청 관련
         SCHEDULE_INPUT_REQUEST,
 
-        // 대타 요청 관련
-        SHIFT_SWAP_REQUEST,
-        SHIFT_SWAP_NOTIFY_MANAGER,
-        SHIFT_SWAP_MANAGER_APPROVED_REQUESTER,
-        SHIFT_SWAP_MANAGER_APPROVED_RECEIVER,
-        SHIFT_SWAP_MANAGER_REJECTED_REQUESTER,
-        SHIFT_SWAP_MANAGER_REJECTED_RECEIVER,
+        TIMETABLE_SWAP_REQUEST,
+        TIMETABLE_SWAP_NOTIFY_ADMIN,
+        TIMETABLE_SWAP_ADMIN_APPROVED_REQUESTER,
+        TIMETABLE_SWAP_ADMIN_APPROVED_RECEIVER,
+        TIMETABLE_SWAP_ADMIN_REJECTED_REQUESTER,
+        TIMETABLE_SWAP_ADMIN_REJECTED_RECEIVER,
 
-        // 추가 인력 요청 관련
-        EXTRA_SHIFT_REQUEST_INVITE,
-        EXTRA_SHIFT_NOTIFY_MANAGER,
-        EXTRA_SHIFT_MANAGER_APPROVED_WORKER,
-        EXTRA_SHIFT_MANAGER_REJECTED_WORKER,
-        EXTRA_SHIFT_FILLED_BROADCAST
+        SUBSTITUTE_REQUEST_INVITE,
+        SUBSTITUTE_NOTIFY_ADMIN,
+        SUBSTITUTE_ADMIN_APPROVED_TEACHER,
+        SUBSTITUTE_ADMIN_REJECTED_TEACHER,
+        SUBSTITUTE_FILLED_BROADCAST
     }
 }

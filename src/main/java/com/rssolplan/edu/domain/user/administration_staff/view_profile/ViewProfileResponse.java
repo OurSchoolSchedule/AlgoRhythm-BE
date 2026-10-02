@@ -11,11 +11,9 @@ public class ViewProfileResponse {
 
     private String username;
     private String profileImageUrl;
-    private String status;       // HIRED, ON_LEAVE, RESIGNED
-    private String position;     // OWNER, STAFF
-    private String storeName;
-    private String bankName;
-    private String accountNumber;
+    private String status;
+    private String position;
+    private String schoolName;
     private String email;
     private LocalDate hireDate;
     private long daysWorked;

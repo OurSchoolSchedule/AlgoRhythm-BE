@@ -1,152 +1,115 @@
 package com.rssolplan.edu.domain.schedule.generation.strategy;
 
 import com.rssolplan.edu.domain.schedule.DayOfWeek;
-import com.rssolplan.edu.domain.schedule.generation.ScheduleGenerationService.ScheduleSettingSnapshot;
+import com.rssolplan.edu.domain.schedule.generation.ScheduleGenerationService.TimetableSettingSnapshot;
+import com.rssolplan.edu.domain.schedule.generation.dto.TimetableSlotRequirementDto;
 import com.rssolplan.edu.domain.schedule.generation.dto.candidate.CandidateSchedule;
 import com.rssolplan.edu.domain.schedule.generation.dto.candidate.CandidateShift;
-import com.rssolplan.edu.domain.schedule.workavailability.WorkAvailability;
-import com.rssolplan.edu.domain.store.UserStore;
+import com.rssolplan.edu.domain.schedule.workavailability.TeacherAvailability;
+import com.rssolplan.edu.domain.school.SchoolUser;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
  * BALANCED 전략: 경력자-신입 균형 배치
- * - 2인 이상 근무 시 경력자(1년 이상) 최소 1명 배치
- * - 경력자와 신입의 조합으로 멘토링 효과 기대
+ * - 2인 이상 배정 시 경력자(1년 이상) 최소 1명 배치
  */
 @Component
 public class BalancedStrategy implements ScheduleGenerationStrategy {
 
-    private static final int SENIOR_THRESHOLD_MONTHS = 12; // 1년 이상이면 경력자
+    private static final int SENIOR_THRESHOLD_MONTHS = 12;
 
     @Override
     public CandidateSchedule generate(
-            Long storeId,
-            ScheduleSettingSnapshot settings,
-            List<WorkAvailability> availabilities,
-            Map<Long, String> userStoreUsernameMap,
-            Map<Long, LocalDate> userStoreHireDateMap) {
+            Long schoolId,
+            TimetableSettingSnapshot settings,
+            List<TeacherAvailability> unavailabilities,
+            List<SchoolUser> teachers,
+            Map<Long, String> teacherUsernameMap,
+            Map<Long, LocalDate> teacherHireDateMap) {
 
-        CandidateSchedule candidate = new CandidateSchedule(storeId);
+        CandidateSchedule candidate = new CandidateSchedule(schoolId);
         Map<Long, Integer> assignmentCount = new HashMap<>();
         LocalDate now = LocalDate.now();
 
-        for (ScheduleSettingSnapshot.SegmentSnapshot seg : settings.getSegments()) {
-            LocalTime start = seg.getStartTime();
-            LocalTime end = seg.getEndTime();
-            int requiredNum = seg.getRequiredStaff();
+        // 교사별 불가 교시 집합 (schoolUserId -> Set of "dayOfWeek_period")
+        Map<Long, Set<String>> unavailabilityMap = buildUnavailabilityMap(unavailabilities);
 
-            for (DayOfWeek day : DayOfWeek.values()) {
-                Set<Long> assignedUserIds = new HashSet<>();
+        for (TimetableSlotRequirementDto slot : settings.getSlotRequirements()) {
+            // 해당 슬롯에 배정 가능한 교사 필터링 (불가 교시 제외)
+            List<SchoolUser> available = filterAvailableTeachers(
+                    teachers, unavailabilityMap, slot.getDayOfWeek(), slot.getPeriodNumber());
 
-                // 해당 요일/시간에 근무 가능한 직원 필터링
-                List<UserStore> availableStaffs = filterAvailableStaffs(availabilities, day, start, end);
+            // 경력자/신입 분류
+            List<SchoolUser> seniors = new ArrayList<>();
+            List<SchoolUser> juniors = new ArrayList<>();
+            for (SchoolUser t : available) {
+                LocalDate hireDate = teacherHireDateMap.getOrDefault(t.getId(), now);
+                long months = java.time.temporal.ChronoUnit.MONTHS.between(hireDate, now);
+                if (months >= SENIOR_THRESHOLD_MONTHS) seniors.add(t);
+                else juniors.add(t);
+            }
 
-                // 경력자/신입 분류
-                List<UserStore> seniors = new ArrayList<>();
-                List<UserStore> juniors = new ArrayList<>();
+            Comparator<SchoolUser> byCount = Comparator.comparingInt(t ->
+                    assignmentCount.getOrDefault(t.getId(), 0));
+            seniors.sort(byCount);
+            juniors.sort(byCount);
 
-                for (UserStore staff : availableStaffs) {
-                    LocalDate hireDate = userStoreHireDateMap.getOrDefault(staff.getId(), now);
-                    long monthsWorked = java.time.temporal.ChronoUnit.MONTHS.between(hireDate, now);
+            // 경력자 우선 배치 (1명), 나머지는 번갈아
+            SchoolUser assigned = null;
+            if (!seniors.isEmpty()) {
+                assigned = seniors.remove(0);
+            } else if (!juniors.isEmpty()) {
+                assigned = juniors.remove(0);
+            }
 
-                    if (monthsWorked >= SENIOR_THRESHOLD_MONTHS) {
-                        seniors.add(staff);
-                    } else {
-                        juniors.add(staff);
-                    }
-                }
-
-                // 각 그룹 내에서 적게 배정된 순으로 정렬
-                Comparator<UserStore> byAssignmentCount = (u1, u2) -> {
-                    int c1 = assignmentCount.getOrDefault(u1.getId(), 0);
-                    int c2 = assignmentCount.getOrDefault(u2.getId(), 0);
-                    return Integer.compare(c1, c2);
-                };
-                seniors.sort(byAssignmentCount);
-                juniors.sort(byAssignmentCount);
-
-                int assigned = 0;
-
-                // 2인 이상 근무 시 경력자 최소 1명 배치
-                if (requiredNum >= 2 && !seniors.isEmpty()) {
-                    UserStore senior = seniors.remove(0);
-                    assignShift(candidate, senior, day, start, end, userStoreUsernameMap, assignmentCount, assignedUserIds);
-                    assigned++;
-                }
-
-                // 남은 자리에 균형있게 배치 (신입-경력 번갈아)
-                Queue<UserStore> seniorQueue = new LinkedList<>(seniors);
-                Queue<UserStore> juniorQueue = new LinkedList<>(juniors);
-                boolean pickJunior = true; // 신입부터 번갈아 배치
-
-                while (assigned < requiredNum) {
-                    UserStore next = null;
-
-                    if (pickJunior && !juniorQueue.isEmpty()) {
-                        next = juniorQueue.poll();
-                    } else if (!pickJunior && !seniorQueue.isEmpty()) {
-                        next = seniorQueue.poll();
-                    } else if (!juniorQueue.isEmpty()) {
-                        next = juniorQueue.poll();
-                    } else if (!seniorQueue.isEmpty()) {
-                        next = seniorQueue.poll();
-                    }
-
-                    if (next != null && !assignedUserIds.contains(next.getId())) {
-                        assignShift(candidate, next, day, start, end, userStoreUsernameMap, assignmentCount, assignedUserIds);
-                        assigned++;
-                    } else if (next == null) {
-                        // 배정 가능한 사람 없음
-                        break;
-                    }
-
-                    pickJunior = !pickJunior;
-                }
-
-                // 남은 자리 UNASSIGNED 처리
-                while (assigned < requiredNum) {
-                    candidate.addShift(new CandidateShift(null, null, day, start, end, "UNASSIGNED"));
-                    assigned++;
-                }
+            if (assigned != null) {
+                candidate.addShift(new CandidateShift(
+                        assigned.getId(),
+                        teacherUsernameMap.get(assigned.getId()),
+                        slot.getSchoolClassId(),
+                        slot.getDayOfWeek(),
+                        slot.getPeriodNumber(),
+                        slot.getSubjectId()
+                ));
+                assignmentCount.merge(assigned.getId(), 1, Integer::sum);
+            } else {
+                candidate.addShift(new CandidateShift(
+                        slot.getSchoolClassId(), slot.getDayOfWeek(),
+                        slot.getPeriodNumber(), slot.getSubjectId(), "UNASSIGNED"));
             }
         }
 
         return candidate;
     }
 
-    private List<UserStore> filterAvailableStaffs(List<WorkAvailability> availabilities,
-                                                  DayOfWeek day, LocalTime start, LocalTime end) {
-        return availabilities.stream()
-                .filter(wa -> wa.getDayOfWeek() == day &&
-                        wa.getStartTime().isBefore(end) &&
-                        wa.getEndTime().isAfter(start))
-                .map(WorkAvailability::getUserStore)
-                .distinct()
+    private Map<Long, Set<String>> buildUnavailabilityMap(List<TeacherAvailability> unavailabilities) {
+        Map<Long, Set<String>> map = new HashMap<>();
+        for (TeacherAvailability ua : unavailabilities) {
+            String key = ua.getDayOfWeek() + "_" + ua.getPeriodNumber();
+            map.computeIfAbsent(ua.getSchoolUser().getId(), k -> new HashSet<>()).add(key);
+        }
+        return map;
+    }
+
+    private List<SchoolUser> filterAvailableTeachers(List<SchoolUser> teachers,
+                                                      Map<Long, Set<String>> unavailabilityMap,
+                                                      DayOfWeek dayOfWeek, int periodNumber) {
+        String slotKey = dayOfWeek + "_" + periodNumber;
+        return teachers.stream()
+                .filter(t -> {
+                    Set<String> unavail = unavailabilityMap.getOrDefault(t.getId(), Set.of());
+                    return !unavail.contains(slotKey);
+                })
                 .collect(Collectors.toList());
     }
 
-    private void assignShift(CandidateSchedule candidate, UserStore staff, DayOfWeek day,
-                             LocalTime start, LocalTime end, Map<Long, String> usernameMap,
-                             Map<Long, Integer> assignmentCount, Set<Long> assignedUserIds) {
-        assignedUserIds.add(staff.getId());
-        String username = usernameMap.get(staff.getId());
-        candidate.addShift(new CandidateShift(staff.getId(), username, day, start, end));
-        assignmentCount.merge(staff.getId(), 1, Integer::sum);
-    }
+    @Override
+    public String getStrategyName() { return "BALANCED"; }
 
     @Override
-    public String getStrategyName() {
-        return "BALANCED";
-    }
-
-    @Override
-    public String getDescription() {
-        return "경력자-신입 균형 배치 (2인 이상 근무 시 경력자 최소 1명 배치)";
-    }
+    public String getDescription() { return "경력자-신입 균형 배치 (경력자 우선, 나머지 신입 교사 배치)"; }
 }
-

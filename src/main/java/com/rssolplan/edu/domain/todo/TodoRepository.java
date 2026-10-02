@@ -9,21 +9,16 @@ import java.util.List;
 
 public interface TodoRepository extends JpaRepository<Todo, Long> {
 
-    // 매장 전체 할일 조회 (STORE 타입)
-    List<Todo> findByStore_IdAndDateAndTodoType(Long storeId, LocalDate date, Todo.TodoType todoType);
+    List<Todo> findBySchool_IdAndDateAndTodoType(Long schoolId, LocalDate date, Todo.TodoType todoType);
 
-    // 인수인계 조회 (HANDOVER 타입, 매장 기준)
-    List<Todo> findByStore_IdAndDateAndTodoTypeOrderByCreatedAtDesc(Long storeId, LocalDate date, Todo.TodoType todoType);
+    List<Todo> findBySchool_IdAndDateAndTodoTypeOrderByCreatedAtDesc(Long schoolId, LocalDate date, Todo.TodoType todoType);
 
-    // 내 할일 조회 (PERSONAL 타입, 사용자 기준)
-    List<Todo> findByUser_IdAndStore_IdAndDateAndTodoType(Long userId, Long storeId, LocalDate date, Todo.TodoType todoType);
+    List<Todo> findByUser_IdAndSchool_IdAndDateAndTodoType(Long userId, Long schoolId, LocalDate date, Todo.TodoType todoType);
 
-    // 특정 날짜의 모든 할일 조회 (매장 기준, 타입별로 분류할 수 있도록)
-    @Query("SELECT t FROM Todo t WHERE t.store.id = :storeId AND t.date = :date " +
-            "AND (t.todoType IN ('STORE', 'HANDOVER') OR (t.todoType = 'PERSONAL' AND t.user.id = :userId)) " +
+    @Query("SELECT t FROM Todo t WHERE t.school.id = :schoolId AND t.date = :date " +
+            "AND (t.todoType IN ('SCHOOL', 'HANDOVER') OR (t.todoType = 'PERSONAL' AND t.user.id = :userId)) " +
             "ORDER BY t.todoType, t.createdAt DESC")
-    List<Todo> findAllTodosForDate(@Param("storeId") Long storeId,
+    List<Todo> findAllTodosForDate(@Param("schoolId") Long schoolId,
                                    @Param("userId") Long userId,
                                    @Param("date") LocalDate date);
 }
-

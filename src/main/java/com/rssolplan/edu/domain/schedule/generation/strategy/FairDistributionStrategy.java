@@ -1,115 +1,93 @@
 package com.rssolplan.edu.domain.schedule.generation.strategy;
 
 import com.rssolplan.edu.domain.schedule.DayOfWeek;
-import com.rssolplan.edu.domain.schedule.generation.ScheduleGenerationService.ScheduleSettingSnapshot;
+import com.rssolplan.edu.domain.schedule.generation.ScheduleGenerationService.TimetableSettingSnapshot;
+import com.rssolplan.edu.domain.schedule.generation.dto.TimetableSlotRequirementDto;
 import com.rssolplan.edu.domain.schedule.generation.dto.candidate.CandidateSchedule;
 import com.rssolplan.edu.domain.schedule.generation.dto.candidate.CandidateShift;
-import com.rssolplan.edu.domain.schedule.workavailability.WorkAvailability;
-import com.rssolplan.edu.domain.store.UserStore;
+import com.rssolplan.edu.domain.schedule.workavailability.TeacherAvailability;
+import com.rssolplan.edu.domain.school.SchoolUser;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * FAIR_DISTRIBUTION 전략: 근무시간 공정 배분
- * - 모든 직원의 총 근무시간 편차 최소화
- * - 가장 적게 배정된 직원 우선 배정
- * - 공정한 근무 배분으로 직원 만족도 향상
+ * FAIR_DISTRIBUTION 전략: 공정 배분
+ * - 모든 교사의 수업 수 편차 최소화
+ * - 가장 적게 배정된 교사 우선 배정
  */
 @Component
 public class FairDistributionStrategy implements ScheduleGenerationStrategy {
 
     @Override
     public CandidateSchedule generate(
-            Long storeId,
-            ScheduleSettingSnapshot settings,
-            List<WorkAvailability> availabilities,
-            Map<Long, String> userStoreUsernameMap,
-            Map<Long, LocalDate> userStoreHireDateMap) {
+            Long schoolId,
+            TimetableSettingSnapshot settings,
+            List<TeacherAvailability> unavailabilities,
+            List<SchoolUser> teachers,
+            Map<Long, String> teacherUsernameMap,
+            Map<Long, LocalDate> teacherHireDateMap) {
 
-        CandidateSchedule candidate = new CandidateSchedule(storeId);
+        CandidateSchedule candidate = new CandidateSchedule(schoolId);
+        Map<Long, Integer> assignmentCount = new HashMap<>();
+        teachers.forEach(t -> assignmentCount.put(t.getId(), 0));
+        LocalDate now = LocalDate.now();
+        Map<Long, Set<String>> unavailabilityMap = buildUnavailabilityMap(unavailabilities);
 
-        // 총 근무 시간(분) 추적
-        Map<Long, Long> totalWorkMinutes = new HashMap<>();
+        for (TimetableSlotRequirementDto slot : settings.getSlotRequirements()) {
+            List<SchoolUser> available = filterAvailableTeachers(
+                    teachers, unavailabilityMap, slot.getDayOfWeek(), slot.getPeriodNumber());
 
-        // 모든 가용 직원 초기화
-        Set<Long> allStaffIds = availabilities.stream()
-                .map(wa -> wa.getUserStore().getId())
-                .collect(Collectors.toSet());
-        allStaffIds.forEach(id -> totalWorkMinutes.put(id, 0L));
+            // 수업 수 적은 순, 동일하면 신입(입사일 늦은) 순으로 기회 부여
+            available.sort((t1, t2) -> {
+                int c1 = assignmentCount.getOrDefault(t1.getId(), 0);
+                int c2 = assignmentCount.getOrDefault(t2.getId(), 0);
+                if (c1 != c2) return Integer.compare(c1, c2);
+                LocalDate h1 = teacherHireDateMap.getOrDefault(t1.getId(), now);
+                LocalDate h2 = teacherHireDateMap.getOrDefault(t2.getId(), now);
+                return h2.compareTo(h1); // 신입 우선
+            });
 
-        for (ScheduleSettingSnapshot.SegmentSnapshot seg : settings.getSegments()) {
-            LocalTime start = seg.getStartTime();
-            LocalTime end = seg.getEndTime();
-            int requiredNum = seg.getRequiredStaff();
-            long slotMinutes = Duration.between(start, end).toMinutes();
-
-            for (DayOfWeek day : DayOfWeek.values()) {
-                Set<Long> assignedUserIds = new HashSet<>();
-
-                // 해당 요일/시간에 근무 가능한 직원 필터링
-                List<UserStore> availableStaffs = filterAvailableStaffs(availabilities, day, start, end);
-
-                // 총 근무시간이 적은 순으로 정렬 (공정 배분)
-                availableStaffs.sort((u1, u2) -> {
-                    long m1 = totalWorkMinutes.getOrDefault(u1.getId(), 0L);
-                    long m2 = totalWorkMinutes.getOrDefault(u2.getId(), 0L);
-                    if (m1 != m2) return Long.compare(m1, m2);
-
-                    // 동일 근무시간이면 경력 낮은 순 (신입에게 기회 부여)
-                    LocalDate h1 = userStoreHireDateMap.getOrDefault(u1.getId(), LocalDate.now());
-                    LocalDate h2 = userStoreHireDateMap.getOrDefault(u2.getId(), LocalDate.now());
-                    return h2.compareTo(h1); // 입사일 늦은 순 = 신입
-                });
-
-                int assigned = 0;
-                for (UserStore staff : availableStaffs) {
-                    if (assigned >= requiredNum) break;
-                    if (assignedUserIds.contains(staff.getId())) continue;
-
-                    assignedUserIds.add(staff.getId());
-                    String username = userStoreUsernameMap.get(staff.getId());
-                    candidate.addShift(new CandidateShift(staff.getId(), username, day, start, end));
-
-                    // 근무시간 누적
-                    totalWorkMinutes.merge(staff.getId(), slotMinutes, Long::sum);
-                    assigned++;
-                }
-
-                // 남은 자리 UNASSIGNED 처리
-                while (assigned < requiredNum) {
-                    candidate.addShift(new CandidateShift(null, null, day, start, end, "UNASSIGNED"));
-                    assigned++;
-                }
+            if (!available.isEmpty()) {
+                SchoolUser assigned = available.get(0);
+                candidate.addShift(new CandidateShift(
+                        assigned.getId(), teacherUsernameMap.get(assigned.getId()),
+                        slot.getSchoolClassId(), slot.getDayOfWeek(),
+                        slot.getPeriodNumber(), slot.getSubjectId()));
+                assignmentCount.merge(assigned.getId(), 1, Integer::sum);
+            } else {
+                candidate.addShift(new CandidateShift(
+                        slot.getSchoolClassId(), slot.getDayOfWeek(),
+                        slot.getPeriodNumber(), slot.getSubjectId(), "UNASSIGNED"));
             }
         }
 
         return candidate;
     }
 
-    private List<UserStore> filterAvailableStaffs(List<WorkAvailability> availabilities,
-                                                  DayOfWeek day, LocalTime start, LocalTime end) {
-        return availabilities.stream()
-                .filter(wa -> wa.getDayOfWeek() == day &&
-                        wa.getStartTime().isBefore(end) &&
-                        wa.getEndTime().isAfter(start))
-                .map(WorkAvailability::getUserStore)
-                .distinct()
+    private Map<Long, Set<String>> buildUnavailabilityMap(List<TeacherAvailability> unavailabilities) {
+        Map<Long, Set<String>> map = new HashMap<>();
+        for (TeacherAvailability ua : unavailabilities) {
+            map.computeIfAbsent(ua.getSchoolUser().getId(), k -> new HashSet<>())
+               .add(ua.getDayOfWeek() + "_" + ua.getPeriodNumber());
+        }
+        return map;
+    }
+
+    private List<SchoolUser> filterAvailableTeachers(List<SchoolUser> teachers,
+                                                      Map<Long, Set<String>> unavailabilityMap,
+                                                      DayOfWeek dayOfWeek, int periodNumber) {
+        String slotKey = dayOfWeek + "_" + periodNumber;
+        return teachers.stream()
+                .filter(t -> !unavailabilityMap.getOrDefault(t.getId(), Set.of()).contains(slotKey))
                 .collect(Collectors.toList());
     }
 
     @Override
-    public String getStrategyName() {
-        return "FAIR_DISTRIBUTION";
-    }
+    public String getStrategyName() { return "FAIR_DISTRIBUTION"; }
 
     @Override
-    public String getDescription() {
-        return "근무시간 공정 배분 (총 근무시간 편차 최소화)";
-    }
+    public String getDescription() { return "수업 수 공정 배분 (모든 교사의 수업 수 편차 최소화)"; }
 }
-

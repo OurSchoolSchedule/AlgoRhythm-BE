@@ -12,7 +12,5 @@ public class OwnerCreateStoreRequest {
     private String name;
     private String address;
     private String phoneNumber;
-    private String businessRegistrationNumber;
     private LocalDate hireDate;
-
 }

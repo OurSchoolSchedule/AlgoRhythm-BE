@@ -27,8 +27,9 @@ public class WorkAvailabilityService {
 
     @Transactional(readOnly = true)
     public WorkAvailabilityGetResponseDto getAvailability(Long userId) {
-        Long storeId = authService.getActiveStoreIdOrThrow(userId);
-        UserStore requester = authService.getUserStoreOrThrow(userId, storeId);
+        Long storeId = authService.getActiveSchoolIdOrThrow(userId);
+        UserStore requester = userStoreRepository.findByUser_IdAndStore_Id(userId, storeId)
+                .orElseThrow(() -> new RuntimeException("소속 매장을 찾을 수 없습니다."));
         List<WorkAvailability> availabilities = availabilityRepository.findByUserStore(requester);
         List<WorkAvailabilityGetResponseDto.AvailabilityItem> items = availabilities.stream()
                 .map(a -> new WorkAvailabilityGetResponseDto.AvailabilityItem(
@@ -79,8 +80,9 @@ public class WorkAvailabilityService {
     @Transactional //Transactional :
     public WorkAvailabilityCreateResponseDto createAvailabilities(Long userId, WorkAvailabilityRequestDto request) {
         //유저 조회및 권한 체크!
-        Long storeId = authService.getActiveStoreIdOrThrow(userId);
-        UserStore requester = authService.getUserStoreOrThrow(userId, storeId);
+        Long storeId = authService.getActiveSchoolIdOrThrow(userId);
+        UserStore requester = userStoreRepository.findByUser_IdAndStore_Id(userId, storeId)
+                .orElseThrow(() -> new RuntimeException("소속 매장을 찾을 수 없습니다."));
         int insertedCount = 0;
 
         for (WorkAvailabilityRequestDto.AvailabilityItem item : request.getAvailabilities()) {
@@ -110,8 +112,9 @@ public class WorkAvailabilityService {
     @Transactional
     public List<WorkAvailabilityPatchResponseDto> replaceAvailabilities(Long userId, WorkAvailabilityRequestDto request) {
         // 1. userStore 조회 -> DB에 있는 availability조회 -> 요청데이터와 비교!
-        Long storeId = authService.getActiveStoreIdOrThrow(userId);
-        UserStore userStore = authService.getUserStoreOrThrow(userId, storeId);
+        Long storeId = authService.getActiveSchoolIdOrThrow(userId);
+        UserStore userStore = userStoreRepository.findByUser_IdAndStore_Id(userId, storeId)
+                .orElseThrow(() -> new RuntimeException("소속 매장을 찾을 수 없습니다."));
         List<WorkAvailability> existing = availabilityRepository.findByUserStore(userStore);
 
         Map<DayOfWeek, WorkAvailabilityRequestDto.AvailabilityItem> requestMap =

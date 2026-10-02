@@ -9,7 +9,6 @@ public class OwnerProfileResponse {
     private String username;
     private String email;
     private String profileImageUrl;
-    private String position;           // OWNER
-    private String employmentStatus;   // 활성 매장 기준
-    private String businessRegistrationNumber; // 활성 매장 기준
+    private String position;
+    private String employmentStatus;
 }

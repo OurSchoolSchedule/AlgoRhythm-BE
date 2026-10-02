@@ -84,12 +84,12 @@ public class ExtrashiftService {
         for (Long receiverId : receiverUserIds) {
             notificationRepo.save(Notification.builder()
                     .userId(receiverId)
-                    .store(request.getStore())
-                    .category(Notification.Category.EXTRA_SHIFT)
-                    .targetType(Notification.TargetType.EXTRA_SHIFT_REQUEST)
+                    .school(null)
+                    .category(Notification.Category.SUBSTITUTE)
+                    .targetType(Notification.TargetType.SUBSTITUTE_REQUEST)
                     .targetId(request.getId())
-                    .extraShiftRequestId(request.getId())
-                    .type(Notification.Type.EXTRA_SHIFT_REQUEST_INVITE)
+                    .substituteRequestId(request.getId())
+                    .type(Notification.Type.SUBSTITUTE_REQUEST_INVITE)
                     .message(inviteMsg)
                     .requester(requester) //프로필이미지파싱용
                     .build());
@@ -126,12 +126,12 @@ public class ExtrashiftService {
         String notifyMgrMsg = buildManagerNotifyMessage(request, response);
         notificationRepo.save(Notification.builder()
                 .userId(request.getOwner().getUser().getId())
-                .store(request.getStore())
-                .category(Notification.Category.EXTRA_SHIFT)
-                .targetType(Notification.TargetType.EXTRA_SHIFT_RESPONSE)
+                .school(null)
+                .category(Notification.Category.SUBSTITUTE)
+                .targetType(Notification.TargetType.SUBSTITUTE_RESPONSE)
                 .targetId(response.getId())
-                .extraShiftRequestId(request.getId())
-                .type(Notification.Type.EXTRA_SHIFT_NOTIFY_MANAGER)
+                .substituteRequestId(request.getId())
+                .type(Notification.Type.SUBSTITUTE_NOTIFY_ADMIN)
                 .message(notifyMgrMsg)
                 .requester(requester)
                 .build());
@@ -193,14 +193,14 @@ public class ExtrashiftService {
         String workerMsg = buildWorkerResultMessage(request, response, shiftAssigned);
         notificationRepo.save(Notification.builder()
                 .userId(response.getCandidate().getUser().getId())
-                .store(request.getStore())
-                .category(Notification.Category.EXTRA_SHIFT)
-                .targetType(Notification.TargetType.EXTRA_SHIFT_RESPONSE)
+                .school(null)
+                .category(Notification.Category.SUBSTITUTE)
+                .targetType(Notification.TargetType.SUBSTITUTE_RESPONSE)
                 .targetId(response.getId())
-                .extraShiftRequestId(request.getId())
+                .substituteRequestId(request.getId())
                 .type(approved
-                        ? Notification.Type.EXTRA_SHIFT_MANAGER_APPROVED_WORKER
-                        : Notification.Type.EXTRA_SHIFT_MANAGER_REJECTED_WORKER)
+                        ? Notification.Type.SUBSTITUTE_ADMIN_APPROVED_TEACHER
+                        : Notification.Type.SUBSTITUTE_ADMIN_REJECTED_TEACHER)
                 .message(workerMsg)
                 .requester(requester)
                 .build());

@@ -1,157 +1,100 @@
 package com.rssolplan.edu.domain.schedule.generation.strategy;
 
 import com.rssolplan.edu.domain.schedule.DayOfWeek;
-import com.rssolplan.edu.domain.schedule.generation.ScheduleGenerationService.ScheduleSettingSnapshot;
+import com.rssolplan.edu.domain.schedule.generation.ScheduleGenerationService.TimetableSettingSnapshot;
+import com.rssolplan.edu.domain.schedule.generation.dto.TimetableSlotRequirementDto;
 import com.rssolplan.edu.domain.schedule.generation.dto.candidate.CandidateSchedule;
 import com.rssolplan.edu.domain.schedule.generation.dto.candidate.CandidateShift;
-import com.rssolplan.edu.domain.schedule.workavailability.WorkAvailability;
-import com.rssolplan.edu.domain.store.UserStore;
+import com.rssolplan.edu.domain.schedule.workavailability.TeacherAvailability;
+import com.rssolplan.edu.domain.school.SchoolUser;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * COVERAGE_FIRST 전략: 빈자리 최소화 우선
- * - 가용 인원이 적은 슬롯부터 먼저 배정
- * - 빈자리(UNASSIGNED) 최소화가 목표
- * - 희소 슬롯에 가능한 직원을 우선 배치
+ * COVERAGE_FIRST 전략: 빈 교시 최소화 우선
+ * - 배정 가능한 교사가 적은 슬롯부터 먼저 배정
  */
 @Component
 public class CoverageFirstStrategy implements ScheduleGenerationStrategy {
 
     @Override
     public CandidateSchedule generate(
-            Long storeId,
-            ScheduleSettingSnapshot settings,
-            List<WorkAvailability> availabilities,
-            Map<Long, String> userStoreUsernameMap,
-            Map<Long, LocalDate> userStoreHireDateMap) {
+            Long schoolId,
+            TimetableSettingSnapshot settings,
+            List<TeacherAvailability> unavailabilities,
+            List<SchoolUser> teachers,
+            Map<Long, String> teacherUsernameMap,
+            Map<Long, LocalDate> teacherHireDateMap) {
 
-        CandidateSchedule candidate = new CandidateSchedule(storeId);
+        CandidateSchedule candidate = new CandidateSchedule(schoolId);
         Map<Long, Integer> assignmentCount = new HashMap<>();
-        Map<Long, Set<String>> userAssignedSlots = new HashMap<>(); // 중복 배정 방지
+        Map<Long, Set<String>> unavailabilityMap = buildUnavailabilityMap(unavailabilities);
 
-        // 1. 모든 슬롯을 가용 인원 수 기준으로 정렬 (적은 순)
-        List<SlotInfo> allSlots = new ArrayList<>();
+        // 슬롯을 배정 가능 교사 수 기준으로 정렬 (적은 순 → 먼저 배정)
+        List<TimetableSlotRequirementDto> sorted = settings.getSlotRequirements().stream()
+                .sorted(Comparator.comparingInt(slot ->
+                        filterAvailableTeachers(teachers, unavailabilityMap,
+                                slot.getDayOfWeek(), slot.getPeriodNumber()).size()))
+                .collect(Collectors.toList());
 
-        for (ScheduleSettingSnapshot.SegmentSnapshot seg : settings.getSegments()) {
-            for (DayOfWeek day : DayOfWeek.values()) {
-                List<UserStore> availableStaffs = filterAvailableStaffs(availabilities, day,
-                        seg.getStartTime(), seg.getEndTime());
+        Map<String, SchoolUser> slotAssignment = new HashMap<>();
 
-                allSlots.add(new SlotInfo(day, seg.getStartTime(), seg.getEndTime(),
-                        seg.getRequiredStaff(), availableStaffs));
-            }
+        for (TimetableSlotRequirementDto slot : sorted) {
+            String slotKey = slot.getSchoolClassId() + "_" + slot.getDayOfWeek() + "_" + slot.getPeriodNumber();
+            List<SchoolUser> available = filterAvailableTeachers(
+                    teachers, unavailabilityMap, slot.getDayOfWeek(), slot.getPeriodNumber());
+
+            // 적게 배정된 순으로 정렬
+            available.sort(Comparator.comparingInt(t -> assignmentCount.getOrDefault(t.getId(), 0)));
+
+            SchoolUser assigned = available.isEmpty() ? null : available.get(0);
+            slotAssignment.put(slotKey, assigned);
+            if (assigned != null) assignmentCount.merge(assigned.getId(), 1, Integer::sum);
         }
 
-        // 가용 인원이 적은 슬롯부터 처리 (빈자리 발생 가능성 높은 슬롯 우선)
-        allSlots.sort(Comparator.comparingInt(s -> s.availableStaffs.size()));
-
-        // 2. 각 슬롯별로 배정 진행
-        Map<String, List<CandidateShift>> slotShifts = new HashMap<>();
-
-        for (SlotInfo slot : allSlots) {
-            String slotKey = slot.day + "_" + slot.startTime + "_" + slot.endTime;
-            List<CandidateShift> shifts = new ArrayList<>();
-            Set<Long> assignedInSlot = new HashSet<>();
-
-            // 해당 슬롯에서 아직 이 슬롯에 배정되지 않은 직원만 필터
-            List<UserStore> candidates = slot.availableStaffs.stream()
-                    .filter(staff -> {
-                        Set<String> assigned = userAssignedSlots.getOrDefault(staff.getId(), new HashSet<>());
-                        return !assigned.contains(slotKey);
-                    })
-                    .sorted((u1, u2) -> {
-                        // 적게 배정된 순 우선
-                        int c1 = assignmentCount.getOrDefault(u1.getId(), 0);
-                        int c2 = assignmentCount.getOrDefault(u2.getId(), 0);
-                        if (c1 != c2) return Integer.compare(c1, c2);
-                        // 경력 높은 순 (안정성)
-                        LocalDate h1 = userStoreHireDateMap.getOrDefault(u1.getId(), LocalDate.now());
-                        LocalDate h2 = userStoreHireDateMap.getOrDefault(u2.getId(), LocalDate.now());
-                        return h1.compareTo(h2);
-                    })
-                    .collect(Collectors.toList());
-
-            int assigned = 0;
-            for (UserStore staff : candidates) {
-                if (assigned >= slot.requiredStaff) break;
-                if (assignedInSlot.contains(staff.getId())) continue;
-
-                assignedInSlot.add(staff.getId());
-                String username = userStoreUsernameMap.get(staff.getId());
-                shifts.add(new CandidateShift(staff.getId(), username, slot.day, slot.startTime, slot.endTime));
-
-                assignmentCount.merge(staff.getId(), 1, Integer::sum);
-                userAssignedSlots.computeIfAbsent(staff.getId(), k -> new HashSet<>()).add(slotKey);
-                assigned++;
-            }
-
-            // 남은 자리 UNASSIGNED
-            while (assigned < slot.requiredStaff) {
-                shifts.add(new CandidateShift(null, null, slot.day, slot.startTime, slot.endTime, "UNASSIGNED"));
-                assigned++;
-            }
-
-            slotShifts.put(slotKey, shifts);
-        }
-
-        // 3. 결과를 CandidateSchedule에 추가 (요일/시간 순서대로)
-        for (ScheduleSettingSnapshot.SegmentSnapshot seg : settings.getSegments()) {
-            for (DayOfWeek day : DayOfWeek.values()) {
-                String slotKey = day + "_" + seg.getStartTime() + "_" + seg.getEndTime();
-                List<CandidateShift> shifts = slotShifts.get(slotKey);
-                if (shifts != null) {
-                    shifts.forEach(candidate::addShift);
-                }
+        // 원래 순서로 CandidateSchedule에 추가
+        for (TimetableSlotRequirementDto slot : settings.getSlotRequirements()) {
+            String slotKey = slot.getSchoolClassId() + "_" + slot.getDayOfWeek() + "_" + slot.getPeriodNumber();
+            SchoolUser assigned = slotAssignment.get(slotKey);
+            if (assigned != null) {
+                candidate.addShift(new CandidateShift(
+                        assigned.getId(), teacherUsernameMap.get(assigned.getId()),
+                        slot.getSchoolClassId(), slot.getDayOfWeek(),
+                        slot.getPeriodNumber(), slot.getSubjectId()));
+            } else {
+                candidate.addShift(new CandidateShift(
+                        slot.getSchoolClassId(), slot.getDayOfWeek(),
+                        slot.getPeriodNumber(), slot.getSubjectId(), "UNASSIGNED"));
             }
         }
 
         return candidate;
     }
 
-    private List<UserStore> filterAvailableStaffs(List<WorkAvailability> availabilities,
-                                                  DayOfWeek day, LocalTime start, LocalTime end) {
-        return availabilities.stream()
-                .filter(wa -> wa.getDayOfWeek() == day &&
-                        wa.getStartTime().isBefore(end) &&
-                        wa.getEndTime().isAfter(start))
-                .map(WorkAvailability::getUserStore)
-                .distinct()
+    private Map<Long, Set<String>> buildUnavailabilityMap(List<TeacherAvailability> unavailabilities) {
+        Map<Long, Set<String>> map = new HashMap<>();
+        for (TeacherAvailability ua : unavailabilities) {
+            String key = ua.getDayOfWeek() + "_" + ua.getPeriodNumber();
+            map.computeIfAbsent(ua.getSchoolUser().getId(), k -> new HashSet<>()).add(key);
+        }
+        return map;
+    }
+
+    private List<SchoolUser> filterAvailableTeachers(List<SchoolUser> teachers,
+                                                      Map<Long, Set<String>> unavailabilityMap,
+                                                      DayOfWeek dayOfWeek, int periodNumber) {
+        String slotKey = dayOfWeek + "_" + periodNumber;
+        return teachers.stream()
+                .filter(t -> !unavailabilityMap.getOrDefault(t.getId(), Set.of()).contains(slotKey))
                 .collect(Collectors.toList());
     }
 
     @Override
-    public String getStrategyName() {
-        return "COVERAGE_FIRST";
-    }
+    public String getStrategyName() { return "COVERAGE_FIRST"; }
 
     @Override
-    public String getDescription() {
-        return "빈자리 최소화 우선 (가용 인원 적은 슬롯부터 배정)";
-    }
-
-    /**
-     * 슬롯 정보 내부 클래스
-     */
-    private static class SlotInfo {
-        DayOfWeek day;
-        LocalTime startTime;
-        LocalTime endTime;
-        int requiredStaff;
-        List<UserStore> availableStaffs;
-
-        SlotInfo(DayOfWeek day, LocalTime startTime, LocalTime endTime,
-                 int requiredStaff, List<UserStore> availableStaffs) {
-            this.day = day;
-            this.startTime = startTime;
-            this.endTime = endTime;
-            this.requiredStaff = requiredStaff;
-            this.availableStaffs = availableStaffs;
-        }
-    }
+    public String getDescription() { return "빈 교시 최소화 우선 (배정 가능 교사 적은 슬롯부터 먼저 배정)"; }
 }
-

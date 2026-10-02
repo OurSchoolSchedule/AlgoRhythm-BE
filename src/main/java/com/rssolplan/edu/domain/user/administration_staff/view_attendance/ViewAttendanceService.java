@@ -1,11 +1,9 @@
 package com.rssolplan.edu.domain.user.administration_staff.view_attendance;
 
-import com.rssolplan.edu.domain.schedule.attendance.Attendance;
-import com.rssolplan.edu.domain.schedule.attendance.AttendanceRepository;
-import com.rssolplan.edu.domain.schedule.generation.entity.WorkShift;
-import com.rssolplan.edu.domain.schedule.workshifts.WorkShiftRepository;
-import com.rssolplan.edu.domain.store.UserStore;
-import com.rssolplan.edu.domain.store.UserStoreRepository;
+import com.rssolplan.edu.domain.schedule.attendance.TeacherAttendance;
+import com.rssolplan.edu.domain.schedule.attendance.TeacherAttendanceRepository;
+import com.rssolplan.edu.domain.school.SchoolUser;
+import com.rssolplan.edu.domain.school.SchoolUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,91 +18,56 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ViewAttendanceService {
 
-    private final AttendanceRepository attendanceRepository;
-    private final WorkShiftRepository workShiftRepository;
-    private final UserStoreRepository userStoreRepository;
+    private final TeacherAttendanceRepository teacherAttendanceRepository;
+    private final SchoolUserRepository schoolUserRepository;
 
     @Transactional(readOnly = true)
     public ViewAttendanceResponse getEmployeeAttendance(
-            Long ownerId,
-            Long userStoreId,
-            LocalDate startDate,
-            LocalDate endDate
-    ) {
+            Long adminId, Long schoolUserId, LocalDate startDate, LocalDate endDate) {
 
         if (startDate.isAfter(endDate)) {
             throw new IllegalArgumentException("INVALID_DATE_RANGE");
         }
 
-        UserStore userStore = userStoreRepository.findById(userStoreId)
-                .orElseThrow(() -> new IllegalArgumentException("USER_STORE_NOT_FOUND"));
+        SchoolUser schoolUser = schoolUserRepository.findById(schoolUserId)
+                .orElseThrow(() -> new IllegalArgumentException("SCHOOL_USER_NOT_FOUND"));
 
-        boolean isOwner = userStoreRepository
-                .findByUser_IdAndStore_Id(ownerId, userStore.getStore().getId())
+        boolean isAdmin = schoolUserRepository
+                .findByUser_IdAndSchool_Id(adminId, schoolUser.getSchool().getId())
                 .stream()
-                .anyMatch(us -> us.getPosition() == UserStore.Position.OWNER);
+                .anyMatch(su -> su.getPosition() == SchoolUser.Position.ADMIN);
 
-        if (!isOwner) {
+        if (!isAdmin) {
             throw new IllegalArgumentException("ACCESS_DENIED");
         }
 
-        String staffName = userStore.getUser().getUsername();
-        String role = userStore.getPosition().name();
+        List<TeacherAttendance> attendanceList =
+                teacherAttendanceRepository.findBySchoolUser_IdAndWorkDateBetween(
+                        schoolUserId, startDate, endDate);
 
-        List<Attendance> attendanceList =
-                attendanceRepository.findByUserStoreIdAndWorkDateBetween(
-                        userStoreId, startDate, endDate
-                );
-
-        List<WorkShift> shiftList =
-                workShiftRepository.findMyShifts(
-                        userStore.getUser().getId(),
-                        startDate.atStartOfDay(),
-                        endDate.atTime(23, 59, 59)
-                );
-
-        Map<LocalDate, Attendance> attendanceMap = new HashMap<>();
-        for (Attendance a : attendanceList) {
+        Map<LocalDate, TeacherAttendance> attendanceMap = new HashMap<>();
+        for (TeacherAttendance a : attendanceList) {
             attendanceMap.put(a.getWorkDate(), a);
         }
 
-        Map<LocalDate, WorkShift> shiftMap = new HashMap<>();
-        for (WorkShift s : shiftList) {
-            shiftMap.put(s.getStartDatetime().toLocalDate(), s);
-        }
-
         List<ViewAttendanceDayDto> result = new ArrayList<>();
-
-        int normalCount = 0;
-        int lateCount = 0;
-        int absentCount = 0;
+        int normalCount = 0, lateCount = 0, absentCount = 0;
 
         for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
+            TeacherAttendance attendance = attendanceMap.get(date);
+            String status = resolveAttendance(attendance);
 
-            WorkShift shift = shiftMap.get(date);
-            Attendance attendance = attendanceMap.get(date);
-
-            String status = resolveAttendance(shift, attendance);
-
-            if ("NORMAL".equals(status)) {
-                normalCount++;
-            }
-
-            if ("LATE".equals(status)) {
-                lateCount++;
-            }
-
-            if ("ABSENT".equals(status)) {
-                absentCount++;
-            }
+            if ("NORMAL".equals(status)) normalCount++;
+            else if ("LATE".equals(status)) lateCount++;
+            else if ("ABSENT".equals(status)) absentCount++;
 
             result.add(new ViewAttendanceDayDto(date, status));
         }
 
         return new ViewAttendanceResponse(
-                userStoreId,
-                staffName,
-                role,
+                schoolUserId,
+                schoolUser.getUser().getUsername(),
+                schoolUser.getPosition().name(),
                 normalCount,
                 lateCount,
                 absentCount,
@@ -114,20 +77,15 @@ public class ViewAttendanceService {
         );
     }
 
-    private String resolveAttendance(WorkShift shift, Attendance attendance) {
-
-        if (shift == null) {
-            return "OFF";
-        }
-
+    private String resolveAttendance(TeacherAttendance attendance) {
         if (attendance == null || !attendance.isCheckedIn()) {
             return "ABSENT";
         }
-
-        if (attendance.getCheckInTime().isAfter(shift.getStartDatetime())) {
-            return "LATE";
-        }
-
-        return "NORMAL";
+        return switch (attendance.getStatus()) {
+            case WORKING, FINISHED -> "NORMAL";
+            case ABSENT -> "ABSENT";
+            case LEAVE -> "LEAVE";
+            default -> "OFF";
+        };
     }
 }

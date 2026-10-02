@@ -32,7 +32,7 @@ public class WorkShiftService {
     @Transactional(readOnly = true)
     public List<WorkShiftDto> getWorkShifts(Long userId) {
         // 사용자의 활성 매장 조회
-        Long storeId = authService.getActiveStoreIdOrThrow(userId);
+        Long storeId = authService.getActiveSchoolIdOrThrow(userId);
         // 엔티티 조회
         List<WorkShift> workShifts = workShiftRepository.findByStore_Id(storeId);
         List<WorkShiftDto> dtos = new ArrayList<>();
@@ -47,7 +47,7 @@ public class WorkShiftService {
 
     @Transactional(readOnly = true)
     public List<WorkShift> getWorkShiftsByPeriod(Long userId, LocalDate startDate, LocalDate endDate) {
-        Long storeId = authService.getActiveStoreIdOrThrow(userId);
+        Long storeId = authService.getActiveSchoolIdOrThrow(userId);
 
         LocalDateTime start = startDate.atStartOfDay();
         LocalDateTime end = endDate.atTime(23, 59, 59);
@@ -59,7 +59,7 @@ public class WorkShiftService {
 
     @Transactional
     public WorkShiftDto createWorkShift(Long userId, WorkShiftCreateDto dto) {
-        Long storeId = authService.getActiveStoreIdOrThrow(userId);
+        Long storeId = authService.getActiveSchoolIdOrThrow(userId);
         log.debug("✅ storeId={}, userStoreId={}", storeId, dto.getUserStoreId());
         Store store = storeRepository.findById(storeId).orElseThrow(() -> new NotFoundException("해당 매장이 존재하지 않습니다."));
         UserStore userStore = userStoreRepository.findById(dto.getUserStoreId())
@@ -78,7 +78,7 @@ public class WorkShiftService {
     /** 🟡 근무블록 수정 **/
     @Transactional
     public WorkShiftDto updateWorkShift(Long userId, Long shiftId, WorkShiftUpdateDto dto) {
-        Long storeId = authService.getActiveStoreIdOrThrow(userId);
+        Long storeId = authService.getActiveSchoolIdOrThrow(userId);
 
         WorkShift workShift = workShiftRepository.findById(shiftId)
                 .orElseThrow(() -> new IllegalArgumentException("WorkShift not found"));
@@ -96,7 +96,7 @@ public class WorkShiftService {
     /** 🔴 근무블록 삭제 **/
     @Transactional
     public void deleteWorkShift(Long userId, Long shiftId) {
-        Long storeId = authService.getActiveStoreIdOrThrow(userId);
+        Long storeId = authService.getActiveSchoolIdOrThrow(userId);
 
         WorkShift workShift = workShiftRepository.findById(shiftId)
                 .orElseThrow(() -> new IllegalArgumentException("WorkShift not found"));

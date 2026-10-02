@@ -9,6 +9,6 @@ import java.time.LocalDate;
 
 @Getter @Setter @AllArgsConstructor @NoArgsConstructor
 public class StaffJoinStoreRequest {
-    private String storeCode;
+    private String schoolCode;
     private LocalDate hireDate;
 }

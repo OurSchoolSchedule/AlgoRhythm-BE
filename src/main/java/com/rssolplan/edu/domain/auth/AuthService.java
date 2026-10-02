@@ -102,12 +102,11 @@ public class AuthService {
                 .expiresAt(LocalDateTime.now().plusDays(14))
                 .build());
 
-        // 5) 응답 ( *** activeStoreId 추가 !!!! )
         return new LoginResponse(
                 at, rt, user.getId(), isNewUser,
                 user.getUsername(), user.getEmail(), user.getProfileImageUrl(),
                 user.getProvider(), user.getProviderId(),
-                user.getActiveStoreId()
+                user.getActiveSchoolId()
         );
     }
 
@@ -206,7 +205,7 @@ public class AuthService {
                 at, rt, user.getId(), isNewUser,
                 user.getUsername(), user.getEmail(), user.getProfileImageUrl(),
                 user.getProvider(), user.getProviderId(),
-                user.getActiveStoreId()
+                user.getActiveSchoolId()
         );
     }
 

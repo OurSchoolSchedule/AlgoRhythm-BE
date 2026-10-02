@@ -1,8 +1,8 @@
 package com.rssolplan.edu.domain.todo;
 
-import com.rssolplan.edu.domain.store.Store;
-import com.rssolplan.edu.domain.store.StoreRepository;
-import com.rssolplan.edu.domain.store.UserStore;
+import com.rssolplan.edu.domain.school.School;
+import com.rssolplan.edu.domain.school.SchoolRepository;
+import com.rssolplan.edu.domain.school.SchoolUser;
 import com.rssolplan.edu.domain.todo.dto.TodoCreateRequestDto;
 import com.rssolplan.edu.domain.todo.dto.TodoListResponseDto;
 import com.rssolplan.edu.domain.todo.dto.TodoResponseDto;
@@ -27,20 +27,16 @@ public class TodoService {
 
     private final TodoRepository todoRepository;
     private final UserRepository userRepository;
-    private final StoreRepository storeRepository;
+    private final SchoolRepository schoolRepository;
     private final AuthorizationService authorizationService;
 
-    /**
-     * 특정 날짜의 모든 할일 조회 (타입별로 분류)
-     */
     public TodoListResponseDto getTodosByDate(Long userId, LocalDate date) {
-        Long storeId = authorizationService.getActiveStoreIdOrThrow(userId);
+        Long schoolId = authorizationService.getActiveSchoolIdOrThrow(userId);
 
+        List<Todo> allTodos = todoRepository.findAllTodosForDate(schoolId, userId, date);
 
-        List<Todo> allTodos = todoRepository.findAllTodosForDate(storeId, userId, date);
-
-        List<TodoResponseDto> storeTodos = allTodos.stream()
-                .filter(t -> t.getTodoType() == Todo.TodoType.STORE)
+        List<TodoResponseDto> schoolTodos = allTodos.stream()
+                .filter(t -> t.getTodoType() == Todo.TodoType.SCHOOL)
                 .map(TodoResponseDto::from)
                 .collect(Collectors.toList());
 
@@ -56,31 +52,27 @@ public class TodoService {
 
         return TodoListResponseDto.builder()
                 .date(date)
-                .storeTodos(storeTodos)
+                .storeTodos(schoolTodos)
                 .handoverTodos(handoverTodos)
                 .personalTodos(personalTodos)
                 .build();
     }
 
-    /**
-     * 할일 생성
-     */
     @Transactional
     public TodoResponseDto createTodo(Long userId, TodoCreateRequestDto request) {
-        Long storeId = authorizationService.getActiveStoreIdOrThrow(userId);
-        UserStore userStore = authorizationService.getUserStoreOrThrow(userId, storeId);
+        Long schoolId = authorizationService.getActiveSchoolIdOrThrow(userId);
+        SchoolUser schoolUser = authorizationService.getSchoolUserOrThrow(userId, schoolId);
 
-        // 권한 체크
-        validateCreatePermission(userStore, request.getTodoType());
+        validateCreatePermission(schoolUser, request.getTodoType());
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("사용자를 찾을 수 없습니다."));
 
-        Store store = storeRepository.findById(storeId)
-                .orElseThrow(() -> new NotFoundException("매장을 찾을 수 없습니다."));
+        School school = schoolRepository.findById(schoolId)
+                .orElseThrow(() -> new NotFoundException("학교를 찾을 수 없습니다."));
 
         Todo todo = Todo.builder()
-                .store(store)
+                .school(school)
                 .user(user)
                 .date(request.getDate())
                 .todoType(request.getTodoType())
@@ -88,127 +80,85 @@ public class TodoService {
                 .completed(false)
                 .build();
 
-        Todo savedTodo = todoRepository.save(todo);
-        return TodoResponseDto.from(savedTodo);
+        return TodoResponseDto.from(todoRepository.save(todo));
     }
 
-    /**
-     * 할일 수정
-     */
     @Transactional
     public TodoResponseDto updateTodo(Long userId, Long todoId, TodoUpdateRequestDto request) {
-        Long storeId = authorizationService.getActiveStoreIdOrThrow(userId);
-        UserStore userStore = authorizationService.getUserStoreOrThrow(userId, storeId);
+        Long schoolId = authorizationService.getActiveSchoolIdOrThrow(userId);
+        SchoolUser schoolUser = authorizationService.getSchoolUserOrThrow(userId, schoolId);
 
         Todo todo = todoRepository.findById(todoId)
                 .orElseThrow(() -> new NotFoundException("할일을 찾을 수 없습니다."));
 
-        // 매장 확인
-        if (!todo.getStore().getId().equals(storeId)) {
-            throw new ForbiddenException("해당 매장의 할일이 아닙니다.");
+        if (!todo.getSchool().getId().equals(schoolId)) {
+            throw new ForbiddenException("해당 학교의 할일이 아닙니다.");
         }
 
-        // 권한 체크
-        validateUpdateDeletePermission(userStore, todo, userId);
+        validateUpdateDeletePermission(schoolUser, todo, userId);
 
-        if (request.getContent() != null) {
-            todo.setContent(request.getContent());
-        }
-        if (request.getCompleted() != null) {
-            todo.setCompleted(request.getCompleted());
-        }
+        if (request.getContent() != null) todo.setContent(request.getContent());
+        if (request.getCompleted() != null) todo.setCompleted(request.getCompleted());
 
         return TodoResponseDto.from(todo);
     }
 
-    /**
-     * 할일 삭제
-     */
     @Transactional
     public void deleteTodo(Long userId, Long todoId) {
-        Long storeId = authorizationService.getActiveStoreIdOrThrow(userId);
-        UserStore userStore = authorizationService.getUserStoreOrThrow(userId, storeId);
+        Long schoolId = authorizationService.getActiveSchoolIdOrThrow(userId);
+        SchoolUser schoolUser = authorizationService.getSchoolUserOrThrow(userId, schoolId);
 
         Todo todo = todoRepository.findById(todoId)
                 .orElseThrow(() -> new NotFoundException("할일을 찾을 수 없습니다."));
 
-        // 매장 확인
-        if (!todo.getStore().getId().equals(storeId)) {
-            throw new ForbiddenException("해당 매장의 할일이 아닙니다.");
+        if (!todo.getSchool().getId().equals(schoolId)) {
+            throw new ForbiddenException("해당 학교의 할일이 아닙니다.");
         }
 
-        // 권한 체크
-        validateUpdateDeletePermission(userStore, todo, userId);
-
+        validateUpdateDeletePermission(schoolUser, todo, userId);
         todoRepository.delete(todo);
     }
 
-    /**
-     * 할일 완료 토글
-     */
     @Transactional
     public TodoResponseDto toggleTodoCompleted(Long userId, Long todoId) {
-        Long storeId = authorizationService.getActiveStoreIdOrThrow(userId);
-        UserStore userStore = authorizationService.getUserStoreOrThrow(userId, storeId);
+        Long schoolId = authorizationService.getActiveSchoolIdOrThrow(userId);
+        SchoolUser schoolUser = authorizationService.getSchoolUserOrThrow(userId, schoolId);
 
         Todo todo = todoRepository.findById(todoId)
                 .orElseThrow(() -> new NotFoundException("할일을 찾을 수 없습니다."));
 
-        // 매장 확인
-        if (!todo.getStore().getId().equals(storeId)) {
-            throw new ForbiddenException("해당 매장의 할일이 아닙니다.");
+        if (!todo.getSchool().getId().equals(schoolId)) {
+            throw new ForbiddenException("해당 학교의 할일이 아닙니다.");
         }
 
-        // 권한 체크
-        validateUpdateDeletePermission(userStore, todo, userId);
-
+        validateUpdateDeletePermission(schoolUser, todo, userId);
         todo.setCompleted(!todo.getCompleted());
 
         return TodoResponseDto.from(todo);
     }
 
-    /**
-     * 생성 권한 검증
-     * - STORE: OWNER만
-     * - HANDOVER: OWNER, STAFF 모두
-     * - PERSONAL: 모든 사용자 (본인 것만)
-     */
-    private void validateCreatePermission(UserStore userStore, Todo.TodoType todoType) {
-        if (todoType == Todo.TodoType.STORE) {
-            if (userStore.getPosition() != UserStore.Position.OWNER) {
-                throw new ForbiddenException("매장 전체 할일은 OWNER만 추가할 수 있습니다.");
+    private void validateCreatePermission(SchoolUser schoolUser, Todo.TodoType todoType) {
+        if (todoType == Todo.TodoType.SCHOOL) {
+            if (schoolUser.getPosition() != SchoolUser.Position.ADMIN) {
+                throw new ForbiddenException("학교 전체 할일은 ADMIN만 추가할 수 있습니다.");
             }
         }
-        // HANDOVER, PERSONAL은 모두 가능
     }
 
-    /**
-     * 수정/삭제 권한 검증
-     * - STORE: OWNER만
-     * - HANDOVER: 작성자 또는 OWNER
-     * - PERSONAL: 작성자 본인만
-     */
-    private void validateUpdateDeletePermission(UserStore userStore, Todo todo, Long userId) {
-        boolean isOwner = userStore.getPosition() == UserStore.Position.OWNER;
+    private void validateUpdateDeletePermission(SchoolUser schoolUser, Todo todo, Long userId) {
+        boolean isAdmin = schoolUser.getPosition() == SchoolUser.Position.ADMIN;
         boolean isAuthor = todo.getUser().getId().equals(userId);
 
         switch (todo.getTodoType()) {
-            case STORE:
-                if (!isOwner) {
-                    throw new ForbiddenException("매장 전체 할일은 OWNER만 수정/삭제할 수 있습니다.");
-                }
-                break;
-            case HANDOVER:
-                if (!isOwner && !isAuthor) {
-                    throw new ForbiddenException("인수인계는 작성자 또는 OWNER만 수정/삭제할 수 있습니다.");
-                }
-                break;
-            case PERSONAL:
-                if (!isAuthor) {
-                    throw new ForbiddenException("내 할일은 본인만 수정/삭제할 수 있습니다.");
-                }
-                break;
+            case SCHOOL -> {
+                if (!isAdmin) throw new ForbiddenException("학교 전체 할일은 ADMIN만 수정/삭제할 수 있습니다.");
+            }
+            case HANDOVER -> {
+                if (!isAdmin && !isAuthor) throw new ForbiddenException("인수인계는 작성자 또는 ADMIN만 수정/삭제할 수 있습니다.");
+            }
+            case PERSONAL -> {
+                if (!isAuthor) throw new ForbiddenException("내 할일은 본인만 수정/삭제할 수 있습니다.");
+            }
         }
     }
 }
-

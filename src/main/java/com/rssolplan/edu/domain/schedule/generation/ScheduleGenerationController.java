@@ -1,14 +1,10 @@
 package com.rssolplan.edu.domain.schedule.generation;
 
-import com.rssolplan.edu.domain.schedule.generation.dto.ScheduleGenerationRequestDto;
-import com.rssolplan.edu.domain.schedule.generation.dto.ScheduleGenerationResponseDto;
-import com.rssolplan.edu.domain.schedule.generation.dto.ScheduleRequestDto;
-import com.rssolplan.edu.domain.schedule.generation.dto.ScheduleRequestResponseDto;
+import com.rssolplan.edu.domain.schedule.generation.dto.TimetableGenerationRequestDto;
 import com.rssolplan.edu.domain.schedule.generation.dto.candidate.CandidateSchedule;
-import com.rssolplan.edu.domain.schedule.generation.dto.candidate.ConfirmScheduleRequestDto;
-import com.rssolplan.edu.domain.schedule.generation.entity.Schedule;
-import com.rssolplan.edu.global.exception.ForbiddenException;
-import com.rssolplan.edu.global.security.AuthorizationService;
+import com.rssolplan.edu.domain.schedule.generation.dto.candidate.ConfirmTimetableRequestDto;
+import com.rssolplan.edu.domain.schedule.generation.entity.TimetableRequest;
+import com.rssolplan.edu.domain.schedule.generation.entity.TimetableSet;
 import com.rssolplan.edu.global.security.annotation.OwnerOnly;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,80 +18,72 @@ import java.util.Map;
 
 @RestController
 @Slf4j
-@RequestMapping("/api/schedules")
+@RequestMapping("/api/timetable-generation")
 @RequiredArgsConstructor
 public class ScheduleGenerationController {
+
     private final ScheduleGenerationService service;
-    private final AuthorizationService authService;
 
     /**
-     * 1. 스케줄 요청 (알바생에게 근무 가능 시간 입력 요청)
-     * - 시간대별 필요 인원수도 함께 전송
+     * 1. 시간표 생성 요청 (교사 불가 교시 제출 요청)
      */
+    @OwnerOnly
     @PostMapping("/requests")
-    public ResponseEntity<ScheduleRequestResponseDto> requestSchedule(
-            @AuthenticationPrincipal Long userId,
-            @RequestBody ScheduleRequestDto request) {
-        ScheduleRequestResponseDto response = service.requestSchedule(userId, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    public ResponseEntity<TimetableRequest> requestTimetable(
+            @AuthenticationPrincipal Long userId) {
+        TimetableRequest request = service.requestTimetable(userId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(request);
     }
 
     /**
-     * 2. 스케줄 생성 (후보군 생성)
+     * 2. 후보 시간표 생성
      */
-    @PostMapping("/requests/{scheduleRequestId}/generate")
-    public ResponseEntity<ScheduleGenerationResponseDto> generateSchedule(
+    @OwnerOnly
+    @PostMapping("/requests/{timetableRequestId}/generate")
+    public ResponseEntity<Map<String, Object>> generateTimetable(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long scheduleRequestId,
-            @RequestBody ScheduleGenerationRequestDto request) {
-        ScheduleGenerationResponseDto response = service.generateSchedule(userId, scheduleRequestId, request);
+            @PathVariable Long timetableRequestId,
+            @RequestBody TimetableGenerationRequestDto request) {
+        Map<String, Object> response = service.generateTimetable(userId, timetableRequestId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     /**
-     * 3. 후보 스케줄 조회
+     * 3. 후보 시간표 조회
      */
     @GetMapping("/candidates")
-    public ResponseEntity<List<CandidateSchedule>> getCandidateSchedules(@RequestParam String key) {
-        List<CandidateSchedule> candidates = service.getCandidateSchedules(key);
-        return ResponseEntity.ok(candidates);
+    public ResponseEntity<List<CandidateSchedule>> getCandidates(@RequestParam String key) {
+        return ResponseEntity.ok(service.getCandidates(key));
     }
 
     /**
-     * 4. 스케줄 확정
+     * 4. 시간표 확정
      */
-    @PostMapping("/requests/{scheduleRequestId}/confirm")
-    public ResponseEntity<?> confirmSchedule(
+    @OwnerOnly
+    @PostMapping("/requests/{timetableRequestId}/confirm")
+    public ResponseEntity<?> confirmTimetable(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long scheduleRequestId,
-            @RequestBody ConfirmScheduleRequestDto request) {
-        Schedule finalized = service.finalizeCandidateSchedule(userId, scheduleRequestId, request.getCandidateIndex());
+            @PathVariable Long timetableRequestId,
+            @RequestBody ConfirmTimetableRequestDto dto) {
+        TimetableSet timetableSet = service.confirmTimetable(userId, timetableRequestId, dto);
         return ResponseEntity.ok(Map.of(
                 "status", "success",
-                "message", "근무표 확정 완료",
-                "scheduleId", finalized.getId()
+                "message", "시간표 확정 완료",
+                "timetableSetId", timetableSet.getId()
         ));
     }
 
     /**
-     * 제출 현황 확인 (미제출 직원 목록)
+     * 미제출 교사 목록 조회
      */
     @OwnerOnly
-    @GetMapping("/requests/{storeId}/submission-status")
-    public ResponseEntity<Map<String, Object>> checkSubmissionStatus(
-            @AuthenticationPrincipal Long userId,
-            @PathVariable Long storeId) {
-
-        Long activeStoreId = authService.getActiveStoreIdOrThrow(userId);
-        if (!activeStoreId.equals(storeId)) {
-            throw new ForbiddenException("해당 매장의 정보를 조회할 권한이 없습니다.");
-        }
-
-        List<Long> unsubmitted = service.validateAllSubmitted(storeId);
+    @GetMapping("/teachers/without-availability")
+    public ResponseEntity<Map<String, Object>> getTeachersWithoutAvailability(
+            @AuthenticationPrincipal Long userId) {
+        List<Long> unsubmitted = service.getTeachersWithoutAvailability(userId);
         return ResponseEntity.ok(Map.of(
                 "allSubmitted", unsubmitted.isEmpty(),
                 "unsubmittedUserIds", unsubmitted
         ));
     }
-
 }

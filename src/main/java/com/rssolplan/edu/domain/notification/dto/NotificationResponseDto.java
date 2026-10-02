@@ -1,8 +1,8 @@
 package com.rssolplan.edu.domain.notification.dto;
 
 import com.rssolplan.edu.domain.notification.Notification;
-import com.rssolplan.edu.domain.schedule.extrashift.entity.ExtrashiftRequest;
-import com.rssolplan.edu.domain.schedule.shiftswap.ShiftSwapRequest;
+import com.rssolplan.edu.domain.schedule.extrashift.entity.SubstituteRequest;
+import com.rssolplan.edu.domain.schedule.shiftswap.TimetableSwapRequest;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @Builder
 public class NotificationResponseDto {
 
-    private String storeName;
+    private String schoolName;
     private String profileImageUrl;
 
     private Notification.Category category;
@@ -22,14 +22,12 @@ public class NotificationResponseDto {
 
     private LocalDateTime createdAt;
 
-    // ===== 요청 ID =====
-    private Long shiftSwapRequestId;
-    private Long extraShiftRequestId;
+    private Long timetableSwapRequestId;
+    private Long substituteRequestId;
 
-    // ===== 상태 (프론트 버튼 제어용) =====
-    private ShiftSwapRequest.Status shiftSwapStatus;
-    private ShiftSwapRequest.ManagerApproval shiftSwapManagerApprovalStatus;
-    private ExtrashiftRequest.Status extraShiftStatus;
+    private TimetableSwapRequest.SwapStatus timetableSwapStatus;
+    private TimetableSwapRequest.ManagerApprovalStatus timetableSwapManagerApprovalStatus;
+    private SubstituteRequest.SubstituteStatus substituteStatus;
 
     private boolean isRead;
 }

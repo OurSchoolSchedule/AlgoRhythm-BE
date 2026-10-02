@@ -1,6 +1,6 @@
 package com.rssolplan.edu.global.security.aspect;
 
-import com.rssolplan.edu.domain.store.UserStore;
+import com.rssolplan.edu.domain.school.SchoolUser;
 import com.rssolplan.edu.global.exception.ForbiddenException;
 import com.rssolplan.edu.global.security.AuthorizationService;
 import com.rssolplan.edu.global.security.SecurityUtil;
@@ -14,24 +14,20 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class OwnerOnlyAspect {
 
-    private final AuthorizationService service; // 실제 AuthService 의존성
-
+    private final AuthorizationService service;
 
     @Before("@annotation(com.rssolplan.edu.global.security.annotation.OwnerOnly)")
     public void checkOwner() {
-        // 활성 매장 ID 가져오기
         Long userId = SecurityUtil.getCurrentUserId();
         if (userId == null) {
             throw new ForbiddenException("로그인이 필요합니다.");
         }
 
-        // 현재 활성화된 매장 ID 조회
-        Long activeStoreId = service.getActiveStoreIdOrThrow(userId);
+        Long activeSchoolId = service.getActiveSchoolIdOrThrow(userId);
+        SchoolUser requester = service.getSchoolUserOrThrow(userId, activeSchoolId);
 
-        // userId와 activeStoreId 기반 권한 체크
-        UserStore requester = service.getUserStoreOrThrow(userId, activeStoreId);
-        if (requester.getPosition() != UserStore.Position.OWNER) {
-            throw new ForbiddenException("해당 매장에 대한 권한이 없습니다.");
+        if (requester.getPosition() != SchoolUser.Position.ADMIN) {
+            throw new ForbiddenException("관리자(교감/교장) 권한이 필요합니다.");
         }
     }
 }

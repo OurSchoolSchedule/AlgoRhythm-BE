@@ -10,16 +10,13 @@ import java.util.List;
 @AllArgsConstructor
 public class ViewAttendanceResponse {
 
-    private Long userStoreId;
-
-    private String staffName;
+    private Long schoolUserId;
+    private String teacherName;
     private String role;
     private int totalAttendance;
     private int totalLateCount;
     private int totalAbsentCount;
-
     private LocalDate startDate;
     private LocalDate endDate;
-
     private List<ViewAttendanceDayDto> attendances;
 }
