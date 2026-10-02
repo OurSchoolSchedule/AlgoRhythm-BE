@@ -1,6 +1,8 @@
 package com.rssolplan.edu.global.exception;
 
 import com.rssolplan.edu.domain.auth.dto.ApiResponse;
+import com.rssolplan.edu.global.exception.DraftExpiredException;
+import com.rssolplan.edu.global.exception.IntentParseException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -35,6 +37,20 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ApiResponse<Object> handleNotFound(NotFoundException ex) {
         return ApiResponse.error("NOT_FOUND", ex.getMessage());
+    }
+
+    // 401 Draft 만료/불일치
+    @ExceptionHandler(DraftExpiredException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ApiResponse<Object> handleDraftExpired(DraftExpiredException ex) {
+        return ApiResponse.error("DRAFT_NOT_FOUND_OR_EXPIRED", ex.getMessage());
+    }
+
+    // 422 AI 파싱 실패
+    @ExceptionHandler(IntentParseException.class)
+    @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+    public ApiResponse<Object> handleIntentParse(IntentParseException ex) {
+        return ApiResponse.error("INTENT_PARSE_FAILED", ex.getMessage());
     }
 
     // fallback

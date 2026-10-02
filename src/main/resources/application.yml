@@ -77,6 +77,10 @@ logging:
     org.springframework.transaction: INFO
     org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport: WARN
 
+openai:
+  api-key: ${OPENAI_API_KEY}
+  model: gpt-4o-mini
+
 management:
   endpoints:
     web:
