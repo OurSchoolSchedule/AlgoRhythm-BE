@@ -11,15 +11,15 @@ public interface MypageService {
     ActiveSchoolResponse updateActiveSchool(Long userId, Long schoolId);
 
     // 교감/교장(Admin) 관련
-    OwnerProfileResponse getOwnerProfile(Long ownerId);
-    OwnerProfileResponse updateOwnerProfile(Long ownerId, OwnerProfileUpdateRequest request);
+    AdminProfileResponse getAdminProfile(Long adminId);
+    AdminProfileResponse updateAdminProfile(Long adminId, AdminProfileUpdateRequest request);
 
-    OwnerSchoolResponse getOwnerActiveSchool(Long ownerId);
-    OwnerSchoolResponse updateOwnerActiveSchool(Long ownerId, OwnerSchoolUpdateRequest request);
+    AdminSchoolResponse getAdminActiveSchool(Long adminId);
+    AdminSchoolResponse updateAdminActiveSchool(Long adminId, AdminSchoolUpdateRequest request);
 
-    List<SchoolSimpleResponse> listOwnerSchools(Long ownerId);
-    SchoolSimpleResponse addOwnerSchool(Long ownerId, OwnerCreateSchoolRequest request);
-    void removeOwnerSchool(Long ownerId, Long schoolId);
+    List<SchoolSimpleResponse> listAdminSchools(Long adminId);
+    SchoolSimpleResponse addAdminSchool(Long adminId, AdminCreateSchoolRequest request);
+    void removeAdminSchool(Long adminId, Long schoolId);
 
     // 교사(Teacher) 관련
     TeacherProfileResponse getTeacherProfile(Long teacherId);

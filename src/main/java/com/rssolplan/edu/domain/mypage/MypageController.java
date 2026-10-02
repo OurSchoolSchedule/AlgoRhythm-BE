@@ -33,47 +33,47 @@ public class MypageController {
 
     // ===== 교감/교장(Admin) =====
 
-    @GetMapping("/owner/profile")
-    public ResponseEntity<OwnerProfileResponse> getOwnerProfile(@AuthenticationPrincipal Long ownerId) {
-        return ResponseEntity.ok(service.getOwnerProfile(ownerId));
+    @GetMapping("/admin/profile")
+    public ResponseEntity<AdminProfileResponse> getAdminProfile(@AuthenticationPrincipal Long adminId) {
+        return ResponseEntity.ok(service.getAdminProfile(adminId));
     }
 
-    @PutMapping("/owner/profile")
-    public ResponseEntity<OwnerProfileResponse> updateOwnerProfile(
-            @AuthenticationPrincipal Long ownerId,
-            @RequestBody OwnerProfileUpdateRequest request) {
-        return ResponseEntity.ok(service.updateOwnerProfile(ownerId, request));
+    @PutMapping("/admin/profile")
+    public ResponseEntity<AdminProfileResponse> updateAdminProfile(
+            @AuthenticationPrincipal Long adminId,
+            @RequestBody AdminProfileUpdateRequest request) {
+        return ResponseEntity.ok(service.updateAdminProfile(adminId, request));
     }
 
-    @GetMapping("/owner/school")
-    public ResponseEntity<OwnerSchoolResponse> getOwnerActiveSchool(@AuthenticationPrincipal Long ownerId) {
-        return ResponseEntity.ok(service.getOwnerActiveSchool(ownerId));
+    @GetMapping("/admin/school")
+    public ResponseEntity<AdminSchoolResponse> getAdminActiveSchool(@AuthenticationPrincipal Long adminId) {
+        return ResponseEntity.ok(service.getAdminActiveSchool(adminId));
     }
 
-    @PutMapping("/owner/school")
-    public ResponseEntity<OwnerSchoolResponse> updateOwnerActiveSchool(
-            @AuthenticationPrincipal Long ownerId,
-            @RequestBody OwnerSchoolUpdateRequest request) {
-        return ResponseEntity.ok(service.updateOwnerActiveSchool(ownerId, request));
+    @PutMapping("/admin/school")
+    public ResponseEntity<AdminSchoolResponse> updateAdminActiveSchool(
+            @AuthenticationPrincipal Long adminId,
+            @RequestBody AdminSchoolUpdateRequest request) {
+        return ResponseEntity.ok(service.updateAdminActiveSchool(adminId, request));
     }
 
-    @GetMapping("/owner/schools")
-    public ResponseEntity<List<SchoolSimpleResponse>> listOwnerSchools(@AuthenticationPrincipal Long ownerId) {
-        return ResponseEntity.ok(service.listOwnerSchools(ownerId));
+    @GetMapping("/admin/schools")
+    public ResponseEntity<List<SchoolSimpleResponse>> listAdminSchools(@AuthenticationPrincipal Long adminId) {
+        return ResponseEntity.ok(service.listAdminSchools(adminId));
     }
 
-    @PostMapping("/owner/schools")
-    public ResponseEntity<SchoolSimpleResponse> addOwnerSchool(
-            @AuthenticationPrincipal Long ownerId,
-            @RequestBody OwnerCreateSchoolRequest request) {
-        return ResponseEntity.status(201).body(service.addOwnerSchool(ownerId, request));
+    @PostMapping("/admin/schools")
+    public ResponseEntity<SchoolSimpleResponse> addAdminSchool(
+            @AuthenticationPrincipal Long adminId,
+            @RequestBody AdminCreateSchoolRequest request) {
+        return ResponseEntity.status(201).body(service.addAdminSchool(adminId, request));
     }
 
-    @DeleteMapping("/owner/schools/{schoolId}")
-    public ResponseEntity<Void> removeOwnerSchool(
-            @AuthenticationPrincipal Long ownerId,
+    @DeleteMapping("/admin/schools/{schoolId}")
+    public ResponseEntity<Void> removeAdminSchool(
+            @AuthenticationPrincipal Long adminId,
             @PathVariable Long schoolId) {
-        service.removeOwnerSchool(ownerId, schoolId);
+        service.removeAdminSchool(adminId, schoolId);
         return ResponseEntity.noContent().build();
     }
 

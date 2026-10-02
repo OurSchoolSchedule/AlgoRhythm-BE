@@ -6,7 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter @Setter @AllArgsConstructor @NoArgsConstructor
-public class OwnerProfileUpdateRequest {
+public class AdminProfileUpdateRequest {
     private String username;
     private String email;
 }

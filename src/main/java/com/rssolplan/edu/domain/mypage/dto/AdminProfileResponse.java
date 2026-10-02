@@ -4,7 +4,7 @@ import lombok.*;
 
 @Getter @Setter @Builder
 @AllArgsConstructor @NoArgsConstructor
-public class OwnerProfileResponse {
+public class AdminProfileResponse {
     private Long userId;
     private String username;
     private String email;
