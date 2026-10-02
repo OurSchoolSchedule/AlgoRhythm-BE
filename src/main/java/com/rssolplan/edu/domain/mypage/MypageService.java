@@ -6,26 +6,26 @@ import java.util.List;
 
 public interface MypageService {
 
-    // 활성 매장 선택 관련 - 인스타처럼 여러 매장 리스트 중 일정 매장을 선택
-    ActiveStoreResponse getActiveStore(Long userId);
-    ActiveStoreResponse updateActiveStore(Long userId, Long storeId);
+    // 활성 학교 선택
+    ActiveSchoolResponse getActiveSchool(Long userId);
+    ActiveSchoolResponse updateActiveSchool(Long userId, Long schoolId);
 
-    // 사장님 관련
+    // 교감/교장(Admin) 관련
     OwnerProfileResponse getOwnerProfile(Long ownerId);
     OwnerProfileResponse updateOwnerProfile(Long ownerId, OwnerProfileUpdateRequest request);
 
-    OwnerStoreResponse getOwnerActiveStore(Long ownerId);
-    OwnerStoreResponse updateOwnerActiveStore(Long ownerId, OwnerStoreUpdateRequest request);
+    OwnerSchoolResponse getOwnerActiveSchool(Long ownerId);
+    OwnerSchoolResponse updateOwnerActiveSchool(Long ownerId, OwnerSchoolUpdateRequest request);
 
-    List<StoreSimpleResponse> listOwnerStores(Long ownerId);
-    StoreSimpleResponse addOwnerStore(Long ownerId, OwnerCreateStoreRequest request);
-    void removeOwnerStore(Long ownerId, Long storeId);
+    List<SchoolSimpleResponse> listOwnerSchools(Long ownerId);
+    SchoolSimpleResponse addOwnerSchool(Long ownerId, OwnerCreateSchoolRequest request);
+    void removeOwnerSchool(Long ownerId, Long schoolId);
 
-    //  알바생
-    StaffProfileResponse getStaffProfile(Long staffId);
-    StaffProfileResponse updateStaffProfile(Long staffId, StaffProfileUpdateRequest request);
+    // 교사(Teacher) 관련
+    TeacherProfileResponse getTeacherProfile(Long teacherId);
+    TeacherProfileResponse updateTeacherProfile(Long teacherId, TeacherProfileUpdateRequest request);
 
-    List<StoreSimpleResponse> listStaffStores(Long staffId);
-    StoreSimpleResponse joinStaffStore(Long staffId, StaffJoinStoreRequest request);
-    void leaveStaffStore(Long staffId, Long storeId);
+    List<SchoolSimpleResponse> listTeacherSchools(Long teacherId);
+    SchoolSimpleResponse joinTeacherSchool(Long teacherId, TeacherJoinSchoolRequest request);
+    void leaveTeacherSchool(Long teacherId, Long schoolId);
 }

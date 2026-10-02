@@ -31,7 +31,7 @@ public class MypageServiceImpl implements MypageService {
     private final SchoolUserRepository schoolUsers;
     private final StringRedisTemplate redisTemplate;
 
-    // 헬퍼
+    // ===== 헬퍼 =====
 
     private SchoolUser ensureMapping(Long userId, Long schoolId) {
         return schoolUsers.findByUser_IdAndSchool_Id(userId, schoolId)
@@ -51,9 +51,9 @@ public class MypageServiceImpl implements MypageService {
         redisTemplate.delete(REDIS_ROLE_KEY_PREFIX + userId);
     }
 
-    private ActiveStoreResponse toActiveStoreResponse(SchoolUser su) {
+    private ActiveSchoolResponse toActiveSchoolResponse(SchoolUser su) {
         School s = su.getSchool();
-        return ActiveStoreResponse.builder()
+        return ActiveSchoolResponse.builder()
                 .schoolId(s.getId())
                 .schoolCode(s.getSchoolCode())
                 .name(s.getName())
@@ -64,9 +64,9 @@ public class MypageServiceImpl implements MypageService {
                 .build();
     }
 
-    private StoreSimpleResponse toSchoolSimple(SchoolUser su) {
+    private SchoolSimpleResponse toSchoolSimple(SchoolUser su) {
         School s = su.getSchool();
-        return StoreSimpleResponse.builder()
+        return SchoolSimpleResponse.builder()
                 .schoolId(s.getId())
                 .schoolCode(s.getSchoolCode())
                 .name(s.getName())
@@ -78,25 +78,25 @@ public class MypageServiceImpl implements MypageService {
                 .build();
     }
 
-    // 활성 학교
+    // ===== 활성 학교 =====
 
     @Override
     @Transactional(readOnly = true)
-    public ActiveStoreResponse getActiveStore(Long userId) {
-        return toActiveStoreResponse(resolveActiveMappingOrDefault(userId));
+    public ActiveSchoolResponse getActiveSchool(Long userId) {
+        return toActiveSchoolResponse(resolveActiveMappingOrDefault(userId));
     }
 
     @Override
-    public ActiveStoreResponse updateActiveStore(Long userId, Long schoolId) {
+    public ActiveSchoolResponse updateActiveSchool(Long userId, Long schoolId) {
         User u = users.findById(userId).orElseThrow();
         ensureMapping(userId, schoolId);
         u.setActiveSchoolId(schoolId);
         users.save(u);
         evictRoleCache(userId);
-        return toActiveStoreResponse(ensureMapping(userId, schoolId));
+        return toActiveSchoolResponse(ensureMapping(userId, schoolId));
     }
 
-    // 교감/교장(Admin) 관련
+    // ===== 교감/교장(Admin) =====
 
     @Override
     @Transactional(readOnly = true)
@@ -131,13 +131,13 @@ public class MypageServiceImpl implements MypageService {
 
     @Override
     @Transactional(readOnly = true)
-    public OwnerStoreResponse getOwnerActiveStore(Long ownerId) {
+    public OwnerSchoolResponse getOwnerActiveSchool(Long ownerId) {
         SchoolUser su = resolveActiveMappingOrDefault(ownerId);
         if (su.getPosition() != Position.ADMIN) {
             throw new IllegalArgumentException("관리자(교감/교장) 권한이 필요한 요청입니다.");
         }
         School s = su.getSchool();
-        return OwnerStoreResponse.builder()
+        return OwnerSchoolResponse.builder()
                 .schoolId(s.getId())
                 .schoolCode(s.getSchoolCode())
                 .name(s.getName())
@@ -147,7 +147,7 @@ public class MypageServiceImpl implements MypageService {
     }
 
     @Override
-    public OwnerStoreResponse updateOwnerActiveStore(Long ownerId, OwnerStoreUpdateRequest req) {
+    public OwnerSchoolResponse updateOwnerActiveSchool(Long ownerId, OwnerSchoolUpdateRequest req) {
         SchoolUser su = resolveActiveMappingOrDefault(ownerId);
         if (su.getPosition() != Position.ADMIN) {
             throw new IllegalArgumentException("관리자(교감/교장) 권한이 필요한 요청입니다.");
@@ -157,12 +157,12 @@ public class MypageServiceImpl implements MypageService {
         if (req.getAddress() != null) s.setAddress(req.getAddress());
         if (req.getPhoneNumber() != null) s.setPhoneNumber(req.getPhoneNumber());
         schools.save(s);
-        return getOwnerActiveStore(ownerId);
+        return getOwnerActiveSchool(ownerId);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<StoreSimpleResponse> listOwnerStores(Long ownerId) {
+    public List<SchoolSimpleResponse> listOwnerSchools(Long ownerId) {
         return schoolUsers.findByUser_IdAndPosition(ownerId, Position.ADMIN)
                 .stream()
                 .sorted(Comparator.comparing(su -> su.getSchool().getId()))
@@ -171,7 +171,7 @@ public class MypageServiceImpl implements MypageService {
     }
 
     @Override
-    public StoreSimpleResponse addOwnerStore(Long ownerId, OwnerCreateStoreRequest req) {
+    public SchoolSimpleResponse addOwnerSchool(Long ownerId, OwnerCreateSchoolRequest req) {
         User owner = users.findById(ownerId).orElseThrow();
 
         School school = School.builder()
@@ -194,7 +194,7 @@ public class MypageServiceImpl implements MypageService {
     }
 
     @Override
-    public void removeOwnerStore(Long ownerId, Long schoolId) {
+    public void removeOwnerSchool(Long ownerId, Long schoolId) {
         SchoolUser su = ensureMapping(ownerId, schoolId);
         if (su.getPosition() != Position.ADMIN) {
             throw new IllegalArgumentException("관리자(교감/교장) 권한이 필요한 요청입니다.");
@@ -213,25 +213,25 @@ public class MypageServiceImpl implements MypageService {
         }
     }
 
-    // 교사(Teacher) 관련
+    // ===== 교사(Teacher) =====
 
     @Override
     @Transactional(readOnly = true)
-    public StaffProfileResponse getStaffProfile(Long staffId) {
-        SchoolUser su = resolveActiveMappingOrDefault(staffId);
+    public TeacherProfileResponse getTeacherProfile(Long teacherId) {
+        SchoolUser su = resolveActiveMappingOrDefault(teacherId);
         if (su.getPosition() != Position.TEACHER) {
             throw new IllegalArgumentException("교사 권한이 필요한 요청입니다.");
         }
         User u = su.getUser();
         School s = su.getSchool();
-        return StaffProfileResponse.builder()
+        return TeacherProfileResponse.builder()
                 .userId(u.getId())
                 .username(u.getUsername())
                 .email(u.getEmail())
                 .profileImageUrl(u.getProfileImageUrl())
                 .position(su.getPosition().name())
                 .employmentStatus(su.getEmploymentStatus().name())
-                .currentSchool(StaffProfileResponse.CurrentSchool.builder()
+                .currentSchool(TeacherProfileResponse.CurrentSchool.builder()
                         .schoolId(s.getId())
                         .name(s.getName())
                         .schoolCode(s.getSchoolCode())
@@ -240,8 +240,8 @@ public class MypageServiceImpl implements MypageService {
     }
 
     @Override
-    public StaffProfileResponse updateStaffProfile(Long staffId, StaffProfileUpdateRequest req) {
-        SchoolUser su = resolveActiveMappingOrDefault(staffId);
+    public TeacherProfileResponse updateTeacherProfile(Long teacherId, TeacherProfileUpdateRequest req) {
+        SchoolUser su = resolveActiveMappingOrDefault(teacherId);
         if (su.getPosition() != Position.TEACHER) {
             throw new IllegalArgumentException("교사 권한이 필요한 요청입니다.");
         }
@@ -249,13 +249,13 @@ public class MypageServiceImpl implements MypageService {
         if (req.getUsername() != null) u.setUsername(req.getUsername());
         if (req.getEmail() != null) u.setEmail(req.getEmail());
         users.save(u);
-        return getStaffProfile(staffId);
+        return getTeacherProfile(teacherId);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<StoreSimpleResponse> listStaffStores(Long staffId) {
-        return schoolUsers.findByUser_IdAndPosition(staffId, Position.TEACHER)
+    public List<SchoolSimpleResponse> listTeacherSchools(Long teacherId) {
+        return schoolUsers.findByUser_IdAndPosition(teacherId, Position.TEACHER)
                 .stream()
                 .sorted(Comparator.comparing(su -> su.getSchool().getId()))
                 .map(this::toSchoolSimple)
@@ -263,12 +263,12 @@ public class MypageServiceImpl implements MypageService {
     }
 
     @Override
-    public StoreSimpleResponse joinStaffStore(Long staffId, StaffJoinStoreRequest req) {
-        User teacher = users.findById(staffId).orElseThrow();
+    public SchoolSimpleResponse joinTeacherSchool(Long teacherId, TeacherJoinSchoolRequest req) {
+        User teacher = users.findById(teacherId).orElseThrow();
         School school = schools.findBySchoolCode(req.getSchoolCode())
                 .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 학교 코드입니다."));
 
-        if (schoolUsers.existsByUser_IdAndSchool_Id(staffId, school.getId())) {
+        if (schoolUsers.existsByUser_IdAndSchool_Id(teacherId, school.getId())) {
             throw new IllegalArgumentException("이미 등록된 학교입니다.");
         }
 
@@ -284,22 +284,22 @@ public class MypageServiceImpl implements MypageService {
     }
 
     @Override
-    public void leaveStaffStore(Long staffId, Long schoolId) {
-        SchoolUser su = ensureMapping(staffId, schoolId);
+    public void leaveTeacherSchool(Long teacherId, Long schoolId) {
+        SchoolUser su = ensureMapping(teacherId, schoolId);
         if (su.getPosition() != Position.TEACHER) {
             throw new IllegalArgumentException("교사 권한이 필요한 요청입니다.");
         }
         schoolUsers.delete(su);
 
-        User u = users.findById(staffId).orElseThrow();
+        User u = users.findById(teacherId).orElseThrow();
         if (schoolId.equals(u.getActiveSchoolId())) {
-            Long nextActive = schoolUsers.findByUser_Id(staffId).stream()
+            Long nextActive = schoolUsers.findByUser_Id(teacherId).stream()
                     .findFirst()
                     .map(s -> s.getSchool().getId())
                     .orElse(null);
             u.setActiveSchoolId(nextActive);
             users.save(u);
-            evictRoleCache(staffId);
+            evictRoleCache(teacherId);
         }
     }
 }
