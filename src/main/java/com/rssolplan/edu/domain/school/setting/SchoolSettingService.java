@@ -1,7 +1,9 @@
 package com.rssolplan.edu.domain.school.setting;
 
+import com.rssolplan.edu.domain.schedule.generation.TimetableRepository;
 import com.rssolplan.edu.domain.school.School;
 import com.rssolplan.edu.domain.school.SchoolRepository;
+import com.rssolplan.edu.global.exception.BadRequestException;
 import com.rssolplan.edu.global.exception.NotFoundException;
 import com.rssolplan.edu.global.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ public class SchoolSettingService {
 
     private final SchoolSettingRepository settingRepo;
     private final SchoolRepository schoolRepo;
+    private final TimetableRepository timetableRepository;
     private final AuthorizationService authService;
 
     @Transactional(readOnly = true)
@@ -87,7 +90,16 @@ public class SchoolSettingService {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
         SchoolSetting setting = settingRepo.findBySchool_Id(schoolId)
                 .orElseThrow(() -> new NotFoundException("학교 설정이 존재하지 않습니다."));
-        setting.getPeriods().removeIf(p -> p.getId().equals(periodId));
+        PeriodSetting target = setting.getPeriods().stream()
+                .filter(p -> p.getId().equals(periodId))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("교시 설정을 찾을 수 없습니다."));
+
+        if (timetableRepository.existsByPeriodSetting_Id(target.getId())) {
+            throw new BadRequestException("해당 교시를 참조하는 시간표가 존재하여 삭제할 수 없습니다.");
+        }
+
+        setting.getPeriods().remove(target);
         settingRepo.save(setting);
     }
 }

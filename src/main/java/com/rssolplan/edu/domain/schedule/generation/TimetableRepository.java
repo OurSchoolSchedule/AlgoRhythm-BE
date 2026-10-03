@@ -26,4 +26,6 @@ public interface TimetableRepository extends JpaRepository<Timetable, Long> {
 
     boolean existsByTeacher_IdAndAcademicYearAndSemesterAndDayOfWeekAndPeriodSetting_Id(
             Long teacherId, int academicYear, int semester, DayOfWeek dayOfWeek, Long periodSettingId);
+
+    boolean existsByPeriodSetting_Id(Long periodSettingId);
 }

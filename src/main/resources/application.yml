@@ -53,9 +53,9 @@ email:
 # application.yml 예시
 springdoc:
  swagger-ui:
-   enabled: true
+   enabled: false
  api-docs:
-   enabled: true
+   enabled: false
 
 
 oauth:
