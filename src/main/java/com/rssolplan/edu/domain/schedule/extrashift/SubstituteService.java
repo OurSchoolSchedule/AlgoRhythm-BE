@@ -187,7 +187,15 @@ public class SubstituteService {
             throw new IllegalStateException("이미 처리된 응답입니다.");
         }
 
-        boolean approved = "APPROVE".equalsIgnoreCase(req.action()) || "APPROVED".equalsIgnoreCase(req.action());
+        // APPROVE/REJECT 외 값(오타 포함)이 묵시적으로 거절 처리되는 것을 방지한다.
+        if (req.action() == null) {
+            throw new IllegalArgumentException("action이 필요합니다. (APPROVE 또는 REJECT)");
+        }
+        boolean approved = switch (req.action().trim().toUpperCase(Locale.ROOT)) {
+            case "APPROVE", "APPROVED" -> true;
+            case "REJECT", "REJECTED" -> false;
+            default -> throw new IllegalArgumentException("유효하지 않은 action입니다. APPROVE 또는 REJECT를 사용하세요.");
+        };
 
         if (approved && response.getWorkerAction() != SubstituteResponse.WorkerAction.ACCEPT) {
             throw new IllegalStateException("교사가 수락한 응답만 승인할 수 있습니다.");

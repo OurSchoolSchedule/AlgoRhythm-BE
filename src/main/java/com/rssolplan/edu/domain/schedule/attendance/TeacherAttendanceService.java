@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 public class TeacherAttendanceService {
 
     private final TeacherAttendanceRepository attendanceRepository;
+    private final TeacherAttendanceCreator attendanceCreator;
     private final AuthorizationService authService;
 
     private SchoolUser resolveSchoolUser(Long userId) {
@@ -92,13 +93,7 @@ public class TeacherAttendanceService {
     }
 
     private TeacherAttendance getOrCreate(SchoolUser schoolUser, LocalDate today) {
-        return attendanceRepository.findBySchoolUser_IdAndWorkDate(schoolUser.getId(), today)
-                .orElseGet(() -> attendanceRepository.save(
-                        TeacherAttendance.builder()
-                                .schoolUser(schoolUser)
-                                .workDate(today)
-                                .status(TeacherAttendanceStatus.BEFORE_WORK)
-                                .build()));
+        return attendanceCreator.getOrCreate(schoolUser, today);
     }
 
     private TeacherAttendanceTodayResponse mapToTodayResponse(TeacherAttendance a) {

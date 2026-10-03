@@ -142,6 +142,15 @@ public class TimetableService {
             throw new ForbiddenException("해당 학교 소속 교사가 아닙니다.");
         }
 
+        // 교사가 변경되는 경우에만 해당 교시 충돌을 검사한다.
+        boolean teacherChanged = !teacher.getId().equals(timetable.getTeacher().getId());
+        if (teacherChanged && timetableRepository.existsByTeacher_IdAndAcademicYearAndSemesterAndDayOfWeekAndPeriodSetting_Id(
+                teacher.getId(),
+                timetable.getAcademicYear(), timetable.getSemester(),
+                timetable.getDayOfWeek(), timetable.getPeriodSetting().getId())) {
+            throw new IllegalStateException("해당 교사는 이미 해당 교시에 다른 수업이 있습니다.");
+        }
+
         timetable.setSubject(subject);
         timetable.setTeacher(teacher);
 

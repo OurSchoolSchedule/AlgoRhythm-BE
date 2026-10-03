@@ -30,7 +30,10 @@ public class OnboardingService {
     @Transactional
     public OnboardingResponse onboard(Long userId, OnboardingRequest req) {
         User user = users.findById(userId).orElseThrow();
-        String role = req.getRole().toUpperCase();
+        if (req.getRole() == null) {
+            throw new IllegalArgumentException("역할(role)이 필요합니다. (ADMIN 또는 TEACHER)");
+        }
+        String role = req.getRole().toUpperCase(java.util.Locale.ROOT);
 
         School school;
         if ("ADMIN".equals(role)) {

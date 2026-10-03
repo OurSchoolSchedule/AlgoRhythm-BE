@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/timetable-swap")
@@ -20,7 +21,7 @@ public class TimetableSwapController {
     private final TimetableSwapService timetableSwapService;
 
     @PostMapping("/requests")
-    public ResponseEntity<TimetableSwapRequest> create(
+    public ResponseEntity<TimetableSwapResponseDto> create(
             @AuthenticationPrincipal Long userId,
             @RequestBody CreateSwapRequestDto dto) {
         TimetableSwapRequest request = timetableSwapService.create(
@@ -28,30 +29,35 @@ public class TimetableSwapController {
                 dto.getRequesterTimetableId(), dto.getRequesterDate(),
                 dto.getReceiverTimetableId(), dto.getReceiverDate(),
                 dto.getReason());
-        return ResponseEntity.status(HttpStatus.CREATED).body(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(TimetableSwapResponseDto.from(request));
     }
 
     @PostMapping("/requests/{requestId}/respond")
-    public ResponseEntity<TimetableSwapRequest> respond(
+    public ResponseEntity<TimetableSwapResponseDto> respond(
             @AuthenticationPrincipal Long userId,
             @PathVariable Long requestId,
             @RequestBody ActionDto dto) {
-        return ResponseEntity.ok(timetableSwapService.respond(userId, requestId, dto.getAction()));
+        return ResponseEntity.ok(
+                TimetableSwapResponseDto.from(timetableSwapService.respond(userId, requestId, dto.getAction())));
     }
 
     @OwnerOnly
     @PostMapping("/requests/{requestId}/approve")
-    public ResponseEntity<TimetableSwapRequest> managerApproval(
+    public ResponseEntity<TimetableSwapResponseDto> managerApproval(
             @AuthenticationPrincipal Long userId,
             @PathVariable Long requestId,
             @RequestBody ActionDto dto) {
-        return ResponseEntity.ok(timetableSwapService.managerApproval(userId, requestId, dto.getAction()));
+        return ResponseEntity.ok(
+                TimetableSwapResponseDto.from(timetableSwapService.managerApproval(userId, requestId, dto.getAction())));
     }
 
     @GetMapping("/requests/me")
-    public ResponseEntity<List<TimetableSwapRequest>> getMyRequests(
+    public ResponseEntity<List<TimetableSwapResponseDto>> getMyRequests(
             @AuthenticationPrincipal Long userId) {
-        return ResponseEntity.ok(timetableSwapService.getMyRequests(userId));
+        return ResponseEntity.ok(
+                timetableSwapService.getMyRequests(userId).stream()
+                        .map(TimetableSwapResponseDto::from)
+                        .collect(java.util.stream.Collectors.toList()));
     }
 
     @Getter

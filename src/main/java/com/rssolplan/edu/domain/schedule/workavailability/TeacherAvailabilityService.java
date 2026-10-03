@@ -82,6 +82,8 @@ public class TeacherAvailabilityService {
         SchoolUser me = authService.getSchoolUserOrThrow(userId, schoolId);
 
         availabilityRepository.deleteBySchoolUser_Id(me.getId());
+        // 즉시 flush하지 않으면 insert 시 unique 제약을 위반할 수 있다.
+        availabilityRepository.flush();
 
         return request.getUnavailabilities().stream()
                 .map(item -> {

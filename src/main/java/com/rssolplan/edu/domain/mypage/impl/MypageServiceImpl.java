@@ -2,6 +2,7 @@ package com.rssolplan.edu.domain.mypage.impl;
 
 import com.rssolplan.edu.domain.mypage.MypageService;
 import com.rssolplan.edu.domain.mypage.dto.*;
+import com.rssolplan.edu.global.exception.ForbiddenException;
 import com.rssolplan.edu.domain.school.School;
 import com.rssolplan.edu.domain.school.SchoolRepository;
 import com.rssolplan.edu.domain.school.SchoolUser;
@@ -40,11 +41,12 @@ public class MypageServiceImpl implements MypageService {
 
     private SchoolUser resolveActiveMappingOrDefault(Long userId) {
         User u = users.findById(userId).orElseThrow();
-        if (u.getActiveSchoolId() != null) {
-            return ensureMapping(userId, u.getActiveSchoolId());
+        // getActiveSchoolIdOrThrow와 동일한 실패 조건을 유지한다.
+        // activeSchoolId가 null이면 @OwnerOnly/학교 API도 거부되므로 여기서도 동일하게 거부한다.
+        if (u.getActiveSchoolId() == null) {
+            throw new ForbiddenException("활성 학교가 설정되어 있지 않습니다. 활성 학교를 먼저 설정하세요.");
         }
-        return schoolUsers.findFirstByUser_IdOrderByCreatedAtAsc(userId)
-                .orElseThrow(() -> new IllegalArgumentException("등록된 학교가 없습니다."));
+        return ensureMapping(userId, u.getActiveSchoolId());
     }
 
     private void evictRoleCache(Long userId) {

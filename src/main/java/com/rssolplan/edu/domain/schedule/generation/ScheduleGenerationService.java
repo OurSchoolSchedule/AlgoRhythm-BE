@@ -195,6 +195,10 @@ public class ScheduleGenerationService {
     @Transactional
     public TimetableSet confirmTimetable(Long userId, Long timetableRequestId,
                                         ConfirmTimetableRequestDto dto) {
+        // Integer 래퍼 타입이므로 null 언박싱 NPE 방어
+        if (dto.getCandidateIndex() == null || dto.getCandidateIndex() < 0) {
+            throw new BadRequestException("유효하지 않은 후보 인덱스입니다.");
+        }
         int candidateIndex = dto.getCandidateIndex();
         int academicYear = dto.getAcademicYear();
         int semester = dto.getSemester();
@@ -240,7 +244,7 @@ public class ScheduleGenerationService {
         Map<Integer, PeriodSetting> periodMap = schoolSetting.getPeriods().stream()
                 .collect(Collectors.toMap(PeriodSetting::getPeriodNumber, p -> p));
 
-        // 삭제 전에 배정된 모든 shift가 유효한지 검증
+        // 삭제 전에 배정된 모든 shift가 유효한지 검증 (학교 소속 포함)
         for (var shift : selected.getShifts()) {
             if (shift.getSchoolUserId() == null) continue;
             if (periodMap.get(shift.getPeriodNumber()) == null) continue;
@@ -248,12 +252,25 @@ public class ScheduleGenerationService {
                 throw new BadRequestException("후보 시간표에 과목이 없는 교시가 포함되어 있습니다. (dayOfWeek=" +
                         shift.getDayOfWeek() + ", period=" + shift.getPeriodNumber() + ")");
             }
+            // 학급·과목이 현재 학교 소속인지 확인
+            SchoolClass sc = schoolClassRepository.findById(shift.getSchoolClassId())
+                    .orElseThrow(() -> new NotFoundException("학급을 찾을 수 없습니다."));
+            if (!sc.getSchool().getId().equals(schoolId)) {
+                throw new ForbiddenException("후보 시간표에 다른 학교의 학급이 포함되어 있습니다.");
+            }
+            Subject sub = subjectRepository.findById(shift.getSubjectId())
+                    .orElseThrow(() -> new NotFoundException("과목을 찾을 수 없습니다."));
+            if (!sub.getSchool().getId().equals(schoolId)) {
+                throw new ForbiddenException("후보 시간표에 다른 학교의 과목이 포함되어 있습니다.");
+            }
         }
 
-        // 기존 해당 연도/학기 시간표 삭제
+        // 기존 해당 연도/학기 시간표 삭제 후 즉시 flush
+        // flush 없이 insert하면 unique 제약을 위반할 수 있다.
         List<Timetable> existing = timetableRepository
                 .findBySchool_IdAndAcademicYearAndSemester(schoolId, academicYear, semester);
         timetableRepository.deleteAll(existing);
+        timetableRepository.flush();
 
         // CandidateShift → Timetable 변환
         for (var shift : selected.getShifts()) {
