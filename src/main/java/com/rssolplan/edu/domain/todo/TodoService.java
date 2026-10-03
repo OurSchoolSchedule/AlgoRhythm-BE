@@ -30,6 +30,14 @@ public class TodoService {
     private final SchoolRepository schoolRepository;
     private final AuthorizationService authorizationService;
 
+    /**
+     * Returns school and handover tasks plus the user's personal tasks for a date in the
+     * active school, grouped by category and newest first within each category.
+     * School tasks occupy the response's storeTodos field.
+     *
+     * @throws com.rssolplan.edu.global.exception.NotFoundException if the user does not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active
+     */
     public TodoListResponseDto getTodosByDate(Long userId, LocalDate date) {
         Long schoolId = authorizationService.getActiveSchoolIdOrThrow(userId);
 
@@ -58,6 +66,13 @@ public class TodoService {
                 .build();
     }
 
+    /**
+     * Creates an incomplete task in the active school and returns its details.
+     * School-wide tasks require ADMIN; handover and personal tasks require school membership.
+     *
+     * @throws NotFoundException if the user or school does not exist
+     * @throws ForbiddenException if the active school, membership, or permission is missing
+     */
     @Transactional
     public TodoResponseDto createTodo(Long userId, TodoCreateRequestDto request) {
         Long schoolId = authorizationService.getActiveSchoolIdOrThrow(userId);
@@ -83,6 +98,13 @@ public class TodoService {
         return TodoResponseDto.from(todoRepository.save(todo));
     }
 
+    /**
+     * Updates non-null content and completion fields for an authorized task in the active school.
+     * Returns its updated details; permissions follow {@link #validateUpdateDeletePermission}.
+     *
+     * @throws NotFoundException if the user or task does not exist
+     * @throws ForbiddenException if the active school, membership, task school, or permission is invalid
+     */
     @Transactional
     public TodoResponseDto updateTodo(Long userId, Long todoId, TodoUpdateRequestDto request) {
         Long schoolId = authorizationService.getActiveSchoolIdOrThrow(userId);
@@ -103,6 +125,12 @@ public class TodoService {
         return TodoResponseDto.from(todo);
     }
 
+    /**
+     * Deletes an authorized task in the active school using {@link #validateUpdateDeletePermission}.
+     *
+     * @throws NotFoundException if the user or task does not exist
+     * @throws ForbiddenException if the active school, membership, task school, or permission is invalid
+     */
     @Transactional
     public void deleteTodo(Long userId, Long todoId) {
         Long schoolId = authorizationService.getActiveSchoolIdOrThrow(userId);
@@ -119,6 +147,13 @@ public class TodoService {
         todoRepository.delete(todo);
     }
 
+    /**
+     * Inverts an authorized task's completion flag and returns the updated details.
+     * Uses {@link #validateUpdateDeletePermission} for a task in the active school.
+     *
+     * @throws NotFoundException if the user or task does not exist
+     * @throws ForbiddenException if the active school, membership, task school, or permission is invalid
+     */
     @Transactional
     public TodoResponseDto toggleTodoCompleted(Long userId, Long todoId) {
         Long schoolId = authorizationService.getActiveSchoolIdOrThrow(userId);
@@ -137,6 +172,11 @@ public class TodoService {
         return TodoResponseDto.from(todo);
     }
 
+    /**
+     * Requires ADMIN to create a school-wide task; other task types pass this check.
+     *
+     * @throws ForbiddenException if a non-administrator requests a school-wide task
+     */
     private void validateCreatePermission(SchoolUser schoolUser, Todo.TodoType todoType) {
         if (todoType == Todo.TodoType.SCHOOL) {
             if (schoolUser.getPosition() != SchoolUser.Position.ADMIN) {
@@ -145,6 +185,12 @@ public class TodoService {
         }
     }
 
+    /**
+     * Requires ADMIN for school tasks, ADMIN or authorship for handover tasks, and
+     * authorship for personal tasks, including when the caller is an administrator.
+     *
+     * @throws ForbiddenException if the caller lacks the task-specific permission
+     */
     private void validateUpdateDeletePermission(SchoolUser schoolUser, Todo todo, Long userId) {
         boolean isAdmin = schoolUser.getPosition() == SchoolUser.Position.ADMIN;
         boolean isAuthor = todo.getUser().getId().equals(userId);

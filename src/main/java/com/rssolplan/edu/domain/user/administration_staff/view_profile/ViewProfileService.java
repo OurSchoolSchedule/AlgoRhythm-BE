@@ -15,6 +15,14 @@ public class ViewProfileService {
 
     private final SchoolUserRepository schoolUserRepository;
 
+    /**
+     * Returns a school member's profile after checking the caller's ADMIN membership in
+     * that school. Days worked is the calendar-day difference from hire date to today,
+     * or zero when no hire date is stored; a future hire date yields a negative value.
+     *
+     * @param schoolUserId target membership ID, rather than user ID
+     * @throws IllegalArgumentException if the membership is missing or access is denied
+     */
     @Transactional(readOnly = true)
     public ViewProfileResponse getEmployeeProfile(Long adminId, Long schoolUserId) {
 

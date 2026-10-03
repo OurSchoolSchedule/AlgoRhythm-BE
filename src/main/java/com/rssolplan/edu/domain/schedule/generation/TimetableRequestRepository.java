@@ -11,5 +11,10 @@ public interface TimetableRequestRepository extends JpaRepository<TimetableReque
 
     List<TimetableRequest> findBySchool_Id(Long schoolId);
 
+    /**
+     * Returns the single matching request, or empty when none exists.
+     *
+     * @throws org.springframework.dao.IncorrectResultSizeDataAccessException if multiple requests match
+     */
     Optional<TimetableRequest> findBySchool_IdAndStatus(Long schoolId, TimetableRequestStatus status);
 }

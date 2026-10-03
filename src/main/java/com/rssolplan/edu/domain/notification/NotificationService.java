@@ -30,6 +30,12 @@ public class NotificationService {
     private final TimetableSwapRequestRepository timetableSwapRequestRepository;
     private final SubstituteRequestRepository substituteRequestRepository;
 
+    /**
+     * Persists an unread schedule-input notification for every non-administrator school member.
+     * The supplied dates are displayed as a month/day range in the message.
+     *
+     * @throws IllegalArgumentException if the school or requester does not exist
+     */
     @Transactional
     public void sendScheduleInputRequest(Long requesterId, Long schoolId, LocalDate startDate, LocalDate endDate) {
 
@@ -65,6 +71,12 @@ public class NotificationService {
                 endDate.getMonthValue() + "/" + endDate.getDayOfMonth();
     }
 
+    /**
+     * Persists an unread request to submit unavailable periods for every teacher membership
+     * in the school, including any employment status.
+     *
+     * @throws IllegalArgumentException if the school or requester does not exist
+     */
     @Transactional
     public void sendTimetableInputRequest(Long requesterId, Long schoolId) {
         School school = schoolRepository.findById(schoolId)
@@ -89,6 +101,10 @@ public class NotificationService {
         }
     }
 
+    /**
+     * Returns the user's notifications newest first, with current swap and substitute statuses.
+     * Statuses are null when the referenced request no longer exists; reading does not mark notifications read.
+     */
     @Transactional(readOnly = true)
     public List<NotificationResponseDto> getNotifications(Long userId) {
 

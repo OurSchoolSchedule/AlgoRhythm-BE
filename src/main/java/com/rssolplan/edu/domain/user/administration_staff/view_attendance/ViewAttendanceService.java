@@ -21,6 +21,14 @@ public class ViewAttendanceService {
     private final TeacherAttendanceRepository teacherAttendanceRepository;
     private final SchoolUserRepository schoolUserRepository;
 
+    /**
+     * Returns daily attendance and totals for an inclusive date range after checking the
+     * caller's ADMIN membership in the target's school. Missing or unchecked-in records
+     * count as ABSENT; every calendar date is included and the late count remains zero.
+     *
+     * @param schoolUserId target membership ID, rather than user ID
+     * @throws IllegalArgumentException if the range is reversed, the membership is missing, or access is denied
+     */
     @Transactional(readOnly = true)
     public ViewAttendanceResponse getEmployeeAttendance(
             Long adminId, Long schoolUserId, LocalDate startDate, LocalDate endDate) {
@@ -77,6 +85,10 @@ public class ViewAttendanceService {
         );
     }
 
+    /**
+     * Maps missing or unchecked-in records to ABSENT, WORKING/FINISHED to NORMAL,
+     * checked-in ABSENT/LEAVE records to their status, and other checked-in records to OFF.
+     */
     private String resolveAttendance(TeacherAttendance attendance) {
         if (attendance == null || !attendance.isCheckedIn()) {
             return "ABSENT";

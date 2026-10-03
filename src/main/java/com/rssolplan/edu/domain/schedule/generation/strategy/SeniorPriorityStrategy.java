@@ -20,6 +20,16 @@ import java.util.stream.Collectors;
 @Component
 public class SeniorPriorityStrategy implements ScheduleGenerationStrategy {
 
+    /**
+     * Assigns slots in input order to the eligible teacher with the earliest hire date,
+     * breaking ties in favor of fewer assignments.
+     * Excludes declared unavailable periods and teachers already selected for the same
+     * day and period. Slots with no eligible teacher have UNASSIGNED status. Metadata
+     * counts are calculated by the caller.
+     *
+     * @param teacherUsernameMap names keyed by SchoolUser ID
+     * @param teacherHireDateMap hire dates keyed by SchoolUser ID; absent entries use today
+     */
     @Override
     public CandidateSchedule generate(
             Long schoolId,
@@ -73,6 +83,7 @@ public class SeniorPriorityStrategy implements ScheduleGenerationStrategy {
         return candidate;
     }
 
+    /** Groups unavailable day/period keys by SchoolUser ID, collapsing duplicate entries. */
     private Map<Long, Set<String>> buildUnavailabilityMap(List<TeacherAvailability> unavailabilities) {
         Map<Long, Set<String>> map = new HashMap<>();
         for (TeacherAvailability ua : unavailabilities) {
@@ -82,6 +93,10 @@ public class SeniorPriorityStrategy implements ScheduleGenerationStrategy {
         return map;
     }
 
+    /**
+     * Returns teachers in input order whose declared unavailability does not include the
+     * specified day and period. Assignment conflicts are filtered separately by the caller.
+     */
     private List<SchoolUser> filterAvailableTeachers(List<SchoolUser> teachers,
                                                       Map<Long, Set<String>> unavailabilityMap,
                                                       DayOfWeek dayOfWeek, int periodNumber) {

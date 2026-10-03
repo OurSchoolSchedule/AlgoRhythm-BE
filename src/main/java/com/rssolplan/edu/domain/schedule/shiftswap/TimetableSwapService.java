@@ -32,6 +32,16 @@ public class TimetableSwapService {
     private final AuthorizationService authService;
 
     // 1. 교시 교환 요청 생성
+    /**
+     * Creates a pending swap between the user's timetable and another member's timetable
+     * in the active school, and persists a notification for the receiver. Dates identify
+     * the requested occurrences; the timetable assignments are not changed.
+     *
+     * @throws NotFoundException if the user, school, or either timetable does not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active or membership is missing
+     * @throws SecurityException if a timetable belongs to another school or the requester does not teach its slot
+     * @throws IllegalArgumentException if both timetables belong to the requester
+     */
     @Transactional
     public TimetableSwapRequest create(Long requesterUserId,
                                        Long requesterTimetableId, LocalDate requesterDate,
@@ -104,6 +114,16 @@ public class TimetableSwapService {
     }
 
     // 2. 수신 교사: 수락/거절 1차 응답
+    /**
+     * Records the receiver's ACCEPT or REJECT decision on a pending swap. Acceptance
+     * notifies school administrators; rejection notifies the requester. Returns the updated request.
+     *
+     * @param action case-insensitive ACCEPT or REJECT, without surrounding whitespace
+     * @throws NotFoundException if the user or request does not exist
+     * @throws SecurityException if the user is not the receiver
+     * @throws IllegalStateException if the request is no longer pending
+     * @throws IllegalArgumentException if the action is null or unsupported
+     */
     @Transactional
     public TimetableSwapRequest respond(Long receiverUserId, Long requestId, String action) {
         User reqUser = userRepository.findById(receiverUserId)
@@ -160,6 +180,18 @@ public class TimetableSwapService {
     }
 
     // 3. 관리자: 최종 승인/거절
+    /**
+     * Records APPROVE or REJECT for an accepted swap awaiting a final decision in the
+     * user's active school, and notifies both participants. Returns the updated request;
+     * this operation changes approval status without changing timetable assignments.
+     *
+     * @param action case-insensitive APPROVE or REJECT, without surrounding whitespace
+     * @throws NotFoundException if the user or request does not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active
+     * @throws SecurityException if the request belongs to another school
+     * @throws IllegalStateException if the swap is not accepted or already has a final decision
+     * @throws IllegalArgumentException if the action is null or unsupported
+     */
     @Transactional
     public TimetableSwapRequest managerApproval(Long adminUserId, Long requestId, String action) {
         User reqUser = userRepository.findById(adminUserId)
@@ -206,6 +238,12 @@ public class TimetableSwapService {
     }
 
     // 4. 조회
+    /**
+     * Returns swaps where the user's membership in the active school is either participant.
+     *
+     * @throws com.rssolplan.edu.global.exception.NotFoundException if the user does not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active or membership is missing
+     */
     @Transactional(readOnly = true)
     public List<TimetableSwapRequest> getMyRequests(Long userId) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
@@ -213,6 +251,7 @@ public class TimetableSwapService {
         return requestRepo.findByRequester_IdOrReceiver_Id(me.getId(), me.getId());
     }
 
+    /** Persists an unread swap notification for the requester, attributing it to the supplied actor. */
     private void notifyRequester(TimetableSwapRequest request, User actor,
                                   Notification.Type type, String message) {
         notificationRepo.save(Notification.builder()
@@ -229,6 +268,7 @@ public class TimetableSwapService {
                 .build());
     }
 
+    /** Persists an unread swap notification for the receiver, attributing it to the supplied actor. */
     private void notifyReceiver(TimetableSwapRequest request, User actor,
                                  Notification.Type type, String message) {
         notificationRepo.save(Notification.builder()

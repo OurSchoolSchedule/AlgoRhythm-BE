@@ -32,6 +32,14 @@ public class AuthService {
     private static final String KAKAO_LOGOUT_URL = "https://kapi.kakao.com/v1/user/logout";
 
     // 카카오 로그인 처리
+    /**
+     * Logs in with an authorization code, creating or refreshing the local profile and
+     * replacing stored refresh tokens with a token expiring in 14 days. Returns issued
+     * JWTs, profile details, the new-user flag, and the possibly null active school ID.
+     *
+     * @throws IllegalArgumentException if the Kakao token or profile request fails
+     * @throws UnauthorizedException if the returned profile has no provider ID
+     */
     @Transactional
     public LoginResponse handleKakaoCallback(String code) {
         log.info("handleKakaoCallback called.");
@@ -152,6 +160,15 @@ public class AuthService {
 
     // 시은추가 아직 사용 X
 
+    /**
+     * Logs in with a Kakao access token, creating or refreshing the local profile and
+     * replacing stored refresh tokens with a token expiring in 14 days. Returns issued
+     * JWTs, profile details, the new-user flag, and the possibly null active school ID.
+     *
+     * @throws IllegalArgumentException if the Kakao token or profile request fails
+     * @throws UnauthorizedException if the returned profile has no provider ID
+     * @throws IndexOutOfBoundsException if the supplied access token has fewer than five characters
+     */
     @Transactional
     public LoginResponse handleKakaoAppLogin(String kakaoAccessToken) {
         log.info("handleKakaoAppLogin 시작. token={}", kakaoAccessToken.substring(0, 5) + "...");

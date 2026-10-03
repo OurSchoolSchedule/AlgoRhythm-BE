@@ -25,6 +25,10 @@ public class TimetableDto {
     private final Long teacherId;
     private final String teacherName;
 
+    /**
+     * Copies the entry and associated class, period, subject, and teacher details into a
+     * response. The response's teacherId is the SchoolUser membership ID.
+     */
     public TimetableDto(Timetable t) {
         this.id = t.getId();
         this.schoolId = t.getSchool().getId();

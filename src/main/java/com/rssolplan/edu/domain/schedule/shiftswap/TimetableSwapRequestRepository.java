@@ -15,5 +15,9 @@ public interface TimetableSwapRequestRepository extends JpaRepository<TimetableS
 
     List<TimetableSwapRequest> findBySchool_IdAndStatus(Long schoolId, SwapStatus status);
 
+    /**
+     * Returns swaps with either the supplied requester membership or receiver membership.
+     * Both arguments are SchoolUser IDs; pass the same ID to find one member's participation.
+     */
     List<TimetableSwapRequest> findByRequester_IdOrReceiver_Id(Long requesterId, Long receiverId);
 }

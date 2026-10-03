@@ -12,6 +12,7 @@ public interface SubstituteRequestRepository extends JpaRepository<SubstituteReq
 
     List<SubstituteRequest> findBySchool_IdAndStatus(Long schoolId, SubstituteStatus status);
 
+    /** Returns requests owned by the supplied SchoolUser membership ID, rather than user ID. */
     List<SubstituteRequest> findByOwner_Id(Long ownerId);
 
     List<SubstituteRequest> findByTimetable_Id(Long timetableId);

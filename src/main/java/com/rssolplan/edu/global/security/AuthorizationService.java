@@ -20,6 +20,12 @@ public class AuthorizationService {
         this.schoolUserRepository = schoolUserRepository;
     }
 
+    /**
+     * Returns the user's configured active school ID without checking school membership.
+     *
+     * @throws NotFoundException if the user does not exist
+     * @throws ForbiddenException if no school is active
+     */
     public Long getActiveSchoolIdOrThrow(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("존재하지 않는 사용자입니다."));
@@ -30,6 +36,11 @@ public class AuthorizationService {
         return activeSchoolId;
     }
 
+    /**
+     * Returns the user's membership in the school, regardless of position or employment status.
+     *
+     * @throws ForbiddenException if no membership exists
+     */
     public SchoolUser getSchoolUserOrThrow(Long userId, Long schoolId) {
         return schoolUserRepository.findByUser_IdAndSchool_Id(userId, schoolId)
                 .orElseThrow(() -> new ForbiddenException("해당 학교에 소속된 교직원이 아닙니다."));

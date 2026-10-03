@@ -33,6 +33,15 @@ public class CommandPreviewService {
     private final TeacherAttendanceService attendanceService;
     private final AuthorizationService authService;
 
+    /**
+     * Returns display data for the proposed command without executing it. Resource lookups
+     * and attendance authorization errors propagate; a successful preview does not establish
+     * that command execution is authorized or that its state preconditions hold.
+     *
+     * @throws IntentParseException if the intent is unknown or required preview parameters are missing
+     * @throws NotFoundException if a referenced resource or user does not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if required active-school access is missing
+     */
     @Transactional(readOnly = true)
     public Map<String, Object> buildPreview(Long userId, ParsedIntent intent) {
         return switch (intent.resolvedType()) {
@@ -47,6 +56,14 @@ public class CommandPreviewService {
         };
     }
 
+    /**
+     * Returns timetable details and prospective teachers from the user's active school,
+     * excluding the timetable's current teacher. Date and note may be null.
+     *
+     * @throws IntentParseException if the timetable ID is missing
+     * @throws NotFoundException if the timetable or user does not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active
+     */
     private Map<String, Object> previewSubstituteCreate(Long userId, ParsedIntent intent) {
         if (intent.timetableId() == null) {
             throw new IntentParseException("시간표 ID를 인식하지 못했습니다. 다시 말씀해 주세요.");
@@ -74,6 +91,13 @@ public class CommandPreviewService {
         return preview;
     }
 
+    /**
+     * Returns the request's timetable, date, status, and proposed action for display.
+     * Uses a placeholder when the action is null.
+     *
+     * @throws IntentParseException if the request ID is missing
+     * @throws NotFoundException if the request does not exist
+     */
     private Map<String, Object> previewSubstituteRespond(ParsedIntent intent) {
         if (intent.requestId() == null) {
             throw new IntentParseException("보결 요청 ID를 인식하지 못했습니다.");
@@ -90,6 +114,13 @@ public class CommandPreviewService {
         );
     }
 
+    /**
+     * Returns the responding teacher, recorded action, timetable, date, and proposed
+     * approval action for display. Uses a placeholder when the action is null.
+     *
+     * @throws IntentParseException if the response ID is missing
+     * @throws NotFoundException if the response does not exist
+     */
     private Map<String, Object> previewSubstituteApprove(ParsedIntent intent) {
         if (intent.responseId() == null) {
             throw new IntentParseException("교사 응답 ID를 인식하지 못했습니다.");
@@ -108,6 +139,12 @@ public class CommandPreviewService {
         );
     }
 
+    /**
+     * Returns the add-or-replace label and proposed unavailable periods for display,
+     * converting null reasons to empty strings.
+     *
+     * @throws IntentParseException if the slot list is null or empty
+     */
     private Map<String, Object> previewAvailability(ParsedIntent intent) {
         if (intent.unavailabilitySlots() == null || intent.unavailabilitySlots().isEmpty()) {
             throw new IntentParseException("불가 교시 정보를 인식하지 못했습니다.");
@@ -123,6 +160,10 @@ public class CommandPreviewService {
         );
     }
 
+    /**
+     * Returns the proposed action and today's attendance status and date.
+     * Attendance lookup and authorization errors propagate.
+     */
     private Map<String, Object> previewAttendance(Long userId, String action) {
         var today = attendanceService.getTodayAttendance(userId);
         return Map.of(
@@ -132,6 +173,7 @@ public class CommandPreviewService {
         );
     }
 
+    /** Formats the class, weekday, subject, period number, and teacher as a Korean display summary. */
     private String buildTimetableInfo(Timetable t) {
         return String.format("%s %s | %s | %s교시 | 담당: %s",
                 t.getSchoolClass().getGrade() + "학년 " + t.getSchoolClass().getClassNumber() + "반",

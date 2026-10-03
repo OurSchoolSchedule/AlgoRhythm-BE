@@ -12,6 +12,10 @@ public interface TeacherAttendanceRepository extends JpaRepository<TeacherAttend
 
     List<TeacherAttendance> findBySchoolUser_Id(Long schoolUserId);
 
+    /**
+     * Returns a membership's attendance records within the inclusive date range.
+     * Dates with no stored record are omitted.
+     */
     List<TeacherAttendance> findBySchoolUser_IdAndWorkDateBetween(Long schoolUserId, LocalDate from, LocalDate to);
 
     List<TeacherAttendance> findBySchoolUser_School_IdAndWorkDate(Long schoolId, LocalDate workDate);

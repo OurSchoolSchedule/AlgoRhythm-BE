@@ -35,6 +35,12 @@ public class TimetableService {
     private final SchoolSettingRepository schoolSettingRepository;
     private final AuthorizationService authService;
 
+    /**
+     * Returns all timetable entries for the user's active school across years and semesters.
+     *
+     * @throws com.rssolplan.edu.global.exception.NotFoundException if the user does not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active
+     */
     @Transactional(readOnly = true)
     public List<TimetableDto> getTimetables(Long userId) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
@@ -42,6 +48,12 @@ public class TimetableService {
                 .stream().map(TimetableDto::new).collect(Collectors.toList());
     }
 
+    /**
+     * Returns the active school's timetable entries for the requested academic year and semester.
+     *
+     * @throws com.rssolplan.edu.global.exception.NotFoundException if the user does not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active
+     */
     @Transactional(readOnly = true)
     public List<TimetableDto> getTimetablesByYearSemester(Long userId, int academicYear, int semester) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
@@ -49,6 +61,12 @@ public class TimetableService {
                 .stream().map(TimetableDto::new).collect(Collectors.toList());
     }
 
+    /**
+     * Returns entries assigned to the user's active-school membership across years and semesters.
+     *
+     * @throws com.rssolplan.edu.global.exception.NotFoundException if the user does not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active or membership is missing
+     */
     @Transactional(readOnly = true)
     public List<TimetableDto> getMyTimetable(Long userId) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
@@ -57,6 +75,12 @@ public class TimetableService {
                 .stream().map(TimetableDto::new).collect(Collectors.toList());
     }
 
+    /**
+     * Returns entries assigned to the user's active-school membership for the requested term.
+     *
+     * @throws com.rssolplan.edu.global.exception.NotFoundException if the user does not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active or membership is missing
+     */
     @Transactional(readOnly = true)
     public List<TimetableDto> getMyTimetableByYearSemester(Long userId, int academicYear, int semester) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
@@ -65,6 +89,14 @@ public class TimetableService {
                 .stream().map(TimetableDto::new).collect(Collectors.toList());
     }
 
+    /**
+     * Creates a timetable entry in the active school after checking the class, subject,
+     * teacher membership, period, and class/teacher slot conflicts. Returns the saved entry's details.
+     *
+     * @throws NotFoundException if the user, school, class, subject, teacher, settings, or period is missing
+     * @throws ForbiddenException if no school is active or the class, subject, or teacher belongs to another school
+     * @throws IllegalStateException if the class or teacher already has an entry in the same term, day, and period
+     */
     @Transactional
     public TimetableDto createTimetable(Long userId, TimetableCreateDto dto) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
@@ -120,6 +152,15 @@ public class TimetableService {
         return new TimetableDto(timetableRepository.save(timetable));
     }
 
+    /**
+     * Replaces an entry's subject and teacher in the active school and returns its updated details.
+     * Only subjectId and teacherSchoolUserId are read from the DTO; other fields are ignored.
+     * No explicit slot-conflict check is performed, so persistence constraint failures propagate.
+     *
+     * @throws NotFoundException if the user, timetable, subject, or teacher is missing
+     * @throws ForbiddenException if no school is active or the subject or teacher belongs to another school
+     * @throws SecurityException if the timetable belongs to another school
+     */
     @Transactional
     public TimetableDto updateTimetable(Long userId, Long timetableId, TimetableCreateDto dto) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
@@ -148,6 +189,13 @@ public class TimetableService {
         return new TimetableDto(timetableRepository.save(timetable));
     }
 
+    /**
+     * Deletes a timetable entry belonging to the user's active school.
+     *
+     * @throws NotFoundException if the user or timetable is missing
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active
+     * @throws SecurityException if the timetable belongs to another school
+     */
     @Transactional
     public void deleteTimetable(Long userId, Long timetableId) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);

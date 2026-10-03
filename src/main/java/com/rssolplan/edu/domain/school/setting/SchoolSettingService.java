@@ -22,6 +22,12 @@ public class SchoolSettingService {
     private final TimetableRepository timetableRepository;
     private final AuthorizationService authService;
 
+    /**
+     * Returns the user's active-school settings.
+     *
+     * @throws NotFoundException if the user or settings do not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active
+     */
     @Transactional(readOnly = true)
     public SchoolSetting getSetting(Long userId) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
@@ -29,6 +35,15 @@ public class SchoolSettingService {
                 .orElseThrow(() -> new NotFoundException("학교 설정이 존재하지 않습니다."));
     }
 
+    /**
+     * Creates or updates the active school's lesson, break, and lunch settings, returning
+     * the saved settings. Existing period start and end times are not recalculated.
+     *
+     * @param periodDuration lesson duration in minutes
+     * @param breakDuration break duration in minutes
+     * @throws NotFoundException if the user or school does not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active
+     */
     @Transactional
     public SchoolSetting createOrUpdateSetting(Long userId, int periodDuration, int breakDuration,
                                                LocalTime lunchStartTime, LocalTime lunchEndTime) {
@@ -46,6 +61,12 @@ public class SchoolSettingService {
         return settingRepo.save(setting);
     }
 
+    /**
+     * Returns the active school's configured periods in their stored collection order.
+     *
+     * @throws NotFoundException if the user or settings do not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active
+     */
     @Transactional(readOnly = true)
     public List<PeriodSetting> getPeriods(Long userId) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
@@ -54,6 +75,13 @@ public class SchoolSettingService {
         return setting.getPeriods();
     }
 
+    /**
+     * Adds a period to the active school's settings and returns it. No time-range or
+     * duplicate-number validation is performed here; persistence constraint failures propagate.
+     *
+     * @throws NotFoundException if the user or settings do not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active
+     */
     @Transactional
     public PeriodSetting addPeriod(Long userId, int periodNumber, LocalTime startTime, LocalTime endTime) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
@@ -70,6 +98,13 @@ public class SchoolSettingService {
         return period;
     }
 
+    /**
+     * Updates a period's start and end times in the active school and returns the period.
+     * Its number is unchanged; no time-range validation is performed here.
+     *
+     * @throws NotFoundException if the user, settings, or period in those settings does not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active
+     */
     @Transactional
     public PeriodSetting updatePeriod(Long userId, Long periodId, LocalTime startTime, LocalTime endTime) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
@@ -85,6 +120,13 @@ public class SchoolSettingService {
         return period;
     }
 
+    /**
+     * Removes a period from the active school's settings only when no timetable references it.
+     *
+     * @throws NotFoundException if the user, settings, or period in those settings does not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active
+     * @throws BadRequestException if any timetable references the period
+     */
     @Transactional
     public void deletePeriod(Long userId, Long periodId) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);

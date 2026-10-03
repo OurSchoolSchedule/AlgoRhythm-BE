@@ -26,6 +26,12 @@ public class IntentParserService {
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
 
+    /**
+     * Sends the text to the configured OpenAI model and returns the extracted intent.
+     * An unrecognized nonblank intent type is retained for callers to resolve.
+     *
+     * @throws IntentParseException if request construction, the API call, or response parsing fails
+     */
     public ParsedIntent parse(String text) {
         try {
             String requestBody = buildRequestBody(text);
@@ -46,6 +52,12 @@ public class IntentParserService {
         }
     }
 
+    /**
+     * Returns a chat-completion request containing the user text, today's parsing prompt,
+     * and the intent schema, forcing selection of the parse_intent function.
+     *
+     * @throws com.fasterxml.jackson.core.JsonProcessingException if the request cannot be serialized
+     */
     private String buildRequestBody(String userText) throws Exception {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("model", openAiProperties.getModel());
@@ -77,6 +89,10 @@ public class IntentParserService {
         return objectMapper.writeValueAsString(root);
     }
 
+    /**
+     * Returns Korean parsing instructions anchored to the server's current local date,
+     * including supported operations, date and weekday formats, and confidence labels.
+     */
     private String buildSystemPrompt() {
         LocalDate today = LocalDate.now();
         String koreanDay = today.getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.KOREAN);
@@ -104,6 +120,11 @@ public class IntentParserService {
                 """, today, koreanDay);
     }
 
+    /**
+     * Populates the supplied schema node with intent fields and unavailable-period items.
+     * Requires intentType and confidence at the top level, and dayOfWeek and periodNumber
+     * within each unavailable-period item.
+     */
     private void buildParameterSchema(ObjectNode params) {
         params.put("type", "object");
 
@@ -145,6 +166,7 @@ public class IntentParserService {
         params.putArray("required").add("intentType").add("confidence");
     }
 
+    /** Adds a named string property with the supplied allowed values and description to the schema. */
     private void addEnumProp(ObjectNode parent, String name, String[] values, String description) {
         ObjectNode prop = parent.putObject(name);
         prop.put("type", "string");
@@ -153,6 +175,7 @@ public class IntentParserService {
         for (String v : values) en.add(v);
     }
 
+    /** Adds a named property accepting the supplied string values or null to the schema. */
     private void addEnumPropNullable(ObjectNode parent, String name, String[] values, String description) {
         ObjectNode prop = parent.putObject(name);
         ArrayNode typeArr = prop.putArray("type");
@@ -164,6 +187,7 @@ public class IntentParserService {
         en.addNull();
     }
 
+    /** Adds a named property accepting a string or null to the schema. */
     private void addNullableString(ObjectNode parent, String name, String description) {
         ObjectNode prop = parent.putObject(name);
         ArrayNode typeArr = prop.putArray("type");
@@ -172,6 +196,7 @@ public class IntentParserService {
         prop.put("description", description);
     }
 
+    /** Adds a named property accepting an integer or null to the schema. */
     private void addNullableInt(ObjectNode parent, String name, String description) {
         ObjectNode prop = parent.putObject(name);
         ArrayNode typeArr = prop.putArray("type");
@@ -180,6 +205,12 @@ public class IntentParserService {
         prop.put("description", description);
     }
 
+    /**
+     * Decodes arguments from the first tool call in the first response choice.
+     * Nonblank intent types are returned without validating that they are supported.
+     *
+     * @throws IntentParseException if the response cannot be decoded or intentType is missing or blank
+     */
     private ParsedIntent extractParsedIntent(String responseJson) {
         try {
             JsonNode root = objectMapper.readTree(responseJson);

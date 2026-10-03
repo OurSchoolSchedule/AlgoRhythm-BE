@@ -15,6 +15,10 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
 
     List<Todo> findByUser_IdAndSchool_IdAndDateAndTodoType(Long userId, Long schoolId, LocalDate date, Todo.TodoType todoType);
 
+    /**
+     * Returns school and handover tasks plus the user's personal tasks for the school and date,
+     * ordered by task type and then newest first.
+     */
     @Query("SELECT t FROM Todo t WHERE t.school.id = :schoolId AND t.date = :date " +
             "AND (t.todoType IN ('SCHOOL', 'HANDOVER') OR (t.todoType = 'PERSONAL' AND t.user.id = :userId)) " +
             "ORDER BY t.todoType, t.createdAt DESC")

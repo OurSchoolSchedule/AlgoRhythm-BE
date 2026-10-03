@@ -39,6 +39,13 @@ public class SubstituteService {
     private final AuthorizationService authService;
 
     // 교감/교장: 보결 요청 생성
+    /**
+     * Creates an open substitute request for a timetable in the administrator's active
+     * school and persists invitations for its other teacher memberships. Returns the request details.
+     *
+     * @throws NotFoundException if the user, school, or timetable does not exist
+     * @throws ForbiddenException if the active school, administrator membership, or timetable's school is invalid
+     */
     @Transactional
     public SubstituteRequestDetail create(Long adminUserId, SubstituteCreateRequest req) {
         User requester = userRepository.findById(adminUserId)
@@ -105,6 +112,16 @@ public class SubstituteService {
     }
 
     // 교사: 보결 요청 수락/거절
+    /**
+     * Records an invited member's first response to an open request in the active school
+     * and notifies its owner. Actions ACCEPT and REJECT are case-insensitive; null records NONE.
+     * Returns the response with manager approval pending.
+     *
+     * @throws NotFoundException if the user or request does not exist
+     * @throws ForbiddenException if the active school, membership, request school, or invitation is invalid
+     * @throws IllegalStateException if the request is closed or the member already responded
+     * @throws IllegalArgumentException if a non-null action is neither ACCEPT nor REJECT
+     */
     @Transactional
     public SubstituteResponseDetail respond(Long teacherUserId, Long requestId, SubstituteRespondRequest req) {
         User requester = userRepository.findById(teacherUserId)
@@ -166,6 +183,16 @@ public class SubstituteService {
     }
 
     // 교감/교장: 교사 응답 최종 승인/거절
+    /**
+     * Records the request owner's decision on a pending response and notifies the candidate.
+     * Case-insensitive APPROVE or APPROVED fills the open request; any other action,
+     * including null, rejects the response and leaves the request open.
+     *
+     * @throws NotFoundException if the user or response does not exist
+     * @throws ForbiddenException if the user does not own the request
+     * @throws IllegalStateException if the request is closed, the response is already decided,
+     *         or approval is attempted for a response other than ACCEPT
+     */
     @Transactional
     public SubstituteApprovalDetail approve(Long adminUserId, Long responseId, SubstituteApprovalRequest req) {
         User requester = userRepository.findById(adminUserId)
@@ -225,6 +252,15 @@ public class SubstituteService {
     }
 
     // 교사: 현재 학교 보결 요청 목록 조회
+    /**
+     * Returns requests in the user's active school matching a case-insensitive status.
+     * Unrecognized status text falls back to OPEN.
+     *
+     * @param status non-null status text; whitespace is not trimmed
+     * @throws NullPointerException if status is null
+     * @throws com.rssolplan.edu.global.exception.NotFoundException if the user does not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active
+     */
     @Transactional(readOnly = true)
     public List<SubstituteRequestDetail> getRequests(Long userId, String status) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
@@ -234,6 +270,11 @@ public class SubstituteService {
                 .toList();
     }
 
+    /**
+     * Parses ACCEPT or REJECT without regard to case, returning NONE for null.
+     *
+     * @throws IllegalArgumentException if non-null text is not ACCEPT or REJECT
+     */
     private SubstituteResponse.WorkerAction parseTeacherAction(String action) {
         if (action == null) return SubstituteResponse.WorkerAction.NONE;
         return switch (action.toUpperCase(Locale.ROOT)) {
@@ -243,6 +284,11 @@ public class SubstituteService {
         };
     }
 
+    /**
+     * Parses a case-insensitive request status, falling back to OPEN for unrecognized text.
+     *
+     * @throws NullPointerException if status is null
+     */
     private SubstituteStatus parseStatus(String status) {
         try {
             return SubstituteStatus.valueOf(status.toUpperCase(Locale.ROOT));
