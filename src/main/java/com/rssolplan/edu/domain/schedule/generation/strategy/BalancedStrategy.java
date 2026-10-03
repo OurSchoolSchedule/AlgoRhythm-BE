@@ -33,15 +33,21 @@ public class BalancedStrategy implements ScheduleGenerationStrategy {
 
         CandidateSchedule candidate = new CandidateSchedule(schoolId);
         Map<Long, Integer> assignmentCount = new HashMap<>();
+        // 교사별 이미 배정된 교시 집합 (teacherId -> Set of "dayOfWeek_period")
+        Map<Long, Set<String>> occupancyMap = new HashMap<>();
         LocalDate now = LocalDate.now();
 
         // 교사별 불가 교시 집합 (schoolUserId -> Set of "dayOfWeek_period")
         Map<Long, Set<String>> unavailabilityMap = buildUnavailabilityMap(unavailabilities);
 
         for (TimetableSlotRequirementDto slot : settings.getSlotRequirements()) {
-            // 해당 슬롯에 배정 가능한 교사 필터링 (불가 교시 제외)
+            String occupancyKey = slot.getDayOfWeek() + "_" + slot.getPeriodNumber();
+            // 해당 슬롯에 배정 가능한 교사 필터링 (불가 교시 + 이미 같은 시간 배정된 교사 제외)
             List<SchoolUser> available = filterAvailableTeachers(
-                    teachers, unavailabilityMap, slot.getDayOfWeek(), slot.getPeriodNumber());
+                    teachers, unavailabilityMap, slot.getDayOfWeek(), slot.getPeriodNumber())
+                    .stream()
+                    .filter(t -> !occupancyMap.getOrDefault(t.getId(), Set.of()).contains(occupancyKey))
+                    .collect(Collectors.toList());
 
             // 경력자/신입 분류
             List<SchoolUser> seniors = new ArrayList<>();
@@ -76,6 +82,7 @@ public class BalancedStrategy implements ScheduleGenerationStrategy {
                         slot.getSubjectId()
                 ));
                 assignmentCount.merge(assigned.getId(), 1, Integer::sum);
+                occupancyMap.computeIfAbsent(assigned.getId(), k -> new HashSet<>()).add(occupancyKey);
             } else {
                 candidate.addShift(new CandidateShift(
                         slot.getSchoolClassId(), slot.getDayOfWeek(),

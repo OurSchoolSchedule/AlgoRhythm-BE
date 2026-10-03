@@ -13,6 +13,7 @@ import com.rssolplan.edu.domain.school.Subject;
 import com.rssolplan.edu.domain.school.SubjectRepository;
 import com.rssolplan.edu.domain.school.setting.PeriodSetting;
 import com.rssolplan.edu.domain.school.setting.SchoolSettingRepository;
+import com.rssolplan.edu.global.exception.ForbiddenException;
 import com.rssolplan.edu.global.exception.NotFoundException;
 import com.rssolplan.edu.global.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
@@ -72,10 +73,19 @@ public class TimetableService {
                 .orElseThrow(() -> new NotFoundException("학교를 찾을 수 없습니다."));
         var schoolClass = schoolClassRepository.findById(dto.getSchoolClassId())
                 .orElseThrow(() -> new NotFoundException("학급을 찾을 수 없습니다."));
+        if (!schoolClass.getSchool().getId().equals(schoolId)) {
+            throw new ForbiddenException("해당 학교의 학급이 아닙니다.");
+        }
         var subject = subjectRepository.findById(dto.getSubjectId())
                 .orElseThrow(() -> new NotFoundException("과목을 찾을 수 없습니다."));
+        if (!subject.getSchool().getId().equals(schoolId)) {
+            throw new ForbiddenException("해당 학교의 과목이 아닙니다.");
+        }
         var teacher = schoolUserRepository.findById(dto.getTeacherSchoolUserId())
                 .orElseThrow(() -> new NotFoundException("교사를 찾을 수 없습니다."));
+        if (!teacher.getSchool().getId().equals(schoolId)) {
+            throw new ForbiddenException("해당 학교 소속 교사가 아닙니다.");
+        }
 
         var schoolSetting = schoolSettingRepository.findBySchool_Id(schoolId)
                 .orElseThrow(() -> new NotFoundException("학교 설정이 존재하지 않습니다."));
@@ -123,8 +133,14 @@ public class TimetableService {
 
         var subject = subjectRepository.findById(dto.getSubjectId())
                 .orElseThrow(() -> new NotFoundException("과목을 찾을 수 없습니다."));
+        if (!subject.getSchool().getId().equals(schoolId)) {
+            throw new ForbiddenException("해당 학교의 과목이 아닙니다.");
+        }
         var teacher = schoolUserRepository.findById(dto.getTeacherSchoolUserId())
                 .orElseThrow(() -> new NotFoundException("교사를 찾을 수 없습니다."));
+        if (!teacher.getSchool().getId().equals(schoolId)) {
+            throw new ForbiddenException("해당 학교 소속 교사가 아닙니다.");
+        }
 
         timetable.setSubject(subject);
         timetable.setTeacher(teacher);

@@ -190,6 +190,12 @@ public class MypageServiceImpl implements MypageService {
                 .build();
         schoolUsers.save(link);
 
+        if (admin.getActiveSchoolId() == null) {
+            admin.setActiveSchoolId(school.getId());
+            users.save(admin);
+            evictRoleCache(admin.getId());
+        }
+
         return toSchoolSimple(link);
     }
 
@@ -279,6 +285,12 @@ public class MypageServiceImpl implements MypageService {
                 .hireDate(req.getHireDate())
                 .build();
         schoolUsers.save(link);
+
+        if (teacher.getActiveSchoolId() == null) {
+            teacher.setActiveSchoolId(school.getId());
+            users.save(teacher);
+            evictRoleCache(teacher.getId());
+        }
 
         return toSchoolSimple(link);
     }

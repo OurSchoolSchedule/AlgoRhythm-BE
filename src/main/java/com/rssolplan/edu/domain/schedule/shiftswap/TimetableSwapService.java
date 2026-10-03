@@ -50,11 +50,20 @@ public class TimetableSwapService {
         Timetable receiverTimetable = timetableRepo.findById(receiverTimetableId)
                 .orElseThrow(() -> new NotFoundException("수신자 시간표를 찾을 수 없습니다."));
 
+        if (!requesterTimetable.getSchool().getId().equals(schoolId)
+                || !receiverTimetable.getSchool().getId().equals(schoolId)) {
+            throw new SecurityException("같은 학교 시간표끼리만 교환할 수 있습니다.");
+        }
+
         if (!requesterTimetable.getTeacher().getId().equals(requester.getId())) {
             throw new SecurityException("본인의 시간표에 대해서만 교환 요청을 생성할 수 있습니다.");
         }
 
         SchoolUser receiver = receiverTimetable.getTeacher();
+
+        if (receiver.getId().equals(requester.getId())) {
+            throw new IllegalArgumentException("본인과는 교환할 수 없습니다.");
+        }
 
         TimetableSwapRequest request = TimetableSwapRequest.builder()
                 .school(school)
@@ -105,6 +114,10 @@ public class TimetableSwapService {
 
         if (!request.getReceiver().getUser().getId().equals(receiverUserId)) {
             throw new SecurityException("이 교환 요청에 응답할 권한이 없습니다.");
+        }
+
+        if (request.getStatus() != TimetableSwapRequest.SwapStatus.PENDING) {
+            throw new IllegalStateException("이미 처리된 교환 요청입니다.");
         }
 
         String act = action == null ? "" : action.toUpperCase();
@@ -158,6 +171,13 @@ public class TimetableSwapService {
         Long schoolId = authService.getActiveSchoolIdOrThrow(adminUserId);
         if (!request.getSchool().getId().equals(schoolId)) {
             throw new SecurityException("해당 학교의 관리자만 승인/거절할 수 있습니다.");
+        }
+
+        if (request.getStatus() != TimetableSwapRequest.SwapStatus.ACCEPTED) {
+            throw new IllegalStateException("수신 교사가 수락한 요청만 최종 승인/거절할 수 있습니다.");
+        }
+        if (request.getManagerApprovalStatus() != TimetableSwapRequest.ManagerApprovalStatus.PENDING) {
+            throw new IllegalStateException("이미 최종 처리된 교환 요청입니다.");
         }
 
         String act = action == null ? "" : action.toUpperCase();

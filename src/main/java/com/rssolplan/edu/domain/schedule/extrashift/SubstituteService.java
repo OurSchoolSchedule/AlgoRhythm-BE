@@ -14,12 +14,14 @@ import com.rssolplan.edu.domain.school.SchoolUser;
 import com.rssolplan.edu.domain.school.SchoolUserRepository;
 import com.rssolplan.edu.domain.user.User;
 import com.rssolplan.edu.domain.user.UserRepository;
+import com.rssolplan.edu.global.exception.ForbiddenException;
 import com.rssolplan.edu.global.exception.NotFoundException;
 import com.rssolplan.edu.global.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -44,11 +46,20 @@ public class SubstituteService {
 
         Long schoolId = authService.getActiveSchoolIdOrThrow(adminUserId);
         SchoolUser admin = authService.getSchoolUserOrThrow(adminUserId, schoolId);
+
+        if (admin.getPosition() != SchoolUser.Position.ADMIN) {
+            throw new ForbiddenException("보결 요청 생성 권한이 없습니다. 관리자(교감/교장)만 가능합니다.");
+        }
+
         School school = schoolRepo.findById(schoolId)
                 .orElseThrow(() -> new NotFoundException("학교를 찾을 수 없습니다."));
 
         Timetable timetable = timetableRepo.findById(req.timetableId())
                 .orElseThrow(() -> new NotFoundException("시간표를 찾을 수 없습니다."));
+
+        if (!timetable.getSchool().getId().equals(schoolId)) {
+            throw new ForbiddenException("해당 학교의 시간표가 아닙니다.");
+        }
 
         List<SchoolUser> candidates = schoolUserRepo.findBySchool_IdAndPosition(
                         schoolId, SchoolUser.Position.TEACHER).stream()
@@ -105,6 +116,19 @@ public class SubstituteService {
         SubstituteRequest request = requestRepo.findById(requestId)
                 .orElseThrow(() -> new NotFoundException("보결 요청을 찾을 수 없습니다."));
 
+        if (!request.getSchool().getId().equals(schoolId)) {
+            throw new ForbiddenException("해당 학교의 보결 요청이 아닙니다.");
+        }
+
+        String receiverCsv = request.getReceiverUserIds();
+        boolean isInvited = receiverCsv != null &&
+                Arrays.stream(receiverCsv.split(","))
+                        .map(String::trim)
+                        .anyMatch(id -> id.equals(String.valueOf(candidate.getId())));
+        if (!isInvited) {
+            throw new ForbiddenException("해당 보결 요청에 응답할 권한이 없습니다.");
+        }
+
         if (request.getStatus() != SubstituteStatus.OPEN) {
             throw new IllegalStateException("이미 종료된 요청입니다.");
         }
@@ -153,10 +177,21 @@ public class SubstituteService {
         SubstituteRequest request = response.getSubstituteRequest();
 
         if (!request.getOwner().getUser().getId().equals(adminUserId)) {
-            throw new SecurityException("승인 권한이 없습니다.");
+            throw new ForbiddenException("승인 권한이 없습니다.");
+        }
+
+        if (request.getStatus() != SubstituteStatus.OPEN) {
+            throw new IllegalStateException("이미 종료된 요청입니다.");
+        }
+        if (response.getManagerApproval() != SubstituteResponse.ManagerApproval.PENDING) {
+            throw new IllegalStateException("이미 처리된 응답입니다.");
         }
 
         boolean approved = "APPROVE".equalsIgnoreCase(req.action()) || "APPROVED".equalsIgnoreCase(req.action());
+
+        if (approved && response.getWorkerAction() != SubstituteResponse.WorkerAction.ACCEPT) {
+            throw new IllegalStateException("교사가 수락한 응답만 승인할 수 있습니다.");
+        }
 
         response.setManagerApproval(approved
                 ? SubstituteResponse.ManagerApproval.APPROVED

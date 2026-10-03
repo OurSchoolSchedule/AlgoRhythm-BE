@@ -28,6 +28,7 @@ import com.rssolplan.edu.domain.school.Subject;
 import com.rssolplan.edu.domain.school.SubjectRepository;
 import com.rssolplan.edu.domain.school.setting.PeriodSetting;
 import com.rssolplan.edu.domain.school.setting.SchoolSettingRepository;
+import com.rssolplan.edu.global.exception.BadRequestException;
 import com.rssolplan.edu.global.exception.ForbiddenException;
 import com.rssolplan.edu.global.exception.NotFoundException;
 import com.rssolplan.edu.global.security.AuthorizationService;
@@ -114,6 +115,10 @@ public class ScheduleGenerationService {
         TimetableRequest timetableRequest = timetableRequestRepository.findById(timetableRequestId)
                 .orElseThrow(() -> new NotFoundException("시간표 요청을 찾을 수 없습니다."));
 
+        if (!timetableRequest.getSchool().getId().equals(schoolId)) {
+            throw new ForbiddenException("해당 학교의 시간표 요청이 아닙니다.");
+        }
+
         if (timetableRequest.getStatus() != TimetableRequest.TimetableRequestStatus.REQUESTED) {
             throw new IllegalStateException("아직 요청 상태가 아닙니다.");
         }
@@ -198,6 +203,10 @@ public class ScheduleGenerationService {
         TimetableRequest timetableRequest = timetableRequestRepository.findById(timetableRequestId)
                 .orElseThrow(() -> new NotFoundException("시간표 요청을 찾을 수 없습니다."));
 
+        if (!timetableRequest.getSchool().getId().equals(schoolId)) {
+            throw new ForbiddenException("해당 학교의 시간표 요청이 아닙니다.");
+        }
+
         if (timetableRequest.getStatus() != TimetableRequest.TimetableRequestStatus.GENERATED) {
             throw new IllegalStateException("아직 후보 시간표가 생성되지 않았습니다.");
         }
@@ -217,11 +226,6 @@ public class ScheduleGenerationService {
                                 .endDate(dto.getEndDate())
                                 .build()));
 
-        // 기존 해당 연도/학기 시간표 삭제
-        List<Timetable> existing = timetableRepository
-                .findBySchool_IdAndAcademicYearAndSemester(schoolId, academicYear, semester);
-        timetableRepository.deleteAll(existing);
-
         // 후보 조회
         List<CandidateSchedule> candidates = getCandidates(timetableRequest.getCandidateTimetableKey());
         if (candidates.isEmpty() || candidateIndex >= candidates.size()) {
@@ -236,6 +240,21 @@ public class ScheduleGenerationService {
         Map<Integer, PeriodSetting> periodMap = schoolSetting.getPeriods().stream()
                 .collect(Collectors.toMap(PeriodSetting::getPeriodNumber, p -> p));
 
+        // 삭제 전에 배정된 모든 shift가 유효한지 검증
+        for (var shift : selected.getShifts()) {
+            if (shift.getSchoolUserId() == null) continue;
+            if (periodMap.get(shift.getPeriodNumber()) == null) continue;
+            if (shift.getSubjectId() == null) {
+                throw new BadRequestException("후보 시간표에 과목이 없는 교시가 포함되어 있습니다. (dayOfWeek=" +
+                        shift.getDayOfWeek() + ", period=" + shift.getPeriodNumber() + ")");
+            }
+        }
+
+        // 기존 해당 연도/학기 시간표 삭제
+        List<Timetable> existing = timetableRepository
+                .findBySchool_IdAndAcademicYearAndSemester(schoolId, academicYear, semester);
+        timetableRepository.deleteAll(existing);
+
         // CandidateShift → Timetable 변환
         for (var shift : selected.getShifts()) {
             if (shift.getSchoolUserId() == null) continue; // UNASSIGNED 건너뜀
@@ -247,12 +266,8 @@ public class ScheduleGenerationService {
                     .orElseThrow(() -> new NotFoundException("교사를 찾을 수 없습니다."));
             SchoolClass schoolClass = schoolClassRepository.findById(shift.getSchoolClassId())
                     .orElseThrow(() -> new NotFoundException("학급을 찾을 수 없습니다."));
-            Subject subject = shift.getSubjectId() != null
-                    ? subjectRepository.findById(shift.getSubjectId())
-                            .orElseThrow(() -> new NotFoundException("과목을 찾을 수 없습니다."))
-                    : null;
-
-            if (subject == null) continue; // 과목 없으면 저장 불가 (NOT NULL 제약)
+            Subject subject = subjectRepository.findById(shift.getSubjectId())
+                    .orElseThrow(() -> new NotFoundException("과목을 찾을 수 없습니다."));
 
             Timetable timetable = Timetable.builder()
                     .school(school)

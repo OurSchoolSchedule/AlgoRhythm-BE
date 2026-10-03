@@ -33,10 +33,16 @@ public class SeniorPriorityStrategy implements ScheduleGenerationStrategy {
         Map<Long, Integer> assignmentCount = new HashMap<>();
         LocalDate now = LocalDate.now();
         Map<Long, Set<String>> unavailabilityMap = buildUnavailabilityMap(unavailabilities);
+        // 교사별 이미 배정된 교시 집합 (teacherId -> Set of "dayOfWeek_period")
+        Map<Long, Set<String>> occupancyMap = new HashMap<>();
 
         for (TimetableSlotRequirementDto slot : settings.getSlotRequirements()) {
+            String occupancyKey = slot.getDayOfWeek() + "_" + slot.getPeriodNumber();
             List<SchoolUser> available = filterAvailableTeachers(
-                    teachers, unavailabilityMap, slot.getDayOfWeek(), slot.getPeriodNumber());
+                    teachers, unavailabilityMap, slot.getDayOfWeek(), slot.getPeriodNumber())
+                    .stream()
+                    .filter(t -> !occupancyMap.getOrDefault(t.getId(), Set.of()).contains(occupancyKey))
+                    .collect(Collectors.toList());
 
             // 경력 순 정렬 (입사일 이른 순), 동일 경력이면 적게 배정된 순
             available.sort((t1, t2) -> {
@@ -56,6 +62,7 @@ public class SeniorPriorityStrategy implements ScheduleGenerationStrategy {
                         slot.getSchoolClassId(), slot.getDayOfWeek(),
                         slot.getPeriodNumber(), slot.getSubjectId()));
                 assignmentCount.merge(assigned.getId(), 1, Integer::sum);
+                occupancyMap.computeIfAbsent(assigned.getId(), k -> new HashSet<>()).add(occupancyKey);
             } else {
                 candidate.addShift(new CandidateShift(
                         slot.getSchoolClassId(), slot.getDayOfWeek(),

@@ -35,10 +35,16 @@ public class FairDistributionStrategy implements ScheduleGenerationStrategy {
         teachers.forEach(t -> assignmentCount.put(t.getId(), 0));
         LocalDate now = LocalDate.now();
         Map<Long, Set<String>> unavailabilityMap = buildUnavailabilityMap(unavailabilities);
+        // 교사별 이미 배정된 교시 집합 (teacherId -> Set of "dayOfWeek_period")
+        Map<Long, Set<String>> occupancyMap = new HashMap<>();
 
         for (TimetableSlotRequirementDto slot : settings.getSlotRequirements()) {
+            String occupancyKey = slot.getDayOfWeek() + "_" + slot.getPeriodNumber();
             List<SchoolUser> available = filterAvailableTeachers(
-                    teachers, unavailabilityMap, slot.getDayOfWeek(), slot.getPeriodNumber());
+                    teachers, unavailabilityMap, slot.getDayOfWeek(), slot.getPeriodNumber())
+                    .stream()
+                    .filter(t -> !occupancyMap.getOrDefault(t.getId(), Set.of()).contains(occupancyKey))
+                    .collect(Collectors.toList());
 
             // 수업 수 적은 순, 동일하면 신입(입사일 늦은) 순으로 기회 부여
             available.sort((t1, t2) -> {
@@ -57,6 +63,7 @@ public class FairDistributionStrategy implements ScheduleGenerationStrategy {
                         slot.getSchoolClassId(), slot.getDayOfWeek(),
                         slot.getPeriodNumber(), slot.getSubjectId()));
                 assignmentCount.merge(assigned.getId(), 1, Integer::sum);
+                occupancyMap.computeIfAbsent(assigned.getId(), k -> new HashSet<>()).add(occupancyKey);
             } else {
                 candidate.addShift(new CandidateShift(
                         slot.getSchoolClassId(), slot.getDayOfWeek(),

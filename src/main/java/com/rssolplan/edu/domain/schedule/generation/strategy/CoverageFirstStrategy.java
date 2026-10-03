@@ -32,6 +32,8 @@ public class CoverageFirstStrategy implements ScheduleGenerationStrategy {
         CandidateSchedule candidate = new CandidateSchedule(schoolId);
         Map<Long, Integer> assignmentCount = new HashMap<>();
         Map<Long, Set<String>> unavailabilityMap = buildUnavailabilityMap(unavailabilities);
+        // 교사별 이미 배정된 교시 집합 (teacherId -> Set of "dayOfWeek_period")
+        Map<Long, Set<String>> occupancyMap = new HashMap<>();
 
         // 슬롯을 배정 가능 교사 수 기준으로 정렬 (적은 순 → 먼저 배정)
         List<TimetableSlotRequirementDto> sorted = settings.getSlotRequirements().stream()
@@ -44,15 +46,22 @@ public class CoverageFirstStrategy implements ScheduleGenerationStrategy {
 
         for (TimetableSlotRequirementDto slot : sorted) {
             String slotKey = slot.getSchoolClassId() + "_" + slot.getDayOfWeek() + "_" + slot.getPeriodNumber();
+            String occupancyKey = slot.getDayOfWeek() + "_" + slot.getPeriodNumber();
             List<SchoolUser> available = filterAvailableTeachers(
-                    teachers, unavailabilityMap, slot.getDayOfWeek(), slot.getPeriodNumber());
+                    teachers, unavailabilityMap, slot.getDayOfWeek(), slot.getPeriodNumber())
+                    .stream()
+                    .filter(t -> !occupancyMap.getOrDefault(t.getId(), Set.of()).contains(occupancyKey))
+                    .collect(Collectors.toList());
 
             // 적게 배정된 순으로 정렬
             available.sort(Comparator.comparingInt(t -> assignmentCount.getOrDefault(t.getId(), 0)));
 
             SchoolUser assigned = available.isEmpty() ? null : available.get(0);
             slotAssignment.put(slotKey, assigned);
-            if (assigned != null) assignmentCount.merge(assigned.getId(), 1, Integer::sum);
+            if (assigned != null) {
+                assignmentCount.merge(assigned.getId(), 1, Integer::sum);
+                occupancyMap.computeIfAbsent(assigned.getId(), k -> new HashSet<>()).add(occupancyKey);
+            }
         }
 
         // 원래 순서로 CandidateSchedule에 추가
