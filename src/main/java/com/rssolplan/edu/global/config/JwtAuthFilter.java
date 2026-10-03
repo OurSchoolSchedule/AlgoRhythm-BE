@@ -40,6 +40,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         this.redisTemplate = redisTemplate;
     }
 
+    /**
+     * Sets the security context to the user ID and resolved school role for a valid Bearer
+     * JWT, then continues the filter chain. Missing or invalid tokens leave the context
+     * unchanged. Token decoding, role lookup, and downstream failures propagate.
+     *
+     * @throws ServletException if downstream request processing fails
+     * @throws IOException if downstream I/O fails
+     */
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -77,6 +85,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    /**
+     * Returns the cached role or resolves the active-school membership's position and
+     * caches it for 30 minutes. Missing users, active schools, or memberships yield GUEST.
+     * Redis and repository failures propagate rather than yielding a fallback role.
+     */
     private String resolveRole(Long userId) {
         String cacheKey = REDIS_ROLE_KEY_PREFIX + userId;
 

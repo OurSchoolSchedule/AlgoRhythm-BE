@@ -29,6 +29,10 @@ public record ParsedIntent(
         // AVAILABILITY_ADD, AVAILABILITY_REPLACE
         List<UnavailabilitySlot> unavailabilitySlots
 ) {
+    /**
+     * Returns the exact, case-sensitive intent enum value, falling back to UNKNOWN for
+     * null or unrecognized text.
+     */
     public IntentType resolvedType() {
         try {
             return IntentType.valueOf(intentType);

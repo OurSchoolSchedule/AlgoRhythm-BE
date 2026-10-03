@@ -20,7 +20,15 @@ public class VoiceCommandService {
     private final CommandDraftStore draftStore;
 
     /**
-     * 1단계: 자연어 → Intent 파싱 → Preview 생성 → draftToken 발급
+     * Parses the request text and returns a preview plus a draft token valid for ten minutes.
+     * Stores the intent with its user ID without executing the command. The request's lang
+     * field is unused. Preview lookup and draft-storage errors propagate.
+     *
+     * @throws com.rssolplan.edu.global.exception.IntentParseException if parsing fails, the intent is unknown,
+     *         or required preview data is missing
+     * @throws com.rssolplan.edu.global.exception.NotFoundException if a referenced preview resource is missing
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if required active-school access is missing
+     * @throws IllegalStateException if draft storage fails
      */
     public CommandPreviewResponse preview(Long userId, VoiceCommandRequest request) {
         ParsedIntent intent = intentParserService.parse(request.text());
@@ -47,7 +55,12 @@ public class VoiceCommandService {
     }
 
     /**
-     * 2단계: draftToken 검증 → userId 일치 확인 → 기존 Service Write 실행
+     * Consumes a draft token, verifies its user ID, and executes the stored command,
+     * returning the underlying service result. The token is consumed even when ownership
+     * validation or execution fails. Execution and Redis access errors propagate.
+     *
+     * @throws DraftExpiredException if the token is missing, expired, or owned by another user
+     * @throws IllegalStateException if the stored draft cannot be decoded
      */
     public Object confirm(Long userId, CommandConfirmRequest request) {
         DraftData draft = draftStore.getAndDelete(request.draftToken());
@@ -60,6 +73,7 @@ public class VoiceCommandService {
         return executorService.execute(userId, draft.intent());
     }
 
+    /** Returns a Korean summary of the proposed operation, with a generic summary for an unknown intent. */
     private String buildDescription(ParsedIntent intent) {
         return switch (intent.resolvedType()) {
             case SUBSTITUTE_CREATE ->
@@ -83,6 +97,10 @@ public class VoiceCommandService {
         };
     }
 
+    /**
+     * Returns the Korean label for ACCEPT, REJECT, or APPROVE regardless of case;
+     * returns an empty string for null and preserves other action text.
+     */
     private String toKorean(String action) {
         if (action == null) return "";
         return switch (action.toUpperCase()) {

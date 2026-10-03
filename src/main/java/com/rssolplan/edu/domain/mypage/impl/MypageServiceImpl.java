@@ -33,11 +33,23 @@ public class MypageServiceImpl implements MypageService {
 
     // ===== 헬퍼 =====
 
+    /**
+     * Returns the membership linking the user and school, regardless of employment status.
+     *
+     * @throws IllegalArgumentException if no membership exists
+     */
     private SchoolUser ensureMapping(Long userId, Long schoolId) {
         return schoolUsers.findByUser_IdAndSchool_Id(userId, schoolId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 학교에 소속되지 않은 사용자입니다."));
     }
 
+    /**
+     * Returns the active membership, or the oldest membership if no active school is set.
+     * Does not persist a fallback selection.
+     *
+     * @throws IllegalArgumentException if the active membership is missing or no membership exists
+     * @throws java.util.NoSuchElementException if the user does not exist
+     */
     private SchoolUser resolveActiveMappingOrDefault(Long userId) {
         User u = users.findById(userId).orElseThrow();
         if (u.getActiveSchoolId() != null) {
@@ -47,6 +59,7 @@ public class MypageServiceImpl implements MypageService {
                 .orElseThrow(() -> new IllegalArgumentException("등록된 학교가 없습니다."));
     }
 
+    /** Invalidates the user's cached authorization role. Redis failures propagate. */
     private void evictRoleCache(Long userId) {
         redisTemplate.delete(REDIS_ROLE_KEY_PREFIX + userId);
     }

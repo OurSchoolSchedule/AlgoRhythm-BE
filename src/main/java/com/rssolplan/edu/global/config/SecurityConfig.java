@@ -31,6 +31,14 @@ public class SecurityConfig {
     private final UserRepository userRepository;
     private final StringRedisTemplate redisTemplate;
 
+    /**
+     * Builds the HTTP security chain with CORS enabled, CSRF disabled, and Bearer JWT
+     * processing before username/password authentication. Allows configured public routes
+     * and preflight requests, restricts administrator and teacher routes by role, and
+     * requires authentication elsewhere.
+     *
+     * @throws Exception if security configuration or chain construction fails
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         log.info("[SecurityConfig] SecurityFilterChain 초기화");

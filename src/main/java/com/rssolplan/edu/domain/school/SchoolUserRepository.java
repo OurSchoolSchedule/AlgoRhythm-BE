@@ -18,12 +18,20 @@ public interface SchoolUserRepository extends JpaRepository<SchoolUser, Long> {
 
     boolean existsByUser_IdAndSchool_Id(Long userId, Long schoolId);
 
+    /**
+     * Returns the user's oldest-created membership, or empty if none exists.
+     * Position and employment status do not restrict the selection.
+     */
     Optional<SchoolUser> findFirstByUser_IdOrderByCreatedAtAsc(Long userId);
 
     List<SchoolUser> findBySchool_Id(Long schoolId);
 
     List<SchoolUser> findBySchool_IdAndPosition(Long schoolId, Position position);
 
+    /**
+     * Returns rows containing SchoolUser ID at index 0 and username at index 1 for
+     * school members with a linked user, regardless of position or employment status.
+     */
     @Query("""
         SELECT su.id, u.username
         FROM SchoolUser su

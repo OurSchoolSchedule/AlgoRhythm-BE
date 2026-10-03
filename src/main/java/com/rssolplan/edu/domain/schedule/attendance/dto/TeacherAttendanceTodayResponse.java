@@ -11,6 +11,7 @@ public record TeacherAttendanceTodayResponse(
         LocalDateTime checkInTime,
         LocalDateTime checkOutTime
 ) {
+    /** Returns a NO_RECORD response for the supplied date with false check flags and null timestamps. */
     public static TeacherAttendanceTodayResponse noRecord(LocalDate workDate) {
         return new TeacherAttendanceTodayResponse(workDate, "NO_RECORD", false, false, null, null);
     }

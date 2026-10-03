@@ -20,7 +20,11 @@ public class CommandDraftStore {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
 
-    /** DraftData를 저장하고 draftToken(key)을 반환한다. */
+    /**
+     * Stores the draft for ten minutes and returns its opaque Redis token.
+     *
+     * @throws IllegalStateException if serialization or Redis storage fails
+     */
     public String save(DraftData data) {
         String token = KEY_PREFIX + UUID.randomUUID();
         try {
@@ -33,8 +37,11 @@ public class CommandDraftStore {
     }
 
     /**
-     * 토큰으로 DraftData를 조회하고 동시에 Redis에서 삭제한다.
-     * 중복 제출(double-submit) 방지를 위해 getAndDelete를 원자적으로 수행한다.
+     * Atomically retrieves and deletes a draft to prevent duplicate submission.
+     * The token remains consumed if decoding or later processing fails. Redis access failures propagate.
+     *
+     * @throws DraftExpiredException if the token is missing or expired
+     * @throws IllegalStateException if the stored draft cannot be decoded
      */
     public DraftData getAndDelete(String token) {
         // GETDEL — Spring Data Redis 2.6+ 지원 (Spring Boot 3.x)

@@ -16,6 +16,13 @@ public class OwnerOnlyAspect {
 
     private final AuthorizationService service;
 
+    /**
+     * Requires an authenticated user with an ADMIN membership in the active school
+     * before an {@code @OwnerOnly} method runs.
+     *
+     * @throws ForbiddenException if authentication, active school, membership, or administrator access is missing
+     * @throws com.rssolplan.edu.global.exception.NotFoundException if the authenticated user does not exist
+     */
     @Before("@annotation(com.rssolplan.edu.global.security.annotation.OwnerOnly)")
     public void checkOwner() {
         Long userId = SecurityUtil.getCurrentUserId();

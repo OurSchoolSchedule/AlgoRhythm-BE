@@ -25,6 +25,13 @@ public class CommandExecutorService {
     private final TeacherAvailabilityService availabilityService;
     private final TeacherAttendanceService attendanceService;
 
+    /**
+     * Executes the parsed command for the user and returns the selected service's result.
+     * Substitute, availability, and attendance service errors propagate unchanged.
+     *
+     * @throws IntentParseException if the intent is unknown or command parameters cannot be converted
+     * @throws java.time.format.DateTimeParseException if a substitute creation date is not an ISO local date
+     */
     public Object execute(Long userId, ParsedIntent intent) {
         return switch (intent.resolvedType()) {
             case SUBSTITUTE_CREATE -> executeSubstituteCreate(userId, intent);
@@ -38,6 +45,12 @@ public class CommandExecutorService {
         };
     }
 
+    /**
+     * Creates a substitute request from the intent, propagating substitute-service errors.
+     *
+     * @throws IntentParseException if the timetable ID or date is missing
+     * @throws java.time.format.DateTimeParseException if the date is not an ISO local date
+     */
     private Object executeSubstituteCreate(Long userId, ParsedIntent intent) {
         if (intent.timetableId() == null || intent.substituteDate() == null) {
             throw new IntentParseException("보결 요청에 필요한 정보가 부족합니다. (시간표 ID, 날짜 필요)");
@@ -50,6 +63,11 @@ public class CommandExecutorService {
         return substituteService.create(userId, req);
     }
 
+    /**
+     * Records the substitute response from the intent, propagating substitute-service errors.
+     *
+     * @throws IntentParseException if the request ID or action is missing
+     */
     private Object executeSubstituteRespond(Long userId, ParsedIntent intent) {
         if (intent.requestId() == null || intent.action() == null) {
             throw new IntentParseException("보결 응답에 필요한 정보가 부족합니다. (요청 ID, action 필요)");
@@ -58,6 +76,11 @@ public class CommandExecutorService {
                 new SubstituteRespondRequest(intent.action()));
     }
 
+    /**
+     * Records the substitute approval decision from the intent, propagating substitute-service errors.
+     *
+     * @throws IntentParseException if the response ID or action is missing
+     */
     private Object executeSubstituteApprove(Long userId, ParsedIntent intent) {
         if (intent.responseId() == null || intent.action() == null) {
             throw new IntentParseException("보결 승인에 필요한 정보가 부족합니다. (응답 ID, action 필요)");
@@ -66,17 +89,28 @@ public class CommandExecutorService {
                 new SubstituteApprovalRequest(intent.action()));
     }
 
+    /**
+     * Adds the intent's unavailable periods and returns newly saved entries.
+     * Conversion and availability-service errors propagate.
+     */
     private Object executeAvailabilityAdd(Long userId, ParsedIntent intent) {
         return availabilityService.addUnavailabilities(userId, toAvailabilityDto(intent));
     }
 
+    /**
+     * Replaces the user's unavailable periods with the intent's nonempty list and returns
+     * saved entries. Conversion and availability-service errors propagate.
+     */
     private Object executeAvailabilityReplace(Long userId, ParsedIntent intent) {
         return availabilityService.replaceUnavailabilities(userId, toAvailabilityDto(intent));
     }
 
     /**
-     * ParsedIntent의 unavailabilitySlots를 TeacherAvailabilityRequestDto로 변환한다.
-     * TeacherAvailabilityRequestDto에 setter가 없으므로 리플렉션으로 필드를 주입한다.
+     * Converts unavailable slots into an availability request, preserving period numbers
+     * and reasons. Weekday names must exactly match the DayOfWeek enum.
+     *
+     * @throws IntentParseException if slots are missing or empty, a weekday is invalid,
+     *         or the request cannot be populated
      */
     private TeacherAvailabilityRequestDto toAvailabilityDto(ParsedIntent intent) {
         if (intent.unavailabilitySlots() == null || intent.unavailabilitySlots().isEmpty()) {
@@ -107,12 +141,24 @@ public class CommandExecutorService {
         }
     }
 
+    /**
+     * Sets a named field on the target, searching its class hierarchy and allowing access
+     * to nonpublic fields.
+     *
+     * @throws NoSuchFieldException if no class in the hierarchy declares the field
+     * @throws IllegalAccessException if the field cannot be written
+     */
     private void setField(Object target, String fieldName, Object value) throws Exception {
         Field field = findField(target.getClass(), fieldName);
         field.setAccessible(true);
         field.set(target, value);
     }
 
+    /**
+     * Returns the named field declared in the class or its nearest declaring superclass.
+     *
+     * @throws NoSuchFieldException if no class in the hierarchy declares the field
+     */
     private Field findField(Class<?> clazz, String name) throws NoSuchFieldException {
         try {
             return clazz.getDeclaredField(name);

@@ -27,6 +27,15 @@ public class OnboardingService {
     private final UserProfileService userProfileService;
     private final StringRedisTemplate redisTemplate;
 
+    /**
+     * Creates a school for ADMIN or joins the school identified by code for TEACHER,
+     * then creates a hired membership and makes that school active. Invalidates the cached
+     * role and normalizes a blank default profile image. Returns the membership and school
+     * details; Redis failures propagate.
+     *
+     * @throws IllegalArgumentException if the role or teacher's school code is invalid
+     * @throws java.util.NoSuchElementException if the user does not exist
+     */
     @Transactional
     public OnboardingResponse onboard(Long userId, OnboardingRequest req) {
         User user = users.findById(userId).orElseThrow();

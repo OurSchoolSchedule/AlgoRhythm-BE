@@ -38,6 +38,10 @@ public class GlobalExceptionHandler {
     }
 
     // 401 Draft 만료/불일치
+    /**
+     * Returns an error body with code DRAFT_NOT_FOUND_OR_EXPIRED and the exception's message;
+     * Spring uses HTTP 401 for the handled exception.
+     */
     @ExceptionHandler(DraftExpiredException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ApiResponse<Object> handleDraftExpired(DraftExpiredException ex) {
@@ -45,6 +49,10 @@ public class GlobalExceptionHandler {
     }
 
     // 422 AI 파싱 실패
+    /**
+     * Returns an error body with code INTENT_PARSE_FAILED and the exception's message;
+     * Spring uses HTTP 422 for the handled exception.
+     */
     @ExceptionHandler(IntentParseException.class)
     @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
     public ApiResponse<Object> handleIntentParse(IntentParseException ex) {
@@ -52,6 +60,10 @@ public class GlobalExceptionHandler {
     }
 
     // 403 Forbidden - 학교 간 리소스 접근, Java SecurityException
+    /**
+     * Returns an error body with code FORBIDDEN and the exception's message;
+     * Spring uses HTTP 403 for the handled exception.
+     */
     @ExceptionHandler(SecurityException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ApiResponse<Object> handleSecurity(SecurityException ex) {
@@ -59,6 +71,10 @@ public class GlobalExceptionHandler {
     }
 
     // 409 Conflict - 이미 처리된 상태, 중복 처리 시도
+    /**
+     * Returns an error body with code CONFLICT and the exception's message;
+     * Spring uses HTTP 409 for the handled exception.
+     */
     @ExceptionHandler(IllegalStateException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ApiResponse<Object> handleIllegalState(IllegalStateException ex) {
@@ -66,6 +82,10 @@ public class GlobalExceptionHandler {
     }
 
     // 400 Bad Request - 잘못된 파라미터/액션 값
+    /**
+     * Returns an error body with code BAD_REQUEST and the exception's message;
+     * Spring uses HTTP 400 for the handled exception.
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Object> handleIllegalArgument(IllegalArgumentException ex) {

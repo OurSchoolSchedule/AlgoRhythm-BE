@@ -47,11 +47,13 @@ public class SchoolSetting {
     @UpdateTimestamp
     private Timestamp updatedAt;
 
+    /** Adds the period to this setting's collection and sets its owning setting to this instance. */
     public void addPeriod(PeriodSetting period) {
         periods.add(period);
         period.setSchoolSetting(this);
     }
 
+    /** Clears the period collection; persisted children are removed through JPA orphan removal. */
     public void clearPeriods() {
         periods.clear();
     }

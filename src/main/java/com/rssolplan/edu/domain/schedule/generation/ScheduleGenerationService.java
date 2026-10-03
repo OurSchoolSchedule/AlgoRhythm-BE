@@ -80,6 +80,14 @@ public class ScheduleGenerationService {
     // =========================================================
     // 1. 시간표 생성 요청 (교사들에게 불가 교시 제출 요청)
     // =========================================================
+    /**
+     * Creates a REQUESTED timetable request in the user's active school and persists
+     * notifications asking its teachers to submit unavailable periods.
+     *
+     * @throws NotFoundException if the user or school does not exist
+     * @throws ForbiddenException if no school is active or the user lacks an ADMIN membership
+     * @throws IllegalArgumentException if the notification service cannot find the school or requester
+     */
     @Transactional
     public TimetableRequest requestTimetable(Long userId) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
@@ -107,6 +115,18 @@ public class ScheduleGenerationService {
     // =========================================================
     // 2. 후보 시간표 생성
     // =========================================================
+    /**
+     * Generates candidate timetables for a REQUESTED request in the active school,
+     * caches them for one day, and marks the request GENERATED. Returns request and school
+     * IDs, academic year, semester, cache key, and generated count; candidates are retrieved separately.
+     * Strategy selection follows {@link #getStrategiesToUse(GenerationOptionsDto)}.
+     * Redis failures propagate.
+     *
+     * @throws NotFoundException if the user or timetable request does not exist
+     * @throws ForbiddenException if no school is active or the request belongs to another school
+     * @throws IllegalStateException if the request is not REQUESTED or there are no teachers
+     * @throws RuntimeException if candidate serialization fails
+     */
     @Transactional
     public Map<String, Object> generateTimetable(Long userId, Long timetableRequestId,
                                                  TimetableGenerationRequestDto request) {
@@ -179,6 +199,12 @@ public class ScheduleGenerationService {
     // =========================================================
     // 3. 후보 시간표 조회
     // =========================================================
+    /**
+     * Returns candidates stored under the supplied Redis key. Redis access failures propagate.
+     *
+     * @throws NotFoundException if the key is missing or expired
+     * @throws RuntimeException if the cached JSON cannot be decoded
+     */
     public List<CandidateSchedule> getCandidates(String redisKey) {
         String json = (String) redisTemplate.opsForValue().get(redisKey);
         if (json == null) throw new NotFoundException("생성된 시간표가 없습니다.");
@@ -192,6 +218,20 @@ public class ScheduleGenerationService {
     // =========================================================
     // 4. 시간표 확정
     // =========================================================
+    /**
+     * Replaces the active school's timetable for the supplied year and semester with a cached
+     * candidate, marks the request CONFIRMED, and deletes its candidate cache. Skips shifts
+     * without a teacher or a configured period. Returns the existing or newly created timetable
+     * set; the supplied dates apply only when creating a set. Redis failures propagate.
+     *
+     * @param dto selection with a zero-based candidate index and the target term and dates
+     * @throws NotFoundException if the user, request, school, settings, candidates, or referenced entities are missing
+     * @throws ForbiddenException if no school is active or the request belongs to another school
+     * @throws IllegalStateException if the request is not GENERATED, candidates are empty, or the index is too large
+     * @throws IndexOutOfBoundsException if the candidate index is negative
+     * @throws BadRequestException if an assigned shift with a configured period has no subject ID
+     * @throws RuntimeException if cached candidate JSON cannot be decoded
+     */
     @Transactional
     public TimetableSet confirmTimetable(Long userId, Long timetableRequestId,
                                         ConfirmTimetableRequestDto dto) {
@@ -297,6 +337,13 @@ public class ScheduleGenerationService {
     // =========================================================
     // 미제출 교사 목록 조회 (불가 교시를 하나도 제출하지 않은 교사)
     // =========================================================
+    /**
+     * Returns user IDs, rather than membership IDs, for teachers in the active school
+     * with no unavailable periods recorded.
+     *
+     * @throws com.rssolplan.edu.global.exception.NotFoundException if the user does not exist
+     * @throws com.rssolplan.edu.global.exception.ForbiddenException if no school is active
+     */
     @Transactional(readOnly = true)
     public List<Long> getTeachersWithoutAvailability(Long userId) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
@@ -312,6 +359,13 @@ public class ScheduleGenerationService {
     // 내부 헬퍼
     // =========================================================
 
+    /**
+     * Generates one candidate per selected strategy and calculates counts and coverage
+     * percentage for each result. Metadata maps are keyed by SchoolUser ID; candidates
+     * may contain unassigned slots. Selection follows {@link #getStrategiesToUse(GenerationOptionsDto)}.
+     *
+     * @throws IllegalStateException if the teacher list is empty
+     */
     public List<CandidateSchedule> generateCandidatesWithStrategies(
             Long schoolId,
             TimetableSettingSnapshot settings,
@@ -347,6 +401,14 @@ public class ScheduleGenerationService {
         return result;
     }
 
+    /**
+     * Returns requested strategies in order, retaining duplicates, then appends unrequested
+     * strategies in BALANCED, COVERAGE_FIRST, SENIOR_PRIORITY, FAIR_DISTRIBUTION order
+     * until there are four entries. Null options or a null strategy list select all four.
+     * The candidate-count option is unused; requested lists longer than four are retained.
+     *
+     * @throws NullPointerException if the strategy list contains null
+     */
     private List<ScheduleGenerationStrategy> getStrategiesToUse(GenerationOptionsDto options) {
         Map<GenerationOptionsDto.GenerationStrategy, ScheduleGenerationStrategy> strategyMap = Map.of(
                 GenerationOptionsDto.GenerationStrategy.BALANCED, balancedStrategy,
@@ -383,6 +445,12 @@ public class ScheduleGenerationService {
         return result;
     }
 
+    /**
+     * Stores candidates as JSON under a new school-specific key for one day and returns
+     * that key. Redis access failures propagate.
+     *
+     * @throws RuntimeException if JSON serialization fails
+     */
     private String saveCandidatesToRedis(Long schoolId, List<CandidateSchedule> candidates) {
         String key = "school:candidate:" + schoolId + ":" + UUID.randomUUID();
         try {

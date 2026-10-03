@@ -11,6 +11,12 @@ public interface SubstituteResponseRepository extends JpaRepository<SubstituteRe
 
     List<SubstituteResponse> findBySubstituteRequest_Id(Long substituteRequestId);
 
+    /**
+     * Returns the response for a request and candidate membership, or empty when none exists.
+     *
+     * @param candidateId SchoolUser membership ID, rather than user ID
+     * @throws org.springframework.dao.IncorrectResultSizeDataAccessException if multiple responses match
+     */
     Optional<SubstituteResponse> findBySubstituteRequest_IdAndCandidate_Id(Long substituteRequestId, Long candidateId);
 
     List<SubstituteResponse> findBySubstituteRequest_IdAndWorkerAction(Long substituteRequestId, WorkerAction action);
