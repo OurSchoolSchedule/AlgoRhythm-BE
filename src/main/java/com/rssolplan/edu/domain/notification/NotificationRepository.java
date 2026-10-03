@@ -10,11 +10,11 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @Query("""
         select n
         from Notification n
-        left join fetch n.store
+        left join fetch n.school
         where n.userId = :userId
         order by n.createdAt desc
     """)
-    List<Notification> findByUserIdWithStore(Long userId);
+    List<Notification> findByUserIdWithSchool(Long userId);
 
     List<Notification> findByUserIdOrderByCreatedAtDesc(Long userId);
 }

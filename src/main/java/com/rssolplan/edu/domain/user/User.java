@@ -21,8 +21,8 @@ public class User {
     @Column(name = "provider_id")
     private String providerId;          // 카카오 회원 고유 ID
 
-    @Column(name = "active_store_id")
-    private Long activeStoreId;         // 현재 선택(활성)된 매장 ID
+    @Column(name = "active_school_id")
+    private Long activeSchoolId;        // 현재 선택(활성)된 학교 ID
 
     @Column(name = "kakao_access_token", length = 500)
     private String kakaoAccessToken;

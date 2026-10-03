@@ -15,7 +15,6 @@ spring:
     show-sql: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.MySQL8Dialect
         format_sql: false
   data:
     redis:
@@ -76,6 +75,11 @@ logging:
     org.hibernate.SQL: INFO                # SQL 쿼리만 출력
     org.hibernate.orm.jdbc.bind: OFF
     org.springframework.transaction: INFO
+    org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport: WARN
+
+openai:
+  api-key: ${OPENAI_API_KEY}
+  model: gpt-4o-mini
 
 management:
   endpoints:

@@ -1,21 +1,19 @@
 package com.rssolplan.edu.domain.mypage.impl;
 
-import com.rssolplan.edu.domain.bank.Bank;
-import com.rssolplan.edu.domain.bank.BankAccount;
-import com.rssolplan.edu.domain.bank.BankAccountRepository;
-import com.rssolplan.edu.domain.bank.BankRepository;
 import com.rssolplan.edu.domain.mypage.MypageService;
 import com.rssolplan.edu.domain.mypage.dto.*;
-import com.rssolplan.edu.domain.store.Store;
-import com.rssolplan.edu.domain.store.StoreRepository;
-import com.rssolplan.edu.domain.store.UserStore;
-import com.rssolplan.edu.domain.store.UserStore.EmploymentStatus;
-import com.rssolplan.edu.domain.store.UserStore.Position;
-import com.rssolplan.edu.domain.store.UserStoreRepository;
+import com.rssolplan.edu.global.exception.ForbiddenException;
+import com.rssolplan.edu.domain.school.School;
+import com.rssolplan.edu.domain.school.SchoolRepository;
+import com.rssolplan.edu.domain.school.SchoolUser;
+import com.rssolplan.edu.domain.school.SchoolUser.EmploymentStatus;
+import com.rssolplan.edu.domain.school.SchoolUser.Position;
+import com.rssolplan.edu.domain.school.SchoolUserRepository;
 import com.rssolplan.edu.domain.user.User;
 import com.rssolplan.edu.domain.user.UserRepository;
-import com.rssolplan.edu.global.fordevToken.StoreCodeGenerator;
+import com.rssolplan.edu.global.fordevToken.SchoolCodeGenerator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,363 +25,295 @@ import java.util.List;
 @Transactional
 public class MypageServiceImpl implements MypageService {
 
+    private static final String REDIS_ROLE_KEY_PREFIX = "auth:role:";
+
     private final UserRepository users;
-    private final StoreRepository stores;
-    private final UserStoreRepository userStores;
-    private final BankRepository banks;
-    private final BankAccountRepository accounts;
+    private final SchoolRepository schools;
+    private final SchoolUserRepository schoolUsers;
+    private final StringRedisTemplate redisTemplate;
 
-    // 내부 헬퍼
+    // ===== 헬퍼 =====
 
-    private UserStore ensureMapping(Long userId, Long storeId) {
-        return userStores.findByUserIdAndStoreId(userId, storeId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 매장에 속하지 않은 사용자입니다."));
+    private SchoolUser ensureMapping(Long userId, Long schoolId) {
+        return schoolUsers.findByUser_IdAndSchool_Id(userId, schoolId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 학교에 소속되지 않은 사용자입니다."));
     }
 
-    private UserStore resolveActiveMappingOrDefault(Long userId) {
+    private SchoolUser resolveActiveMappingOrDefault(Long userId) {
         User u = users.findById(userId).orElseThrow();
-
-        if (u.getActiveStoreId() != null) {
-            return ensureMapping(userId, u.getActiveStoreId());
+        // getActiveSchoolIdOrThrow와 동일한 실패 조건을 유지한다.
+        // activeSchoolId가 null이면 @OwnerOnly/학교 API도 거부되므로 여기서도 동일하게 거부한다.
+        if (u.getActiveSchoolId() == null) {
+            throw new ForbiddenException("활성 학교가 설정되어 있지 않습니다. 활성 학교를 먼저 설정하세요.");
         }
-
-        return userStores.findFirstByUserIdOrderByCreatedAtAsc(userId)
-                .orElseThrow(() -> new IllegalArgumentException("등록된 매장이 없습니다."));
+        return ensureMapping(userId, u.getActiveSchoolId());
     }
 
-    private ActiveStoreResponse toActiveStoreResponse(UserStore mapping) {
-        Store s = mapping.getStore();
-        return ActiveStoreResponse.builder()
-                .storeId(s.getId())
-                .storeCode(s.getStoreCode())
+    private void evictRoleCache(Long userId) {
+        redisTemplate.delete(REDIS_ROLE_KEY_PREFIX + userId);
+    }
+
+    private ActiveSchoolResponse toActiveSchoolResponse(SchoolUser su) {
+        School s = su.getSchool();
+        return ActiveSchoolResponse.builder()
+                .schoolId(s.getId())
+                .schoolCode(s.getSchoolCode())
                 .name(s.getName())
                 .address(s.getAddress())
                 .phoneNumber(s.getPhoneNumber())
-                .businessRegistrationNumber(s.getBusinessRegistrationNumber())
-                .position(mapping.getPosition().name())
-                .employmentStatus(mapping.getEmploymentStatus().name())
+                .position(su.getPosition().name())
+                .employmentStatus(su.getEmploymentStatus().name())
                 .build();
     }
 
-    private StoreSimpleResponse toStoreSimple(UserStore mapping, boolean includeStatus) {
-        Store s = mapping.getStore();
-        return StoreSimpleResponse.builder()
-                .storeId(s.getId())
-                .storeCode(s.getStoreCode())
+    private SchoolSimpleResponse toSchoolSimple(SchoolUser su) {
+        School s = su.getSchool();
+        return SchoolSimpleResponse.builder()
+                .schoolId(s.getId())
+                .schoolCode(s.getSchoolCode())
                 .name(s.getName())
                 .address(s.getAddress())
                 .phoneNumber(s.getPhoneNumber())
-                .businessRegistrationNumber(s.getBusinessRegistrationNumber())
-                .position(mapping.getPosition().name())
-                .employmentStatus(includeStatus ? mapping.getEmploymentStatus().name() : null)
+                .position(su.getPosition().name())
+                .employmentStatus(su.getEmploymentStatus().name())
+                .hireDate(su.getHireDate())
                 .build();
     }
 
-    // 활성 매장
+    // ===== 활성 학교 =====
 
     @Override
     @Transactional(readOnly = true)
-    public ActiveStoreResponse getActiveStore(Long userId) {
-        UserStore mapping = resolveActiveMappingOrDefault(userId);
-        return toActiveStoreResponse(mapping);
+    public ActiveSchoolResponse getActiveSchool(Long userId) {
+        return toActiveSchoolResponse(resolveActiveMappingOrDefault(userId));
     }
 
     @Override
-    public ActiveStoreResponse updateActiveStore(Long userId, Long storeId) {
+    public ActiveSchoolResponse updateActiveSchool(Long userId, Long schoolId) {
         User u = users.findById(userId).orElseThrow();
-        ensureMapping(userId, storeId);
-        u.setActiveStoreId(storeId);
+        ensureMapping(userId, schoolId);
+        u.setActiveSchoolId(schoolId);
         users.save(u);
-
-        return toActiveStoreResponse(ensureMapping(userId, storeId));
+        evictRoleCache(userId);
+        return toActiveSchoolResponse(ensureMapping(userId, schoolId));
     }
 
-    // 사장님 관련
+    // ===== 교감/교장(Admin) =====
 
     @Override
     @Transactional(readOnly = true)
-    public OwnerProfileResponse getOwnerProfile(Long ownerId) {
-        UserStore mapping = resolveActiveMappingOrDefault(ownerId);
-        if (mapping.getPosition() != Position.OWNER) {
-            throw new IllegalArgumentException("사장님 권한이 필요한 요청입니다.");
+    public AdminProfileResponse getAdminProfile(Long adminId) {
+        SchoolUser su = resolveActiveMappingOrDefault(adminId);
+        if (su.getPosition() != Position.ADMIN) {
+            throw new IllegalArgumentException("관리자(교감/교장) 권한이 필요한 요청입니다.");
         }
-        User u = mapping.getUser();
-        Store s = mapping.getStore();
-
-        return OwnerProfileResponse.builder()
+        User u = su.getUser();
+        return AdminProfileResponse.builder()
                 .userId(u.getId())
                 .username(u.getUsername())
                 .email(u.getEmail())
                 .profileImageUrl(u.getProfileImageUrl())
-                .position(mapping.getPosition().name())
-                .employmentStatus(mapping.getEmploymentStatus().name())
-                .businessRegistrationNumber(s.getBusinessRegistrationNumber())
+                .position(su.getPosition().name())
+                .employmentStatus(su.getEmploymentStatus().name())
                 .build();
     }
 
     @Override
-    public OwnerProfileResponse updateOwnerProfile(Long ownerId, OwnerProfileUpdateRequest req) {
-        UserStore mapping = resolveActiveMappingOrDefault(ownerId);
-        if (mapping.getPosition() != Position.OWNER) {
-            throw new IllegalArgumentException("사장님 권한이 필요한 요청입니다.");
+    public AdminProfileResponse updateAdminProfile(Long adminId, AdminProfileUpdateRequest req) {
+        SchoolUser su = resolveActiveMappingOrDefault(adminId);
+        if (su.getPosition() != Position.ADMIN) {
+            throw new IllegalArgumentException("관리자(교감/교장) 권한이 필요한 요청입니다.");
         }
-        User u = mapping.getUser();
-        Store s = mapping.getStore();
-
+        User u = su.getUser();
         if (req.getUsername() != null) u.setUsername(req.getUsername());
         if (req.getEmail() != null) u.setEmail(req.getEmail());
         users.save(u);
-
-        if (req.getBusinessRegistrationNumber() != null
-                && !req.getBusinessRegistrationNumber().equals(s.getBusinessRegistrationNumber())) {
-            if (stores.existsByBusinessRegistrationNumber(req.getBusinessRegistrationNumber())) {
-                throw new IllegalArgumentException("이미 사용 중인 사업자 등록번호입니다.");
-            }
-            s.setBusinessRegistrationNumber(req.getBusinessRegistrationNumber());
-            stores.save(s);
-        }
-
-        return getOwnerProfile(ownerId);
+        return getAdminProfile(adminId);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public OwnerStoreResponse getOwnerActiveStore(Long ownerId) {
-        UserStore mapping = resolveActiveMappingOrDefault(ownerId);
-        if (mapping.getPosition() != Position.OWNER) {
-            throw new IllegalArgumentException("사장님 권한이 필요한 요청입니다.");
+    public AdminSchoolResponse getAdminActiveSchool(Long adminId) {
+        SchoolUser su = resolveActiveMappingOrDefault(adminId);
+        if (su.getPosition() != Position.ADMIN) {
+            throw new IllegalArgumentException("관리자(교감/교장) 권한이 필요한 요청입니다.");
         }
-        Store s = mapping.getStore();
-
-        return OwnerStoreResponse.builder()
-                .storeId(s.getId())
-                .storeCode(s.getStoreCode())
+        School s = su.getSchool();
+        return AdminSchoolResponse.builder()
+                .schoolId(s.getId())
+                .schoolCode(s.getSchoolCode())
                 .name(s.getName())
                 .address(s.getAddress())
                 .phoneNumber(s.getPhoneNumber())
-                // .businessRegistrationNumber(s.getBusinessRegistrationNumber())
                 .build();
     }
 
     @Override
-    public OwnerStoreResponse updateOwnerActiveStore(Long ownerId, OwnerStoreUpdateRequest req) {
-        UserStore mapping = resolveActiveMappingOrDefault(ownerId);
-        if (mapping.getPosition() != Position.OWNER) {
-            throw new IllegalArgumentException("사장님 권한이 필요한 요청입니다.");
+    public AdminSchoolResponse updateAdminActiveSchool(Long adminId, AdminSchoolUpdateRequest req) {
+        SchoolUser su = resolveActiveMappingOrDefault(adminId);
+        if (su.getPosition() != Position.ADMIN) {
+            throw new IllegalArgumentException("관리자(교감/교장) 권한이 필요한 요청입니다.");
         }
-        Store s = mapping.getStore();
-
+        School s = su.getSchool();
         if (req.getName() != null) s.setName(req.getName());
         if (req.getAddress() != null) s.setAddress(req.getAddress());
         if (req.getPhoneNumber() != null) s.setPhoneNumber(req.getPhoneNumber());
-
-//        if (req.getBusinessRegistrationNumber() != null
-//                && !req.getBusinessRegistrationNumber().equals(s.getBusinessRegistrationNumber())) {
-//            if (stores.existsByBusinessRegistrationNumber(req.getBusinessRegistrationNumber())) {
-//                throw new IllegalArgumentException("이미 사용 중인 사업자 등록번호입니다.");
-//            }
-//            s.setBusinessRegistrationNumber(req.getBusinessRegistrationNumber());
-//        }
-
-        stores.save(s);
-        return getOwnerActiveStore(ownerId);
+        schools.save(s);
+        return getAdminActiveSchool(adminId);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<StoreSimpleResponse> listOwnerStores(Long ownerId) {
-        return userStores.findByUserIdAndPosition(ownerId, Position.OWNER)
+    public List<SchoolSimpleResponse> listAdminSchools(Long adminId) {
+        return schoolUsers.findByUser_IdAndPosition(adminId, Position.ADMIN)
                 .stream()
-                .sorted(Comparator.comparing(us -> us.getStore().getId()))
-                .map(us -> toStoreSimple(us, true))
+                .sorted(Comparator.comparing(su -> su.getSchool().getId()))
+                .map(this::toSchoolSimple)
                 .toList();
     }
 
     @Override
-    public StoreSimpleResponse addOwnerStore(Long ownerId, OwnerCreateStoreRequest req) {
-        User owner = users.findById(ownerId).orElseThrow();
+    public SchoolSimpleResponse addAdminSchool(Long adminId, AdminCreateSchoolRequest req) {
+        User admin = users.findById(adminId).orElseThrow();
 
-        Store store = Store.builder()
-                .storeCode(StoreCodeGenerator.generate())
+        School school = School.builder()
+                .schoolCode(SchoolCodeGenerator.generate())
                 .name(req.getName())
                 .address(req.getAddress())
                 .phoneNumber(req.getPhoneNumber())
-                .businessRegistrationNumber(req.getBusinessRegistrationNumber())
                 .build();
-        stores.save(store);
+        schools.save(school);
 
-        UserStore link = UserStore.builder()
-                .user(owner).store(store)
-                .position(Position.OWNER)
+        SchoolUser link = SchoolUser.builder()
+                .user(admin).school(school)
+                .position(Position.ADMIN)
                 .employmentStatus(EmploymentStatus.HIRED)
                 .hireDate(req.getHireDate())
                 .build();
-        userStores.save(link);
+        schoolUsers.save(link);
 
-        return StoreSimpleResponse.builder()
-                .storeId(store.getId())
-                .storeCode(store.getStoreCode())
-                .name(store.getName())
-                .address(store.getAddress())
-                .phoneNumber(store.getPhoneNumber())
-                .businessRegistrationNumber(store.getBusinessRegistrationNumber())
-                .position("OWNER")
-                .employmentStatus("HIRED")
-                .hireDate(link.getHireDate())
-                .build();
+        if (admin.getActiveSchoolId() == null) {
+            admin.setActiveSchoolId(school.getId());
+            users.save(admin);
+            evictRoleCache(admin.getId());
+        }
+
+        return toSchoolSimple(link);
     }
 
     @Override
-    public void removeOwnerStore(Long ownerId, Long storeId) {
-        UserStore mapping = ensureMapping(ownerId, storeId);
-        if (mapping.getPosition() != Position.OWNER) {
-            throw new IllegalArgumentException("사장님 권한이 필요한 요청입니다.");
+    public void removeAdminSchool(Long adminId, Long schoolId) {
+        SchoolUser su = ensureMapping(adminId, schoolId);
+        if (su.getPosition() != Position.ADMIN) {
+            throw new IllegalArgumentException("관리자(교감/교장) 권한이 필요한 요청입니다.");
         }
-        userStores.delete(mapping);
+        schoolUsers.delete(su);
 
-        User u = users.findById(ownerId).orElseThrow();
-        if (storeId.equals(u.getActiveStoreId())) {
-            Long nextActive = userStores.findByUserId(ownerId).stream()
+        User u = users.findById(adminId).orElseThrow();
+        if (schoolId.equals(u.getActiveSchoolId())) {
+            Long nextActive = schoolUsers.findByUser_Id(adminId).stream()
                     .findFirst()
-                    .map(us -> us.getStore().getId())
+                    .map(s -> s.getSchool().getId())
                     .orElse(null);
-            u.setActiveStoreId(nextActive);
+            u.setActiveSchoolId(nextActive);
             users.save(u);
+            evictRoleCache(adminId);
         }
     }
 
-    // 알바생 관련
+    // ===== 교사(Teacher) =====
 
     @Override
     @Transactional(readOnly = true)
-    public StaffProfileResponse getStaffProfile(Long staffId) {
-        UserStore mapping = resolveActiveMappingOrDefault(staffId);
-        if (mapping.getPosition() != Position.STAFF) {
-            throw new IllegalArgumentException("알바생 권한이 필요한 요청입니다.");
+    public TeacherProfileResponse getTeacherProfile(Long teacherId) {
+        SchoolUser su = resolveActiveMappingOrDefault(teacherId);
+        if (su.getPosition() != Position.TEACHER) {
+            throw new IllegalArgumentException("교사 권한이 필요한 요청입니다.");
         }
-
-        User u = mapping.getUser();
-        Store s = mapping.getStore();
-
-        BankAccount latest = accounts.findTopByUserIdOrderByIdDesc(staffId).orElse(null);
-
-        return StaffProfileResponse.builder()
+        User u = su.getUser();
+        School s = su.getSchool();
+        return TeacherProfileResponse.builder()
                 .userId(u.getId())
                 .username(u.getUsername())
                 .email(u.getEmail())
                 .profileImageUrl(u.getProfileImageUrl())
-                .position(mapping.getPosition().name())
-                .employmentStatus(mapping.getEmploymentStatus().name())
-                .currentStore(StaffProfileResponse.CurrentStore.builder()
-                        .storeId(s.getId())
+                .position(su.getPosition().name())
+                .employmentStatus(su.getEmploymentStatus().name())
+                .currentSchool(TeacherProfileResponse.CurrentSchool.builder()
+                        .schoolId(s.getId())
                         .name(s.getName())
-                        .storeCode(s.getStoreCode())
+                        .schoolCode(s.getSchoolCode())
                         .build())
-                .bankAccount(latest == null ? null :
-                        StaffProfileResponse.BankAccount.builder()
-                                .bankId(latest.getBank().getId())
-                                .bankName(latest.getBank().getBankName())
-                                .accountNumber(latest.getAccountNumber())
-                                .build())
                 .build();
     }
 
     @Override
-    public StaffProfileResponse updateStaffProfile(Long staffId, StaffProfileUpdateRequest req) {
-        UserStore mapping = resolveActiveMappingOrDefault(staffId);
-        if (mapping.getPosition() != Position.STAFF) {
-            throw new IllegalArgumentException("알바생 권한이 필요한 요청입니다.");
+    public TeacherProfileResponse updateTeacherProfile(Long teacherId, TeacherProfileUpdateRequest req) {
+        SchoolUser su = resolveActiveMappingOrDefault(teacherId);
+        if (su.getPosition() != Position.TEACHER) {
+            throw new IllegalArgumentException("교사 권한이 필요한 요청입니다.");
         }
-        User u = mapping.getUser();
-
+        User u = su.getUser();
         if (req.getUsername() != null) u.setUsername(req.getUsername());
         if (req.getEmail() != null) u.setEmail(req.getEmail());
         users.save(u);
-
-        if (req.getBankId() != null || req.getAccountNumber() != null) {
-            BankAccount latest = accounts.findTopByUserIdOrderByIdDesc(staffId).orElse(null);
-
-            if (latest == null) {
-                if (req.getBankId() != null && req.getAccountNumber() != null) {
-                    Bank bank = banks.findById(req.getBankId())
-                            .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 은행입니다."));
-                    accounts.save(BankAccount.builder()
-                            .user(u)
-                            .bank(bank)
-                            .accountNumber(req.getAccountNumber())
-                            .build());
-                }
-            } else {
-                if (req.getBankId() != null) {
-                    Bank bank = banks.findById(req.getBankId())
-                            .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 은행입니다."));
-                    latest.setBank(bank);
-                }
-                if (req.getAccountNumber() != null) latest.setAccountNumber(req.getAccountNumber());
-                accounts.save(latest);
-            }
-        }
-
-        return getStaffProfile(staffId);
+        return getTeacherProfile(teacherId);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<StoreSimpleResponse> listStaffStores(Long staffId) {
-        return userStores.findByUserIdAndPosition(staffId, Position.STAFF)
+    public List<SchoolSimpleResponse> listTeacherSchools(Long teacherId) {
+        return schoolUsers.findByUser_IdAndPosition(teacherId, Position.TEACHER)
                 .stream()
-                .sorted(Comparator.comparing(us -> us.getStore().getId()))
-                .map(us -> toStoreSimple(us, true))
+                .sorted(Comparator.comparing(su -> su.getSchool().getId()))
+                .map(this::toSchoolSimple)
                 .toList();
     }
 
     @Override
-    public StoreSimpleResponse joinStaffStore(Long staffId, StaffJoinStoreRequest req) {
-        User staff = users.findById(staffId).orElseThrow();
-        Store store = stores.findByStoreCode(req.getStoreCode())
-                .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 매장 코드입니다."));
+    public SchoolSimpleResponse joinTeacherSchool(Long teacherId, TeacherJoinSchoolRequest req) {
+        User teacher = users.findById(teacherId).orElseThrow();
+        School school = schools.findBySchoolCode(req.getSchoolCode())
+                .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 학교 코드입니다."));
 
-        if (userStores.existsByUserIdAndStoreId(staffId, store.getId())) {
-            throw new IllegalArgumentException("이미 등록된 매장입니다.");
+        if (schoolUsers.existsByUser_IdAndSchool_Id(teacherId, school.getId())) {
+            throw new IllegalArgumentException("이미 등록된 학교입니다.");
         }
 
-        UserStore link = UserStore.builder()
-                .user(staff).store(store)
-                .position(Position.STAFF)
+        SchoolUser link = SchoolUser.builder()
+                .user(teacher).school(school)
+                .position(Position.TEACHER)
                 .employmentStatus(EmploymentStatus.HIRED)
                 .hireDate(req.getHireDate())
                 .build();
-        userStores.save(link);
+        schoolUsers.save(link);
 
-        return StoreSimpleResponse.builder()
-                .storeId(store.getId())
-                .storeCode(store.getStoreCode())
-                .name(store.getName())
-                .address(store.getAddress())
-                .phoneNumber(store.getPhoneNumber())
-                .businessRegistrationNumber(store.getBusinessRegistrationNumber())
-                .position("STAFF")
-                .employmentStatus("HIRED")
-                .hireDate(link.getHireDate())
-                .build();
+        if (teacher.getActiveSchoolId() == null) {
+            teacher.setActiveSchoolId(school.getId());
+            users.save(teacher);
+            evictRoleCache(teacher.getId());
+        }
+
+        return toSchoolSimple(link);
     }
 
     @Override
-    public void leaveStaffStore(Long staffId, Long storeId) {
-        UserStore mapping = ensureMapping(staffId, storeId);
-        if (mapping.getPosition() != Position.STAFF) {
-            throw new IllegalArgumentException("알바생 권한이 필요한 요청입니다.");
+    public void leaveTeacherSchool(Long teacherId, Long schoolId) {
+        SchoolUser su = ensureMapping(teacherId, schoolId);
+        if (su.getPosition() != Position.TEACHER) {
+            throw new IllegalArgumentException("교사 권한이 필요한 요청입니다.");
         }
-        userStores.delete(mapping);
+        schoolUsers.delete(su);
 
-        User u = users.findById(staffId).orElseThrow();
-        if (storeId.equals(u.getActiveStoreId())) {
-            Long nextActive = userStores.findByUserId(staffId).stream()
+        User u = users.findById(teacherId).orElseThrow();
+        if (schoolId.equals(u.getActiveSchoolId())) {
+            Long nextActive = schoolUsers.findByUser_Id(teacherId).stream()
                     .findFirst()
-                    .map(us -> us.getStore().getId())
+                    .map(s -> s.getSchool().getId())
                     .orElse(null);
-            u.setActiveStoreId(nextActive);
+            u.setActiveSchoolId(nextActive);
             users.save(u);
+            evictRoleCache(teacherId);
         }
     }
 }

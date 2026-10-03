@@ -1,9 +1,7 @@
 package com.rssolplan.edu.domain.user.administration_staff.view_profile;
 
-import com.rssolplan.edu.domain.bank.BankAccount;
-import com.rssolplan.edu.domain.bank.BankAccountRepository;
-import com.rssolplan.edu.domain.store.UserStore;
-import com.rssolplan.edu.domain.store.UserStoreRepository;
+import com.rssolplan.edu.domain.school.SchoolUser;
+import com.rssolplan.edu.domain.school.SchoolUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,50 +13,35 @@ import java.time.temporal.ChronoUnit;
 @RequiredArgsConstructor
 public class ViewProfileService {
 
-    private final UserStoreRepository userStoreRepository;
-    private final BankAccountRepository bankAccountRepository;
+    private final SchoolUserRepository schoolUserRepository;
 
     @Transactional(readOnly = true)
-    public ViewProfileResponse getEmployeeProfile(
-            Long ownerId,
-            Long userStoreId
-    ) {
+    public ViewProfileResponse getEmployeeProfile(Long adminId, Long schoolUserId) {
 
-        UserStore userStore = userStoreRepository.findById(userStoreId)
-                .orElseThrow(() -> new IllegalArgumentException("USER_STORE_NOT_FOUND"));
+        SchoolUser schoolUser = schoolUserRepository.findById(schoolUserId)
+                .orElseThrow(() -> new IllegalArgumentException("SCHOOL_USER_NOT_FOUND"));
 
-        boolean isOwner = userStoreRepository
-                .findByUser_IdAndStore_Id(ownerId, userStore.getStore().getId())
+        boolean isAdmin = schoolUserRepository
+                .findByUser_IdAndSchool_Id(adminId, schoolUser.getSchool().getId())
                 .stream()
-                .anyMatch(us -> us.getPosition() == UserStore.Position.OWNER);
+                .anyMatch(su -> su.getPosition() == SchoolUser.Position.ADMIN);
 
-        if (!isOwner) {
+        if (!isAdmin) {
             throw new IllegalArgumentException("ACCESS_DENIED");
         }
 
-        var user = userStore.getUser();
-        var store = userStore.getStore();
+        var user = schoolUser.getUser();
+        var school = schoolUser.getSchool();
 
-        BankAccount bankAccount =
-                bankAccountRepository.findTopByUserIdOrderByIdDesc(user.getId())
-                        .orElse(null);
-
-        LocalDate hireDate = userStore.getHireDate();
-
-        long daysWorked = hireDate != null
-                ? ChronoUnit.DAYS.between(hireDate, LocalDate.now())
-                : 0;
+        LocalDate hireDate = schoolUser.getHireDate();
+        long daysWorked = hireDate != null ? ChronoUnit.DAYS.between(hireDate, LocalDate.now()) : 0;
 
         return new ViewProfileResponse(
                 user.getUsername(),
                 user.getProfileImageUrl(),
-                userStore.getEmploymentStatus().name(),
-                userStore.getPosition().name(),
-                store.getName(),
-                bankAccount != null && bankAccount.getBank() != null
-                        ? bankAccount.getBank().getBankName()
-                        : null,
-                bankAccount != null ? bankAccount.getAccountNumber() : null,
+                schoolUser.getEmploymentStatus().name(),
+                schoolUser.getPosition().name(),
+                school.getName(),
                 user.getEmail(),
                 hireDate,
                 daysWorked

@@ -7,29 +7,33 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.rssolplan.edu.domain.notification.NotificationService;
 import com.rssolplan.edu.domain.schedule.DayOfWeek;
-import com.rssolplan.edu.domain.schedule.generation.dto.*;
+import com.rssolplan.edu.domain.schedule.generation.dto.TimetableGenerationRequestDto;
+import com.rssolplan.edu.domain.schedule.generation.dto.TimetableSlotRequirementDto;
+import com.rssolplan.edu.domain.schedule.generation.dto.candidate.ConfirmTimetableRequestDto;
 import com.rssolplan.edu.domain.schedule.generation.dto.candidate.CandidateSchedule;
-import com.rssolplan.edu.domain.schedule.generation.dto.candidate.CandidateShift;
 import com.rssolplan.edu.domain.schedule.generation.dto.candidate.GenerationOptionsDto;
-import com.rssolplan.edu.domain.schedule.generation.dto.setting.ScheduleSettingSegmentResponseDto;
-import com.rssolplan.edu.domain.schedule.generation.entity.Schedule;
-import com.rssolplan.edu.domain.schedule.generation.entity.ScheduleRequest;
-import com.rssolplan.edu.domain.schedule.generation.entity.ScheduleRequest.ScheduleRequestStatus;
-import com.rssolplan.edu.domain.schedule.generation.entity.WorkShift;
+import com.rssolplan.edu.domain.schedule.generation.entity.Timetable;
+import com.rssolplan.edu.domain.schedule.generation.entity.TimetableRequest;
+import com.rssolplan.edu.domain.schedule.generation.entity.TimetableSet;
 import com.rssolplan.edu.domain.schedule.generation.strategy.*;
-import com.rssolplan.edu.domain.schedule.workavailability.WorkAvailability;
-import com.rssolplan.edu.domain.schedule.workavailability.WorkAvailabilityRepository;
-import com.rssolplan.edu.domain.schedule.workshifts.WorkShiftRepository;
-import com.rssolplan.edu.domain.store.Store;
-import com.rssolplan.edu.domain.store.StoreRepository;
-import com.rssolplan.edu.domain.store.UserStore;
-import com.rssolplan.edu.domain.store.UserStoreRepository;
-import com.rssolplan.edu.domain.store.setting.StoreSetting;
-import com.rssolplan.edu.domain.store.setting.StoreSettingRepository;
-import com.rssolplan.edu.domain.store.setting.StoreSettingSegment;
+import com.rssolplan.edu.domain.schedule.workavailability.TeacherAvailability;
+import com.rssolplan.edu.domain.schedule.workavailability.TeacherAvailabilityRepository;
+import com.rssolplan.edu.domain.school.School;
+import com.rssolplan.edu.domain.school.SchoolClass;
+import com.rssolplan.edu.domain.school.SchoolClassRepository;
+import com.rssolplan.edu.domain.school.SchoolRepository;
+import com.rssolplan.edu.domain.school.SchoolUser;
+import com.rssolplan.edu.domain.school.SchoolUserRepository;
+import com.rssolplan.edu.domain.school.Subject;
+import com.rssolplan.edu.domain.school.SubjectRepository;
+import com.rssolplan.edu.domain.school.setting.PeriodSetting;
+import com.rssolplan.edu.domain.school.setting.SchoolSettingRepository;
+import com.rssolplan.edu.global.exception.BadRequestException;
 import com.rssolplan.edu.global.exception.ForbiddenException;
 import com.rssolplan.edu.global.exception.NotFoundException;
 import com.rssolplan.edu.global.security.AuthorizationService;
+import lombok.Getter;
+import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -38,29 +42,27 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
-
-import static com.rssolplan.edu.domain.store.UserStore.Position.OWNER;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ScheduleGenerationService {
-    private final StoreRepository storeRepository;
-    private final AuthorizationService authService;
-    private final RedisTemplate<String, Object> redisTemplate;
-    private final WorkAvailabilityRepository workAvailabilityRepository;
-    private final UserStoreRepository userStoreRepository;
-    private final ScheduleRepository scheduleRepository;
-    private final WorkShiftRepository workShiftRepository;
-    private final NotificationService notificationService;
-    private final StoreSettingRepository storeSettingRepository;
-    private final ScheduleRequestRepository scheduleRequestRepository;
 
-    // 전략 패턴 - 4가지 전략 주입
+    private final SchoolRepository schoolRepository;
+    private final SchoolUserRepository schoolUserRepository;
+    private final SchoolClassRepository schoolClassRepository;
+    private final SubjectRepository subjectRepository;
+    private final SchoolSettingRepository schoolSettingRepository;
+    private final TeacherAvailabilityRepository teacherAvailabilityRepository;
+    private final TimetableRepository timetableRepository;
+    private final TimetableRequestRepository timetableRequestRepository;
+    private final TimetableSetRepository timetableSetRepository;
+    private final AuthorizationService authService;
+    private final NotificationService notificationService;
+    private final RedisTemplate<String, Object> redisTemplate;
+
     private final BalancedStrategy balancedStrategy;
     private final CoverageFirstStrategy coverageFirstStrategy;
     private final SeniorPriorityStrategy seniorPriorityStrategy;
@@ -75,312 +77,294 @@ public class ScheduleGenerationService {
         objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
-    // ========================================
-    // 1. 스케줄 요청 (알바생에게 근무 가능 시간 입력 요청)
-    // ========================================
+    // =========================================================
+    // 1. 시간표 생성 요청 (교사들에게 불가 교시 제출 요청)
+    // =========================================================
     @Transactional
-    public ScheduleRequestResponseDto requestSchedule(Long userId, ScheduleRequestDto request) {
-        Long storeId = authService.getActiveStoreIdOrThrow(userId);
-        UserStore owner = authService.getUserStoreOrThrow(userId, storeId);
-        Store store = storeRepository.findById(storeId)
-                .orElseThrow(() -> new NotFoundException("존재하지 않는 매장입니다."));
+    public TimetableRequest requestTimetable(Long userId) {
+        Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
+        SchoolUser admin = authService.getSchoolUserOrThrow(userId, schoolId);
 
-        if (owner.getPosition() != OWNER) {
-            throw new ForbiddenException("해당 매장의 근무표를 생성할 권한이 없습니다.");
+        if (admin.getPosition() != SchoolUser.Position.ADMIN) {
+            throw new ForbiddenException("시간표 생성 요청 권한이 없습니다.");
         }
 
-        // 매장 기본 설정 검증 (시간대 정보 필수)
-        storeSettingRepository.findByStoreId(storeId)
-                .orElseThrow(() -> new NotFoundException("매장 기본 설정이 존재하지 않습니다. 온보딩을 완료해주세요."));
+        School school = schoolRepository.findById(schoolId)
+                .orElseThrow(() -> new NotFoundException("학교를 찾을 수 없습니다."));
 
-        // 인원수 정보를 Redis에 임시 저장
-        String staffRequirementKey = null;
-        if (request.getStaffRequirement() != null) {
-            staffRequirementKey = saveStaffRequirementToRedis(storeId, request.getStaffRequirement());
-        }
-
-        // ScheduleRequest 생성
-        ScheduleRequest scheduleRequest = ScheduleRequest.builder()
-                .store(store)
-                .startDate(request.getStartDate())
-                .endDate(request.getEndDate())
-                .status(ScheduleRequestStatus.REQUESTED)
-                .temporarySettingKey(staffRequirementKey) // 인원수 정보 저장 키
+        TimetableRequest request = TimetableRequest.builder()
+                .school(school)
+                .status(TimetableRequest.TimetableRequestStatus.REQUESTED)
                 .build();
 
-        scheduleRequestRepository.save(scheduleRequest);
+        timetableRequestRepository.save(request);
 
-        // 알림 생성
-        notificationService.sendScheduleInputRequest(userId, storeId,
-                request.getStartDate(), request.getEndDate());
+        notificationService.sendTimetableInputRequest(userId, schoolId);
 
-        return ScheduleRequestResponseDto.builder()
-                .scheduleRequestId(scheduleRequest.getId())
-                .storeId(storeId)
-                .startDate(request.getStartDate())
-                .endDate(request.getEndDate())
-                .status(scheduleRequest.getStatus().name())
-                .build();
+        return request;
     }
 
-    /**
-     * 인원수 설정을 Redis에 저장
-     */
-    private String saveStaffRequirementToRedis(Long storeId, StaffRequirementDto dto) {
-        String key = "staff_requirement:store:" + storeId + ":" + UUID.randomUUID();
-        try {
-            String json = objectMapper.writeValueAsString(dto);
-            redisTemplate.opsForValue().set(key, json, Duration.ofDays(7));
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("인원수 설정 저장 실패", e);
-        }
-        return key;
-    }
-
-    // ========================================
-    // 3. 스케줄 생성 (후보군 생성)
-    // ========================================
+    // =========================================================
+    // 2. 후보 시간표 생성
+    // =========================================================
     @Transactional
-    public ScheduleGenerationResponseDto generateSchedule(Long userId, Long scheduleRequestId,
-                                                          ScheduleGenerationRequestDto request) {
-        Long storeId = authService.getActiveStoreIdOrThrow(userId);
+    public Map<String, Object> generateTimetable(Long userId, Long timetableRequestId,
+                                                 TimetableGenerationRequestDto request) {
+        Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
 
-        ScheduleRequest scheduleRequest = scheduleRequestRepository.findById(scheduleRequestId)
-                .orElseThrow(() -> new NotFoundException("스케줄 요청을 찾을 수 없습니다."));
+        TimetableRequest timetableRequest = timetableRequestRepository.findById(timetableRequestId)
+                .orElseThrow(() -> new NotFoundException("시간표 요청을 찾을 수 없습니다."));
 
-        if (scheduleRequest.getStatus() != ScheduleRequestStatus.REQUESTED) {
+        if (!timetableRequest.getSchool().getId().equals(schoolId)) {
+            throw new ForbiddenException("해당 학교의 시간표 요청이 아닙니다.");
+        }
+
+        if (timetableRequest.getStatus() != TimetableRequest.TimetableRequestStatus.REQUESTED) {
             throw new IllegalStateException("아직 요청 상태가 아닙니다.");
         }
 
-        // 근무 가능 시간 모두 제출됐는지 확인
-        List<Long> unsubmitted = validateAllSubmitted(storeId);
-        if (!unsubmitted.isEmpty()) {
-            throw new IllegalStateException("아직 근무 시간표를 제출하지 않은 직원이 있습니다: " + unsubmitted);
-        }
+        // 교사 목록 로드
+        List<SchoolUser> teachers = schoolUserRepository.findBySchool_IdAndPosition(
+                schoolId, SchoolUser.Position.TEACHER);
 
-        // 설정 조회 (StoreSetting 또는 Redis 임시 설정)
-        ScheduleSettingSnapshot settingSnapshot = getSettingSnapshot(scheduleRequest);
+        // 교사 불가 교시 로드
+        List<Long> teacherIds = teachers.stream().map(SchoolUser::getId).collect(Collectors.toList());
+        List<TeacherAvailability> unavailabilities = teacherIds.stream()
+                .flatMap(id -> teacherAvailabilityRepository.findBySchoolUser_Id(id).stream())
+                .collect(Collectors.toList());
 
-        // 전략 기반 후보 스케줄 생성
-        GenerationOptionsDto options = request.getGenerationOptions();
-        List<CandidateSchedule> candidates = generateCandidatesWithStrategies(storeId, settingSnapshot, options);
+        // 교시 설정 스냅샷
+        TimetableSettingSnapshot settings = TimetableSettingSnapshot.builder()
+                .schoolId(schoolId)
+                .academicYear(request.getAcademicYear())
+                .semester(request.getSemester())
+                .slotRequirements(request.getSlotRequirements())
+                .build();
+
+        // 교사 메타데이터 매핑
+        Map<Long, String> usernameMap = schoolUserRepository
+                .findSchoolUserIdAndUsernameBySchoolId(schoolId)
+                .stream()
+                .collect(Collectors.toMap(row -> (Long) row[0], row -> (String) row[1]));
+
+        Map<Long, LocalDate> hireDateMap = teachers.stream()
+                .collect(Collectors.toMap(
+                        SchoolUser::getId,
+                        t -> t.getHireDate() != null ? t.getHireDate() : LocalDate.now()
+                ));
+
+        // 전략 기반 후보 생성
+        List<CandidateSchedule> candidates = generateCandidatesWithStrategies(
+                schoolId, settings, unavailabilities, teachers, usernameMap, hireDateMap,
+                request.getGenerationOptions());
 
         // Redis에 후보 저장
-        String redisKey = saveCandidateSchedulesToRedis(storeId, candidates);
+        String redisKey = saveCandidatesToRedis(schoolId, candidates);
 
-        // ScheduleRequest 상태 업데이트
-        scheduleRequest.setStatus(ScheduleRequestStatus.GENERATED);
-        scheduleRequest.setCandidateScheduleKey(redisKey);
-        scheduleRequestRepository.save(scheduleRequest);
+        // 상태 업데이트
+        timetableRequest.setStatus(TimetableRequest.TimetableRequestStatus.GENERATED);
+        timetableRequest.setCandidateTimetableKey(redisKey);
+        timetableRequestRepository.save(timetableRequest);
 
-        return buildResponse(scheduleRequest, storeId, settingSnapshot.getSegments(),
-                redisKey, candidates.size());
+        return Map.of(
+                "timetableRequestId", timetableRequest.getId(),
+                "schoolId", schoolId,
+                "academicYear", request.getAcademicYear(),
+                "semester", request.getSemester(),
+                "candidateTimetableKey", redisKey,
+                "generatedCount", candidates.size()
+        );
     }
 
-    // ========================================
-    // 4. 후보 스케줄 조회
-    // ========================================
-    public List<CandidateSchedule> getCandidateSchedules(String redisKey) {
-        String jsonFromRedis = (String) redisTemplate.opsForValue().get(redisKey);
-        if (jsonFromRedis == null) {
-            throw new NotFoundException("생성된 근무표가 없습니다.");
-        }
-
+    // =========================================================
+    // 3. 후보 시간표 조회
+    // =========================================================
+    public List<CandidateSchedule> getCandidates(String redisKey) {
+        String json = (String) redisTemplate.opsForValue().get(redisKey);
+        if (json == null) throw new NotFoundException("생성된 시간표가 없습니다.");
         try {
-            return objectMapper.readValue(jsonFromRedis, new TypeReference<>() {
-            });
+            return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Redis 캐시 읽기 실패", e);
         }
     }
 
-    // ========================================
-    // 5. 스케줄 확정
-    // ========================================
+    // =========================================================
+    // 4. 시간표 확정
+    // =========================================================
     @Transactional
-    public Schedule finalizeCandidateSchedule(Long userId, Long scheduleRequestId, int candidateIndex) {
-        Long storeId = authService.getActiveStoreIdOrThrow(userId);
+    public TimetableSet confirmTimetable(Long userId, Long timetableRequestId,
+                                        ConfirmTimetableRequestDto dto) {
+        // Integer 래퍼 타입이므로 null 언박싱 NPE 방어
+        if (dto.getCandidateIndex() == null || dto.getCandidateIndex() < 0) {
+            throw new BadRequestException("유효하지 않은 후보 인덱스입니다.");
+        }
+        int candidateIndex = dto.getCandidateIndex();
+        int academicYear = dto.getAcademicYear();
+        int semester = dto.getSemester();
+        Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
 
-        ScheduleRequest scheduleRequest = scheduleRequestRepository.findById(scheduleRequestId)
-                .orElseThrow(() -> new NotFoundException("스케줄 요청을 찾을 수 없습니다."));
+        TimetableRequest timetableRequest = timetableRequestRepository.findById(timetableRequestId)
+                .orElseThrow(() -> new NotFoundException("시간표 요청을 찾을 수 없습니다."));
 
-        if (scheduleRequest.getStatus() != ScheduleRequestStatus.GENERATED) {
-            throw new IllegalStateException("아직 후보 스케줄이 생성되지 않았습니다.");
+        if (!timetableRequest.getSchool().getId().equals(schoolId)) {
+            throw new ForbiddenException("해당 학교의 시간표 요청이 아닙니다.");
         }
 
-        LocalDate startDate = scheduleRequest.getStartDate();
-        LocalDate endDate = scheduleRequest.getEndDate();
-        LocalDateTime start = startDate.atStartOfDay();
-        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+        if (timetableRequest.getStatus() != TimetableRequest.TimetableRequestStatus.GENERATED) {
+            throw new IllegalStateException("아직 후보 시간표가 생성되지 않았습니다.");
+        }
 
-        // 기존 근무블록 삭제
-        workShiftRepository.deleteOverlappingShifts(storeId, start, end);
+        School school = schoolRepository.findById(schoolId)
+                .orElseThrow(() -> new NotFoundException("학교를 찾을 수 없습니다."));
 
-        // Schedule 엔티티 생성
-        Store store = storeRepository.findById(storeId)
-                .orElseThrow(() -> new NotFoundException("매장을 찾을 수 없습니다."));
-        Schedule schedule = new Schedule();
-        schedule.setStore(store);
-        schedule.setStartDate(startDate);
-        schedule.setEndDate(endDate);
+        // TimetableSet 생성 또는 조회
+        TimetableSet timetableSet = timetableSetRepository
+                .findBySchool_IdAndAcademicYearAndSemester(schoolId, academicYear, semester)
+                .orElseGet(() -> timetableSetRepository.save(
+                        TimetableSet.builder()
+                                .school(school)
+                                .academicYear(academicYear)
+                                .semester(semester)
+                                .startDate(dto.getStartDate())
+                                .endDate(dto.getEndDate())
+                                .build()));
 
-        // Redis에서 CandidateSchedule 가져오기
-        List<CandidateSchedule> candidates = getCandidateSchedules(scheduleRequest.getCandidateScheduleKey());
-
+        // 후보 조회
+        List<CandidateSchedule> candidates = getCandidates(timetableRequest.getCandidateTimetableKey());
         if (candidates.isEmpty() || candidateIndex >= candidates.size()) {
             throw new IllegalStateException("유효하지 않은 후보 인덱스입니다.");
         }
 
         CandidateSchedule selected = candidates.get(candidateIndex);
 
-        // CandidateShift → WorkShift 변환
-        for (CandidateShift shift : selected.getShifts()) {
-            if (shift.getUserStoreId() == null) continue; // UNASSIGNED
+        // 교시 ID → PeriodSetting 매핑
+        var schoolSetting = schoolSettingRepository.findBySchool_Id(schoolId)
+                .orElseThrow(() -> new NotFoundException("학교 설정이 존재하지 않습니다."));
+        Map<Integer, PeriodSetting> periodMap = schoolSetting.getPeriods().stream()
+                .collect(Collectors.toMap(PeriodSetting::getPeriodNumber, p -> p));
 
-            WorkShift ws = new WorkShift();
-            ws.setShiftStatus(WorkShift.ShiftStatus.SCHEDULED);
-            ws.setUserStore(userStoreRepository.findById(shift.getUserStoreId())
-                    .orElseThrow(() -> new NotFoundException("직원 정보를 찾을 수 없습니다.")));
-            ws.setStore(store);
-            ws.setSchedule(schedule);
-            schedule.getWorkShifts().add(ws);
-
-            LocalDate shiftDate = startDate.plusDays(shift.getDay().getValue() - 1);
-            ws.setStartDatetime(shiftDate.atTime(shift.getStartTime()));
-            ws.setEndDatetime(shiftDate.atTime(shift.getEndTime()));
+        // 삭제 전에 배정된 모든 shift가 유효한지 검증 (학교 소속 포함)
+        for (var shift : selected.getShifts()) {
+            if (shift.getSchoolUserId() == null) continue;
+            if (periodMap.get(shift.getPeriodNumber()) == null) continue;
+            if (shift.getSubjectId() == null) {
+                throw new BadRequestException("후보 시간표에 과목이 없는 교시가 포함되어 있습니다. (dayOfWeek=" +
+                        shift.getDayOfWeek() + ", period=" + shift.getPeriodNumber() + ")");
+            }
+            // 학급·과목이 현재 학교 소속인지 확인
+            SchoolClass sc = schoolClassRepository.findById(shift.getSchoolClassId())
+                    .orElseThrow(() -> new NotFoundException("학급을 찾을 수 없습니다."));
+            if (!sc.getSchool().getId().equals(schoolId)) {
+                throw new ForbiddenException("후보 시간표에 다른 학교의 학급이 포함되어 있습니다.");
+            }
+            Subject sub = subjectRepository.findById(shift.getSubjectId())
+                    .orElseThrow(() -> new NotFoundException("과목을 찾을 수 없습니다."));
+            if (!sub.getSchool().getId().equals(schoolId)) {
+                throw new ForbiddenException("후보 시간표에 다른 학교의 과목이 포함되어 있습니다.");
+            }
         }
 
-        // Schedule 저장
-        Schedule saved = scheduleRepository.save(schedule);
+        // 기존 해당 연도/학기 시간표 삭제 후 즉시 flush
+        // flush 없이 insert하면 unique 제약을 위반할 수 있다.
+        List<Timetable> existing = timetableRepository
+                .findBySchool_IdAndAcademicYearAndSemester(schoolId, academicYear, semester);
+        timetableRepository.deleteAll(existing);
+        timetableRepository.flush();
 
-        // ScheduleRequest 상태 업데이트
-        scheduleRequest.setStatus(ScheduleRequestStatus.CONFIRMED);
-        scheduleRequest.setSchedule(saved);
-        scheduleRequestRepository.save(scheduleRequest);
+        // CandidateShift → Timetable 변환
+        for (var shift : selected.getShifts()) {
+            if (shift.getSchoolUserId() == null) continue; // UNASSIGNED 건너뜀
+
+            PeriodSetting periodSetting = periodMap.get(shift.getPeriodNumber());
+            if (periodSetting == null) continue;
+
+            SchoolUser teacher = schoolUserRepository.findById(shift.getSchoolUserId())
+                    .orElseThrow(() -> new NotFoundException("교사를 찾을 수 없습니다."));
+            SchoolClass schoolClass = schoolClassRepository.findById(shift.getSchoolClassId())
+                    .orElseThrow(() -> new NotFoundException("학급을 찾을 수 없습니다."));
+            Subject subject = subjectRepository.findById(shift.getSubjectId())
+                    .orElseThrow(() -> new NotFoundException("과목을 찾을 수 없습니다."));
+
+            Timetable timetable = Timetable.builder()
+                    .school(school)
+                    .academicYear(academicYear)
+                    .semester(semester)
+                    .schoolClass(schoolClass)
+                    .periodSetting(periodSetting)
+                    .dayOfWeek(shift.getDayOfWeek())
+                    .subject(subject)
+                    .teacher(teacher)
+                    .build();
+
+            timetableRepository.save(timetable);
+        }
+
+        // TimetableRequest 상태 업데이트
+        timetableRequest.setStatus(TimetableRequest.TimetableRequestStatus.CONFIRMED);
+        timetableRequest.setTimetableSet(timetableSet);
+        timetableRequestRepository.save(timetableRequest);
 
         // Redis 정리
-        redisTemplate.delete(scheduleRequest.getCandidateScheduleKey());
-        if (scheduleRequest.getTemporarySettingKey() != null) {
-            redisTemplate.delete(scheduleRequest.getTemporarySettingKey());
-        }
+        redisTemplate.delete(timetableRequest.getCandidateTimetableKey());
 
-        return saved;
+        return timetableSet;
     }
 
-    // ========================================
-    // 내부 헬퍼 메서드
-    // ========================================
-
-    /**
-     * 설정 스냅샷 조회
-     * - StoreSetting에서 시간대 정보 조회
-     * - Redis에서 인원수 정보 조회하여 결합
-     */
-    private ScheduleSettingSnapshot getSettingSnapshot(ScheduleRequest request) {
-        Long storeId = request.getStore().getId();
-
-        // StoreSetting에서 시간대 정보 조회
-        StoreSetting storeSetting = storeSettingRepository.findByStoreId(storeId)
-                .orElseThrow(() -> new NotFoundException("기본 매장 설정이 존재하지 않습니다."));
-
-        // Redis에서 인원수 정보 조회
-        StaffRequirementDto staffRequirement = null;
-        if (request.getTemporarySettingKey() != null) {
-            staffRequirement = getStaffRequirementFromRedis(request.getTemporarySettingKey());
-        }
-
-        return ScheduleSettingSnapshot.fromStoreSettingWithStaff(storeSetting, staffRequirement);
+    // =========================================================
+    // 미제출 교사 목록 조회 (불가 교시를 하나도 제출하지 않은 교사)
+    // =========================================================
+    @Transactional(readOnly = true)
+    public List<Long> getTeachersWithoutAvailability(Long userId) {
+        Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
+        List<SchoolUser> teachers = schoolUserRepository.findBySchool_IdAndPosition(
+                schoolId, SchoolUser.Position.TEACHER);
+        return teachers.stream()
+                .filter(t -> teacherAvailabilityRepository.findBySchoolUser_Id(t.getId()).isEmpty())
+                .map(t -> t.getUser().getId())
+                .collect(Collectors.toList());
     }
 
-    /**
-     * Redis에서 인원수 설정 조회
-     */
-    private StaffRequirementDto getStaffRequirementFromRedis(String key) {
-        String json = (String) redisTemplate.opsForValue().get(key);
-        if (json == null) {
-            return null; // 인원수 정보 없으면 기본값 사용
+    // =========================================================
+    // 내부 헬퍼
+    // =========================================================
+
+    public List<CandidateSchedule> generateCandidatesWithStrategies(
+            Long schoolId,
+            TimetableSettingSnapshot settings,
+            List<TeacherAvailability> unavailabilities,
+            List<SchoolUser> teachers,
+            Map<Long, String> usernameMap,
+            Map<Long, LocalDate> hireDateMap,
+            GenerationOptionsDto options) {
+
+        if (teachers.isEmpty()) {
+            throw new IllegalStateException("배정 가능한 교사가 없습니다.");
         }
 
-        try {
-            return objectMapper.readValue(json, StaffRequirementDto.class);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("인원수 설정 읽기 실패", e);
-        }
-    }
-
-    /**
-     * 전략 패턴 기반 후보 스케줄 생성
-     * - 각 전략별로 1개의 후보 스케줄 생성
-     * - 기본: 4가지 전략 모두 사용 (BALANCED, COVERAGE_FIRST, SENIOR_PRIORITY, FAIR_DISTRIBUTION)
-     */
-    public List<CandidateSchedule> generateCandidatesWithStrategies(Long storeId,
-                                                                    ScheduleSettingSnapshot settings,
-                                                                    GenerationOptionsDto options) {
-        // 근무 가능자 로드
-        List<WorkAvailability> availabilities = workAvailabilityRepository.findByUserStore_Store_Id(storeId);
-        if (availabilities.isEmpty()) {
-            throw new IllegalStateException("근무 가능 시간을 제출한 직원이 없습니다.");
-        }
-
-        // 직원 username 매핑
-        Map<Long, String> userStoreUsernameMap = userStoreRepository
-                .findUserStoreIdAndUsernameByStoreId(storeId)
-                .stream()
-                .collect(Collectors.toMap(
-                        row -> (Long) row[0],
-                        row -> (String) row[1]
-                ));
-
-        // 직원 경력(hireDate) 매핑
-        Map<Long, LocalDate> userStoreHireDateMap = userStoreRepository.findByStore_Id(storeId)
-                .stream()
-                .collect(Collectors.toMap(
-                        UserStore::getId,
-                        us -> us.getHireDate() != null ? us.getHireDate() : LocalDate.now()
-                ));
-
-        // 사용할 전략 결정
         List<ScheduleGenerationStrategy> strategiesToUse = getStrategiesToUse(options);
-
-        List<CandidateSchedule> candidateSchedules = new ArrayList<>();
+        List<CandidateSchedule> result = new ArrayList<>();
 
         for (ScheduleGenerationStrategy strategy : strategiesToUse) {
-            log.info("🔄 전략 '{}' 으로 후보 스케줄 생성 중...", strategy.getStrategyName());
+            log.info("전략 '{}' 으로 후보 시간표 생성 중...", strategy.getStrategyName());
 
             CandidateSchedule candidate = strategy.generate(
-                    storeId,
-                    settings,
-                    availabilities,
-                    userStoreUsernameMap,
-                    userStoreHireDateMap
-            );
+                    schoolId, settings, unavailabilities, teachers, usernameMap, hireDateMap);
 
-            // 전략 정보 설정
             candidate.setStrategyName(strategy.getStrategyName());
             candidate.setStrategyDescription(strategy.getDescription());
-
-            // 메타데이터 계산 (배정률 등)
             candidate.calculateMetadata();
 
-            log.info("✅ 전략 '{}' 완료 - 배정률: {}%, 빈자리: {}개",
-                    strategy.getStrategyName(),
-                    candidate.getCoverageRate(),
-                    candidate.getUnassignedCount());
+            log.info("전략 '{}' 완료 - 배정률: {}%, 빈자리: {}개",
+                    strategy.getStrategyName(), candidate.getCoverageRate(), candidate.getUnassignedCount());
 
-            candidateSchedules.add(candidate);
+            result.add(candidate);
         }
 
-        return candidateSchedules;
+        return result;
     }
 
-    /**
-     * 사용할 전략 목록 결정
-     * 1. 항상 최소 4개 이상의 후보 생성
-     * 2. 요청에 보낸 전략을 최우선으로 적용
-     * 3. 나머지는 요청에 없는 전략들을 순차적으로 적용
-     */
     private List<ScheduleGenerationStrategy> getStrategiesToUse(GenerationOptionsDto options) {
-        // 모든 전략 맵
         Map<GenerationOptionsDto.GenerationStrategy, ScheduleGenerationStrategy> strategyMap = Map.of(
                 GenerationOptionsDto.GenerationStrategy.BALANCED, balancedStrategy,
                 GenerationOptionsDto.GenerationStrategy.COVERAGE_FIRST, coverageFirstStrategy,
@@ -388,8 +372,7 @@ public class ScheduleGenerationService {
                 GenerationOptionsDto.GenerationStrategy.FAIR_DISTRIBUTION, fairDistributionStrategy
         );
 
-        // 전체 전략 순서 (기본 순서)
-        List<GenerationOptionsDto.GenerationStrategy> allStrategyOrder = List.of(
+        List<GenerationOptionsDto.GenerationStrategy> allOrder = List.of(
                 GenerationOptionsDto.GenerationStrategy.BALANCED,
                 GenerationOptionsDto.GenerationStrategy.COVERAGE_FIRST,
                 GenerationOptionsDto.GenerationStrategy.SENIOR_PRIORITY,
@@ -397,263 +380,47 @@ public class ScheduleGenerationService {
         );
 
         List<ScheduleGenerationStrategy> result = new ArrayList<>();
+        Set<GenerationOptionsDto.GenerationStrategy> requested = new LinkedHashSet<>();
 
-        // 1. 요청에 보낸 전략을 최우선으로 추가
-        Set<GenerationOptionsDto.GenerationStrategy> requestedStrategies = new LinkedHashSet<>();
-        if (options != null && options.getStrategies() != null && !options.getStrategies().isEmpty()) {
-            for (GenerationOptionsDto.GenerationStrategy strategy : options.getStrategies()) {
-                if (strategyMap.containsKey(strategy)) {
-                    result.add(strategyMap.get(strategy));
-                    requestedStrategies.add(strategy);
+        if (options != null && options.getStrategies() != null) {
+            for (var s : options.getStrategies()) {
+                if (strategyMap.containsKey(s)) {
+                    result.add(strategyMap.get(s));
+                    requested.add(s);
                 }
             }
         }
 
-        // 2. 요청에 없는 전략들을 순차적으로 추가
-        List<ScheduleGenerationStrategy> remainingStrategies = new ArrayList<>();
-        for (GenerationOptionsDto.GenerationStrategy strategy : allStrategyOrder) {
-            if (!requestedStrategies.contains(strategy)) {
-                remainingStrategies.add(strategyMap.get(strategy));
+        for (var s : allOrder) {
+            if (!requested.contains(s) && result.size() < 4) {
+                result.add(strategyMap.get(s));
             }
         }
-
-        // 3. 최소 4개 보장 (요청 전략 + 나머지 전략으로 채움)
-        int minCount = 4;
-        int needed = minCount - result.size();
-
-        for (int i = 0; i < needed && i < remainingStrategies.size(); i++) {
-            result.add(remainingStrategies.get(i));
-        }
-
-        log.info("📋 생성할 후보 수: {}, 사용 전략: {}",
-                result.size(),
-                result.stream().map(ScheduleGenerationStrategy::getStrategyName).toList());
 
         return result;
     }
 
-    /**
-     * @deprecated 전략 패턴 기반 generateCandidatesWithStrategies 사용 권장
-     */
-    @Deprecated
-    public List<CandidateSchedule> generateWeeklyCandidates(Long storeId,
-                                                            ScheduleSettingSnapshot settings,
-                                                            int candidateCount) {
-        // 근무 가능자 로드
-        List<WorkAvailability> availabilities = workAvailabilityRepository.findByUserStore_Store_Id(storeId);
-        if (availabilities.isEmpty()) {
-            throw new IllegalStateException("근무 가능 시간을 제출한 직원이 없습니다.");
-        }
-
-        List<CandidateSchedule> candidateSchedules = new ArrayList<>();
-
-        // 직원 username 매핑
-        Map<Long, String> userStoreUsernameMap = userStoreRepository
-                .findUserStoreIdAndUsernameByStoreId(storeId)
-                .stream()
-                .collect(Collectors.toMap(
-                        row -> (Long) row[0],
-                        row -> (String) row[1]
-                ));
-
-        // 직원 경력(hireDate) 매핑
-        Map<Long, LocalDate> userStoreHireDateMap = userStoreRepository.findByStore_Id(storeId)
-                .stream()
-                .collect(Collectors.toMap(UserStore::getId, UserStore::getHireDate));
-
-        // 후보 스케줄 생성
-        for (int c = 0; c < candidateCount; c++) {
-            Map<Long, Integer> assignmentCount = new HashMap<>();
-            CandidateSchedule candidate = new CandidateSchedule(storeId);
-
-            for (ScheduleSettingSnapshot.SegmentSnapshot seg : settings.getSegments()) {
-                LocalTime start = seg.getStartTime();
-                LocalTime end = seg.getEndTime();
-                int requiredNum = seg.getRequiredStaff();
-
-                for (DayOfWeek day : DayOfWeek.values()) {
-                    Set<Long> assignedUserIds = new HashSet<>();
-                    List<UserStore> availableStaffs = new ArrayList<>();
-
-                    // 해당 요일/시간에 근무 가능한 직원 필터링
-                    for (WorkAvailability wa : availabilities) {
-                        if (wa.getDayOfWeek() == day &&
-                                wa.getStartTime().isBefore(end) &&
-                                wa.getEndTime().isAfter(start)) {
-                            availableStaffs.add(wa.getUserStore());
-                        }
-                    }
-
-                    // 우선순위 정렬: 1) 적게 배정된 순 (공정) 2) 경력 높은 순 (hireDate 이른 순)
-                    availableStaffs.sort((u1, u2) -> {
-                        int c1 = assignmentCount.getOrDefault(u1.getId(), 0);
-                        int c2 = assignmentCount.getOrDefault(u2.getId(), 0);
-                        if (c1 != c2) return c1 - c2;
-
-                        LocalDate h1 = userStoreHireDateMap.getOrDefault(u1.getId(), LocalDate.now());
-                        LocalDate h2 = userStoreHireDateMap.getOrDefault(u2.getId(), LocalDate.now());
-                        return h1.compareTo(h2); // 경력 높은 순 (입사일 이른 순)
-                    });
-
-                    int assigned = 0;
-                    for (UserStore staff : availableStaffs) {
-                        if (assigned >= requiredNum) break;
-                        if (assignedUserIds.contains(staff.getId())) continue;
-
-                        assignedUserIds.add(staff.getId());
-                        String username = userStoreUsernameMap.get(staff.getId());
-
-                        candidate.addShift(new CandidateShift(
-                                staff.getId(), username, day, start, end
-                        ));
-
-                        assignmentCount.merge(staff.getId(), 1, Integer::sum);
-                        assigned++;
-                    }
-
-                    // 남은 자리 UNASSIGNED 처리
-                    while (assigned < requiredNum) {
-                        candidate.addShift(new CandidateShift(
-                                null, null, day, start, end, "UNASSIGNED"
-                        ));
-                        assigned++;
-                    }
-                }
-            }
-            candidateSchedules.add(candidate);
-        }
-
-        return candidateSchedules;
-    }
-
-    private String saveCandidateSchedulesToRedis(Long storeId, List<CandidateSchedule> schedules) {
-        String key = "candidate_schedule:store:" + storeId + ":week:" + getCurrentWeekString();
-
+    private String saveCandidatesToRedis(Long schoolId, List<CandidateSchedule> candidates) {
+        String key = "school:candidate:" + schoolId + ":" + UUID.randomUUID();
         try {
-            String jsonToSave = objectMapper.writeValueAsString(schedules);
-            redisTemplate.opsForValue().set(key, jsonToSave, Duration.ofDays(1));
+            String json = objectMapper.writeValueAsString(candidates);
+            redisTemplate.opsForValue().set(key, json, Duration.ofDays(1));
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Redis 캐시 변환 실패", e);
+            throw new RuntimeException("Redis 캐시 저장 실패", e);
         }
-
         return key;
     }
 
-    private ScheduleGenerationResponseDto buildResponse(ScheduleRequest request, Long storeId,
-                                                        List<ScheduleSettingSnapshot.SegmentSnapshot> segments,
-                                                        String redisKey, int candidateCount) {
-        List<ScheduleSettingSegmentResponseDto> segmentDtos = segments.stream()
-                .map(seg -> {
-                    ScheduleSettingSegmentResponseDto dto = new ScheduleSettingSegmentResponseDto();
-                    dto.setStartTime(seg.getStartTime());
-                    dto.setEndTime(seg.getEndTime());
-                    dto.setRequiredStaff(seg.getRequiredStaff());
-                    return dto;
-                })
-                .collect(Collectors.toList());
-
-        ScheduleGenerationResponseDto response = new ScheduleGenerationResponseDto();
-        response.setStatus("success");
-        response.setScheduleRequestId(request.getId());
-        response.setStoreId(storeId);
-        response.setTimeSegments(segmentDtos);
-        response.setCandidateScheduleKey(redisKey);
-        response.setGeneratedCount(candidateCount);
-        return response;
-    }
-
-    private String getCurrentWeekString() {
-        return LocalDate.now().format(java.time.format.DateTimeFormatter.ISO_WEEK_DATE);
-    }
-
-    @Transactional(readOnly = true)
-    public List<Long> validateAllSubmitted(Long storeId) {
-        List<UserStore> userStores = userStoreRepository.findByStore_Id(storeId);
-        List<Long> submittedUserStoreIds = workAvailabilityRepository.findDistinctUserStoreIdsByStoreId(storeId);
-
-        List<Long> unsubmitted = new ArrayList<>();
-        for (UserStore us : userStores) {
-            if (us.getPosition() == UserStore.Position.OWNER) continue;
-            if (!submittedUserStoreIds.contains(us.getId())) {
-                unsubmitted.add(us.getUser().getId());
-            }
-        }
-        return unsubmitted;
-    }
-
-    // ========================================
-    // 설정 스냅샷 (StoreSetting 시간대 + StaffRequirement 인원수 결합)
-    // ========================================
-    @lombok.Getter
-    @lombok.Builder
-    public static class ScheduleSettingSnapshot {
-        private LocalTime openTime;
-        private LocalTime closeTime;
-        private boolean useSegments;
-        private boolean hasBreakTime;
-        private LocalTime breakStartTime;
-        private LocalTime breakEndTime;
-        private List<SegmentSnapshot> segments;
-
-        @lombok.Getter
-        @lombok.Builder
-        public static class SegmentSnapshot {
-            private LocalTime startTime;
-            private LocalTime endTime;
-            private int requiredStaff;
-        }
-
-        /**
-         * StoreSetting(시간대) + StaffRequirementDto(인원수) 결합
-         * <p>
-         * 1. 세그먼트 사용 O: 각 세그먼트별로 필요 인원수 적용
-         * 2. 세그먼트 사용 X: 가게 운영 시간 전체에 필요한 동시 근무자 수 적용
-         */
-        public static ScheduleSettingSnapshot fromStoreSettingWithStaff(
-                StoreSetting setting,
-                StaffRequirementDto staffRequirement) {
-
-            List<SegmentSnapshot> segs = new ArrayList<>();
-
-            if (setting.isUseSegments() && setting.getSegments() != null && !setting.getSegments().isEmpty()) {
-                // 세그먼트 사용 시: StoreSetting의 시간대 + StaffRequirement의 인원수 결합
-                Map<Integer, Integer> staffMap = new HashMap<>();
-                if (staffRequirement != null && staffRequirement.getSegmentStaffList() != null) {
-                    for (StaffRequirementDto.SegmentStaffDto segStaff : staffRequirement.getSegmentStaffList()) {
-                        staffMap.put(segStaff.getSegmentIndex(), segStaff.getRequiredStaff());
-                    }
-                }
-
-                List<StoreSettingSegment> storeSegments = setting.getSegments();
-                for (int i = 0; i < storeSegments.size(); i++) {
-                    StoreSettingSegment seg = storeSegments.get(i);
-                    int requiredStaff = staffMap.getOrDefault(i, 1); // 기본값 1명
-                    segs.add(SegmentSnapshot.builder()
-                            .startTime(seg.getStartTime())
-                            .endTime(seg.getEndTime())
-                            .requiredStaff(requiredStaff)
-                            .build());
-                }
-            } else {
-                // 세그먼트 미사용 시: 전체 운영시간을 하나의 세그먼트로, 동시 근무자 수 적용
-                int requiredStaff = (staffRequirement != null && staffRequirement.getRequiredStaff() != null)
-                        ? staffRequirement.getRequiredStaff() : 1;
-                segs.add(SegmentSnapshot.builder()
-                        .startTime(setting.getOpenTime())
-                        .endTime(setting.getCloseTime())
-                        .requiredStaff(requiredStaff)
-                        .build());
-            }
-
-            return ScheduleSettingSnapshot.builder()
-                    .openTime(setting.getOpenTime())
-                    .closeTime(setting.getCloseTime())
-                    .useSegments(setting.isUseSegments())
-                    .hasBreakTime(setting.isHasBreakTime())
-                    .breakStartTime(setting.getBreakStartTime())
-                    .breakEndTime(setting.getBreakEndTime())
-                    .segments(segs)
-                    .build();
-        }
+    // =========================================================
+    // TimetableSettingSnapshot (교시 기반)
+    // =========================================================
+    @Getter
+    @Builder
+    public static class TimetableSettingSnapshot {
+        private Long schoolId;
+        private int academicYear;
+        private int semester;
+        /** 생성 요청에 포함된 슬롯 목록 */
+        private List<TimetableSlotRequirementDto> slotRequirements;
     }
 }

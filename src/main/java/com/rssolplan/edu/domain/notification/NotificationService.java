@@ -1,14 +1,14 @@
 package com.rssolplan.edu.domain.notification;
 
 import com.rssolplan.edu.domain.notification.dto.NotificationResponseDto;
-import com.rssolplan.edu.domain.schedule.extrashift.ExtrashiftRequestRepository;
-import com.rssolplan.edu.domain.schedule.extrashift.entity.ExtrashiftRequest;
-import com.rssolplan.edu.domain.schedule.shiftswap.ShiftSwapRequest;
-import com.rssolplan.edu.domain.schedule.shiftswap.ShiftSwapRequestRepository;
-import com.rssolplan.edu.domain.store.Store;
-import com.rssolplan.edu.domain.store.StoreRepository;
-import com.rssolplan.edu.domain.store.UserStore;
-import com.rssolplan.edu.domain.store.UserStoreRepository;
+import com.rssolplan.edu.domain.schedule.extrashift.SubstituteRequestRepository;
+import com.rssolplan.edu.domain.schedule.extrashift.entity.SubstituteRequest;
+import com.rssolplan.edu.domain.schedule.shiftswap.TimetableSwapRequest;
+import com.rssolplan.edu.domain.schedule.shiftswap.TimetableSwapRequestRepository;
+import com.rssolplan.edu.domain.school.School;
+import com.rssolplan.edu.domain.school.SchoolRepository;
+import com.rssolplan.edu.domain.school.SchoolUser;
+import com.rssolplan.edu.domain.school.SchoolUserRepository;
 import com.rssolplan.edu.domain.user.User;
 import com.rssolplan.edu.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,38 +23,35 @@ import java.util.List;
 @RequiredArgsConstructor
 public class NotificationService {
 
-    private final UserStoreRepository userStoreRepository;
+    private final SchoolUserRepository schoolUserRepository;
     private final NotificationRepository notificationRepository;
-    private final StoreRepository storeRepository;
+    private final SchoolRepository schoolRepository;
     private final UserRepository userRepository;
-    private final ShiftSwapRequestRepository shiftSwapRequestRepository;
-    private final ExtrashiftRequestRepository extrashiftRequestRepository;
+    private final TimetableSwapRequestRepository timetableSwapRequestRepository;
+    private final SubstituteRequestRepository substituteRequestRepository;
 
-    // 근무표 입력 요청 알림
     @Transactional
-    public void sendScheduleInputRequest(Long requesterId,Long storeId, LocalDate startDate, LocalDate endDate) {
+    public void sendScheduleInputRequest(Long requesterId, Long schoolId, LocalDate startDate, LocalDate endDate) {
 
-        Store store = storeRepository.findById(storeId)
-                .orElseThrow(() -> new IllegalArgumentException("매장을 찾을 수 없습니다."));
+        School school = schoolRepository.findById(schoolId)
+                .orElseThrow(() -> new IllegalArgumentException("학교를 찾을 수 없습니다."));
 
-        User requester = userRepository.findById(requesterId).orElseThrow(() -> new IllegalArgumentException("요청자 유저를 찾을 수 없습니다."));
+        User requester = userRepository.findById(requesterId)
+                .orElseThrow(() -> new IllegalArgumentException("요청자 유저를 찾을 수 없습니다."));
 
-        List<UserStore> userStores = userStoreRepository.findByStore_Id(storeId);
+        List<SchoolUser> schoolUsers = schoolUserRepository.findBySchool_Id(schoolId);
         String periodText = formatPeriod(startDate, endDate);
 
-        for (UserStore us : userStores) {
-            if (us.getPosition() == UserStore.Position.OWNER) continue;
+        for (SchoolUser su : schoolUsers) {
+            if (su.getPosition() == SchoolUser.Position.ADMIN) continue;
 
             Notification notification = Notification.builder()
-                    .userId(us.getUser().getId()) //수신자
-                    .requester(requester)       // 알림 requester발생자 (AppUser 엔티티)
-                    .store(store)
+                    .userId(su.getUser().getId())
+                    .requester(requester)
+                    .school(school)
                     .category(Notification.Category.SCHEDULE_INPUT)
                     .type(Notification.Type.SCHEDULE_INPUT_REQUEST)
-                    .message(
-                            "사장님이 " + periodText + " 근무표 입력을 요청했어요.\n" +
-                                    "근무 가능한 시간을 기입해주세요!"
-                    )
+                    .message("교감 선생님이 " + periodText + " 시간표 입력을 요청했어요.\n시간표를 기입해주세요!")
                     .isRead(false)
                     .build();
 
@@ -68,53 +65,61 @@ public class NotificationService {
                 endDate.getMonthValue() + "/" + endDate.getDayOfMonth();
     }
 
-    // 알림 조회 (status 포함)
+    @Transactional
+    public void sendTimetableInputRequest(Long requesterId, Long schoolId) {
+        School school = schoolRepository.findById(schoolId)
+                .orElseThrow(() -> new IllegalArgumentException("학교를 찾을 수 없습니다."));
+        User requester = userRepository.findById(requesterId)
+                .orElseThrow(() -> new IllegalArgumentException("요청자 유저를 찾을 수 없습니다."));
+
+        List<SchoolUser> teachers = schoolUserRepository.findBySchool_IdAndPosition(
+                schoolId, SchoolUser.Position.TEACHER);
+
+        for (SchoolUser su : teachers) {
+            Notification notification = Notification.builder()
+                    .userId(su.getUser().getId())
+                    .requester(requester)
+                    .school(school)
+                    .category(Notification.Category.SCHEDULE_INPUT)
+                    .type(Notification.Type.SCHEDULE_INPUT_REQUEST)
+                    .message("관리자가 시간표 작성을 위해 불가 교시 제출을 요청했습니다.")
+                    .isRead(false)
+                    .build();
+            notificationRepository.save(notification);
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<NotificationResponseDto> getNotifications(Long userId) {
 
-        User user = userRepository.findById(userId).orElseThrow();
-        List<Notification> notifications = notificationRepository.findByUserIdWithStore(userId);
-
+        List<Notification> notifications = notificationRepository.findByUserIdWithSchool(userId);
         List<NotificationResponseDto> dtos = new ArrayList<>();
 
         for (Notification n : notifications) {
-            ShiftSwapRequest shiftSwap = null;
-            ExtrashiftRequest extraShift = null;
-            if (n.getShiftSwapRequestId() != null) {
-                shiftSwap = shiftSwapRequestRepository
-                        .findById(n.getShiftSwapRequestId())
-                        .orElse(null);
-            }
+            TimetableSwapRequest swapRequest = null;
+            SubstituteRequest substituteRequest = null;
 
-            if (n.getExtraShiftRequestId() != null) {
-                extraShift = extrashiftRequestRepository
-                        .findById(n.getExtraShiftRequestId())
-                        .orElse(null);
+            if (n.getTimetableSwapRequestId() != null) {
+                swapRequest = timetableSwapRequestRepository
+                        .findById(n.getTimetableSwapRequestId()).orElse(null);
+            }
+            if (n.getSubstituteRequestId() != null) {
+                substituteRequest = substituteRequestRepository
+                        .findById(n.getSubstituteRequestId()).orElse(null);
             }
 
             NotificationResponseDto dto = NotificationResponseDto.builder()
-                    .profileImageUrl(
-                            n.getRequester() != null
-                                    ? n.getRequester().getProfileImageUrl()
-                                    : null
-                    )
-                    .storeName(n.getStore() != null ? n.getStore().getName() : null)
+                    .profileImageUrl(n.getRequester() != null ? n.getRequester().getProfileImageUrl() : null)
+                    .schoolName(n.getSchool() != null ? n.getSchool().getName() : null)
                     .category(n.getCategory())
                     .type(n.getType())
                     .message(n.getMessage())
                     .createdAt(n.getCreatedAt())
-
-                    // 요청 id 추가
-                    .shiftSwapRequestId(n.getShiftSwapRequestId())
-                    .extraShiftRequestId(n.getExtraShiftRequestId())
-
-                    // 요청 상태 status 추가
-                    .shiftSwapStatus(shiftSwap != null ? shiftSwap.getStatus() : null)
-                    .shiftSwapManagerApprovalStatus(
-                            shiftSwap != null ? shiftSwap.getManagerApprovalStatus() : null
-                    )
-                    .extraShiftStatus(extraShift != null ? extraShift.getStatus() : null)
-
+                    .timetableSwapRequestId(n.getTimetableSwapRequestId())
+                    .substituteRequestId(n.getSubstituteRequestId())
+                    .timetableSwapStatus(swapRequest != null ? swapRequest.getStatus() : null)
+                    .timetableSwapManagerApprovalStatus(swapRequest != null ? swapRequest.getManagerApprovalStatus() : null)
+                    .substituteStatus(substituteRequest != null ? substituteRequest.getStatus() : null)
                     .isRead(n.isRead())
                     .build();
 

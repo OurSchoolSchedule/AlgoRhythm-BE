@@ -1,7 +1,9 @@
 package com.rssolplan.edu.global.config;
 
-import com.rssolplan.edu.domain.store.UserStoreRepository;
+import com.rssolplan.edu.domain.school.SchoolUserRepository;
+import com.rssolplan.edu.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,7 +27,9 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtTokenProvider jwt;
-    private final UserStoreRepository userStoreRepository;
+    private final SchoolUserRepository schoolUserRepository;
+    private final UserRepository userRepository;
+    private final StringRedisTemplate redisTemplate;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -58,18 +62,18 @@ public class SecurityConfig {
                             "/api/auth/dev-token" //로컬개발용으로추가
                     ).permitAll();
 
-                    // OWNER 전용 API
-                    auth.requestMatchers("/api/auth/onboarding/owner/**").hasRole("OWNER");
-                    auth.requestMatchers("/api/administration-staff/**").hasRole("OWNER");
+                    // ADMIN(교감/교장) 전용 API
+                    auth.requestMatchers("/api/auth/onboarding/admin/**").hasRole("ADMIN");
+                    auth.requestMatchers("/api/administration-staff/**").hasRole("ADMIN");
 
-                    // STAFF 전용 API
-                    auth.requestMatchers("/api/auth/onboarding/staff/**").hasRole("STAFF");
+                    // TEACHER 전용 API
+                    auth.requestMatchers("/api/auth/onboarding/teacher/**").hasRole("TEACHER");
 
                     // 나머지는 인증만 필요
                     auth.anyRequest().authenticated();
                 })
                 .addFilterBefore(
-                        new JwtAuthFilter(jwt, userStoreRepository),
+                        new JwtAuthFilter(jwt, schoolUserRepository, userRepository, redisTemplate),
                         UsernamePasswordAuthenticationFilter.class
                 )
                 .build();

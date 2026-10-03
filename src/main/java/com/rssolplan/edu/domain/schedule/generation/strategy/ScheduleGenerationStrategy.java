@@ -1,44 +1,41 @@
 package com.rssolplan.edu.domain.schedule.generation.strategy;
 
-import com.rssolplan.edu.domain.schedule.generation.ScheduleGenerationService.ScheduleSettingSnapshot;
+import com.rssolplan.edu.domain.schedule.generation.ScheduleGenerationService.TimetableSettingSnapshot;
 import com.rssolplan.edu.domain.schedule.generation.dto.candidate.CandidateSchedule;
-import com.rssolplan.edu.domain.schedule.workavailability.WorkAvailability;
+import com.rssolplan.edu.domain.schedule.workavailability.TeacherAvailability;
+import com.rssolplan.edu.domain.school.SchoolUser;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * 스케줄 생성 전략 인터페이스
+ * 시간표 생성 전략 인터페이스 (교시 기반)
  */
 public interface ScheduleGenerationStrategy {
 
     /**
-     * 후보 스케줄 생성
+     * 후보 시간표 생성
      *
-     * @param storeId              매장 ID
-     * @param settings             스케줄 설정 스냅샷
-     * @param availabilities       근무 가능 시간 목록
-     * @param userStoreUsernameMap userStoreId -> username 매핑
-     * @param userStoreHireDateMap userStoreId -> hireDate 매핑
-     * @return 생성된 후보 스케줄
+     * @param schoolId               학교 ID
+     * @param settings               시간표 설정 스냅샷 (교시 정보)
+     * @param unavailabilities       교사 불가 교시 목록
+     * @param teachers               학교 소속 교사 목록
+     * @param teacherUsernameMap     schoolUserId -> username 매핑
+     * @param teacherHireDateMap     schoolUserId -> hireDate 매핑
+     * @return 생성된 후보 시간표
      */
     CandidateSchedule generate(
-            Long storeId,
-            ScheduleSettingSnapshot settings,
-            List<WorkAvailability> availabilities,
-            Map<Long, String> userStoreUsernameMap,
-            Map<Long, LocalDate> userStoreHireDateMap
+            Long schoolId,
+            TimetableSettingSnapshot settings,
+            List<TeacherAvailability> unavailabilities,
+            List<SchoolUser> teachers,
+            Map<Long, String> teacherUsernameMap,
+            Map<Long, LocalDate> teacherHireDateMap
     );
 
-    /**
-     * 전략 이름 반환
-     */
     String getStrategyName();
 
-    /**
-     * 전략 설명 반환
-     */
     String getDescription();
 }
-

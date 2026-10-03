@@ -13,24 +13,22 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CandidateSchedule {
-    private Long storeId;
+    private Long schoolId;
     private List<CandidateShift> shifts = new ArrayList<>();
 
-    // 사용된 전략 정보
     private String strategyName;
     private String strategyDescription;
 
-    // 메타데이터 (비교용)
-    private int totalShifts;           // 총 배정 수
-    private int unassignedCount;       // 미배정(빈자리) 수
-    private double coverageRate;       // 배정률 (%)
+    private int totalShifts;
+    private int unassignedCount;
+    private double coverageRate;
 
-    public CandidateSchedule(Long storeId) {
-        this.storeId = storeId;
+    public CandidateSchedule(Long schoolId) {
+        this.schoolId = schoolId;
     }
 
-    public CandidateSchedule(Long storeId, String strategyName, String strategyDescription) {
-        this.storeId = storeId;
+    public CandidateSchedule(Long schoolId, String strategyName, String strategyDescription) {
+        this.schoolId = schoolId;
         this.strategyName = strategyName;
         this.strategyDescription = strategyDescription;
     }
@@ -39,9 +37,6 @@ public class CandidateSchedule {
         this.shifts.add(shift);
     }
 
-    /**
-     * 메타데이터 계산
-     */
     public void calculateMetadata() {
         this.totalShifts = shifts.size();
         this.unassignedCount = (int) shifts.stream()

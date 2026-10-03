@@ -13,102 +13,101 @@ public class MypageController {
 
     private final MypageService service;
 
-    // 직접 생성자 정의
     public MypageController(MypageService service) {
         this.service = service;
     }
 
-    // ===== 활성 매장 =====
+    // ===== 활성 학교 =====
 
-    @GetMapping("/active-store")
-    public ResponseEntity<ActiveStoreResponse> getActiveStore(@AuthenticationPrincipal Long userId) {
-        return ResponseEntity.ok(service.getActiveStore(userId));
+    @GetMapping("/active-school")
+    public ResponseEntity<ActiveSchoolResponse> getActiveSchool(@AuthenticationPrincipal Long userId) {
+        return ResponseEntity.ok(service.getActiveSchool(userId));
     }
 
-    @PatchMapping("/active-store/{storeId}")
-    public ResponseEntity<ActiveStoreResponse> updateActiveStore(
+    @PatchMapping("/active-school/{schoolId}")
+    public ResponseEntity<ActiveSchoolResponse> updateActiveSchool(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long storeId) {
-        return ResponseEntity.ok(service.updateActiveStore(userId, storeId));
+            @PathVariable Long schoolId) {
+        return ResponseEntity.ok(service.updateActiveSchool(userId, schoolId));
     }
 
-    // ===== 사장님 =====
+    // ===== 교감/교장(Admin) =====
 
-    @GetMapping("/owner/profile")
-    public ResponseEntity<OwnerProfileResponse> getOwnerProfile(@AuthenticationPrincipal Long ownerId) {
-        return ResponseEntity.ok(service.getOwnerProfile(ownerId));
+    @GetMapping("/admin/profile")
+    public ResponseEntity<AdminProfileResponse> getAdminProfile(@AuthenticationPrincipal Long adminId) {
+        return ResponseEntity.ok(service.getAdminProfile(adminId));
     }
 
-    @PutMapping("/owner/profile")
-    public ResponseEntity<OwnerProfileResponse> updateOwnerProfile(
-            @AuthenticationPrincipal Long ownerId,
-            @RequestBody OwnerProfileUpdateRequest request) {
-        return ResponseEntity.ok(service.updateOwnerProfile(ownerId, request));
+    @PutMapping("/admin/profile")
+    public ResponseEntity<AdminProfileResponse> updateAdminProfile(
+            @AuthenticationPrincipal Long adminId,
+            @RequestBody AdminProfileUpdateRequest request) {
+        return ResponseEntity.ok(service.updateAdminProfile(adminId, request));
     }
 
-    @GetMapping("/owner/store")
-    public ResponseEntity<OwnerStoreResponse> getOwnerActiveStore(@AuthenticationPrincipal Long ownerId) {
-        return ResponseEntity.ok(service.getOwnerActiveStore(ownerId));
+    @GetMapping("/admin/school")
+    public ResponseEntity<AdminSchoolResponse> getAdminActiveSchool(@AuthenticationPrincipal Long adminId) {
+        return ResponseEntity.ok(service.getAdminActiveSchool(adminId));
     }
 
-    @PutMapping("/owner/store")
-    public ResponseEntity<OwnerStoreResponse> updateOwnerActiveStore(
-            @AuthenticationPrincipal Long ownerId,
-            @RequestBody OwnerStoreUpdateRequest request) {
-        return ResponseEntity.ok(service.updateOwnerActiveStore(ownerId, request));
+    @PutMapping("/admin/school")
+    public ResponseEntity<AdminSchoolResponse> updateAdminActiveSchool(
+            @AuthenticationPrincipal Long adminId,
+            @RequestBody AdminSchoolUpdateRequest request) {
+        return ResponseEntity.ok(service.updateAdminActiveSchool(adminId, request));
     }
 
-    @GetMapping("/owner/stores")
-    public ResponseEntity<List<StoreSimpleResponse>> listOwnerStores(@AuthenticationPrincipal Long ownerId) {
-        return ResponseEntity.ok(service.listOwnerStores(ownerId));
+    @GetMapping("/admin/schools")
+    public ResponseEntity<List<SchoolSimpleResponse>> listAdminSchools(@AuthenticationPrincipal Long adminId) {
+        return ResponseEntity.ok(service.listAdminSchools(adminId));
     }
 
-    @PostMapping("/owner/stores")
-    public ResponseEntity<StoreSimpleResponse> addOwnerStore(
-            @AuthenticationPrincipal Long ownerId,
-            @RequestBody OwnerCreateStoreRequest request) {
-        return ResponseEntity.status(201).body(service.addOwnerStore(ownerId, request));
+    @PostMapping("/admin/schools")
+    public ResponseEntity<SchoolSimpleResponse> addAdminSchool(
+            @AuthenticationPrincipal Long adminId,
+            @RequestBody AdminCreateSchoolRequest request) {
+        return ResponseEntity.status(201).body(service.addAdminSchool(adminId, request));
     }
 
-    @DeleteMapping("/owner/stores/{storeId}")
-    public ResponseEntity<Void> removeOwnerStore(
-            @AuthenticationPrincipal Long ownerId,
-            @PathVariable Long storeId) {
-        service.removeOwnerStore(ownerId, storeId);
+    @DeleteMapping("/admin/schools/{schoolId}")
+    public ResponseEntity<Void> removeAdminSchool(
+            @AuthenticationPrincipal Long adminId,
+            @PathVariable Long schoolId) {
+        service.removeAdminSchool(adminId, schoolId);
         return ResponseEntity.noContent().build();
     }
 
-    // ===== 알바생 =====
+    // ===== 교사(Teacher) =====
 
-    @GetMapping("/staff/profile")
-    public ResponseEntity<StaffProfileResponse> getStaffProfile(@AuthenticationPrincipal Long staffId) {
-        return ResponseEntity.ok(service.getStaffProfile(staffId));
+    @GetMapping("/teacher/profile")
+    public ResponseEntity<TeacherProfileResponse> getTeacherProfile(@AuthenticationPrincipal Long teacherId) {
+        return ResponseEntity.ok(service.getTeacherProfile(teacherId));
     }
 
-    @PutMapping("/staff/profile")
-    public ResponseEntity<StaffProfileResponse> updateStaffProfile(
-            @AuthenticationPrincipal Long staffId,
-            @RequestBody StaffProfileUpdateRequest request) {
-        return ResponseEntity.ok(service.updateStaffProfile(staffId, request));
+    @PutMapping("/teacher/profile")
+    public ResponseEntity<TeacherProfileResponse> updateTeacherProfile(
+            @AuthenticationPrincipal Long teacherId,
+            @RequestBody TeacherProfileUpdateRequest request) {
+        return ResponseEntity.ok(service.updateTeacherProfile(teacherId, request));
     }
 
-    @GetMapping("/staff/stores")
-    public ResponseEntity<List<StoreSimpleResponse>> listStaffStores(@AuthenticationPrincipal Long staffId) {
-        return ResponseEntity.ok(service.listStaffStores(staffId));
+    @GetMapping("/teacher/schools")
+    public ResponseEntity<List<SchoolSimpleResponse>> listTeacherSchools(@AuthenticationPrincipal Long teacherId) {
+        return ResponseEntity.ok(service.listTeacherSchools(teacherId));
     }
 
-    @PostMapping("/staff/stores")
-    public ResponseEntity<StoreSimpleResponse> joinStaffStore(
-            @AuthenticationPrincipal Long staffId,
-            @RequestBody StaffJoinStoreRequest request) {
-        return ResponseEntity.status(201).body(service.joinStaffStore(staffId, request));
+    @PostMapping("/teacher/schools")
+    public ResponseEntity<SchoolSimpleResponse> joinTeacherSchool(
+            @AuthenticationPrincipal Long teacherId,
+            @RequestBody TeacherJoinSchoolRequest request) {
+        return ResponseEntity.status(201).body(service.joinTeacherSchool(teacherId, request));
     }
 
-    @DeleteMapping("/staff/stores/{storeId}")
-    public ResponseEntity<Void> leaveStaffStore(
-            @AuthenticationPrincipal Long staffId,
-            @PathVariable Long storeId) {
-        service.leaveStaffStore(staffId, storeId);
+    @DeleteMapping("/teacher/schools/{schoolId}")
+    public ResponseEntity<Void> leaveTeacherSchool(
+            @AuthenticationPrincipal Long teacherId,
+            @PathVariable Long schoolId) {
+        service.leaveTeacherSchool(teacherId, schoolId);
         return ResponseEntity.noContent().build();
     }
 }
