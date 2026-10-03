@@ -50,7 +50,7 @@ email:
       - ewha.ac.kr
       - gmail.com  # 테스트용
 
-# application.yml 예시
+# swagger, 별도배포
 springdoc:
  swagger-ui:
    enabled: false
