@@ -89,8 +89,10 @@ public class NotificationService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<NotificationResponseDto> getNotifications(Long userId) {
+        // 조회 시점 기준 해당 사용자의 모든 미읽음 알림을 일괄 읽음 처리
+        notificationRepository.markAllAsReadByUserId(userId);
 
         List<Notification> notifications = notificationRepository.findByUserIdWithSchool(userId);
         List<NotificationResponseDto> dtos = new ArrayList<>();
@@ -109,6 +111,7 @@ public class NotificationService {
             }
 
             NotificationResponseDto dto = NotificationResponseDto.builder()
+                    .id(n.getId())
                     .profileImageUrl(n.getRequester() != null ? n.getRequester().getProfileImageUrl() : null)
                     .schoolName(n.getSchool() != null ? n.getSchool().getName() : null)
                     .category(n.getCategory())
@@ -117,6 +120,7 @@ public class NotificationService {
                     .createdAt(n.getCreatedAt())
                     .timetableSwapRequestId(n.getTimetableSwapRequestId())
                     .substituteRequestId(n.getSubstituteRequestId())
+                    .substituteResponseId(n.getSubstituteResponseId())
                     .timetableSwapStatus(swapRequest != null ? swapRequest.getStatus() : null)
                     .timetableSwapManagerApprovalStatus(swapRequest != null ? swapRequest.getManagerApprovalStatus() : null)
                     .substituteStatus(substituteRequest != null ? substituteRequest.getStatus() : null)

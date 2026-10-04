@@ -52,7 +52,7 @@ public class TodoService {
 
         return TodoListResponseDto.builder()
                 .date(date)
-                .storeTodos(schoolTodos)
+                .schoolTodos(schoolTodos)
                 .handoverTodos(handoverTodos)
                 .personalTodos(personalTodos)
                 .build();

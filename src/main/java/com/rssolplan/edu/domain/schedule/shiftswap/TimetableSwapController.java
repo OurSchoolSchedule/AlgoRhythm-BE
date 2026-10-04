@@ -1,6 +1,7 @@
 package com.rssolplan.edu.domain.schedule.shiftswap;
 
 import com.rssolplan.edu.global.security.annotation.OwnerOnly;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
@@ -73,6 +74,8 @@ public class TimetableSwapController {
     @Getter
     @NoArgsConstructor
     public static class ActionDto {
+        @Schema(description = "respond: ACCEPT|REJECT, approve: APPROVE|REJECT",
+                allowableValues = {"ACCEPT", "REJECT", "APPROVE"})
         private String action;
     }
 }

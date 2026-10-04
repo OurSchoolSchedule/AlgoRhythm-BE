@@ -47,6 +47,9 @@ public class Notification {
     @Column(name = "substitute_request_id")
     private Long substituteRequestId;
 
+    @Column(name = "substitute_response_id")
+    private Long substituteResponseId;
+
     @Enumerated(EnumType.STRING)
     @Column(length = 16, nullable = false)
     private Category category;

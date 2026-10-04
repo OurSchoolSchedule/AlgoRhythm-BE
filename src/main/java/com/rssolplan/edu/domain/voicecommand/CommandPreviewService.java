@@ -1,6 +1,5 @@
 package com.rssolplan.edu.domain.voicecommand;
 
-import com.rssolplan.edu.domain.schedule.attendance.TeacherAttendanceService;
 import com.rssolplan.edu.domain.schedule.extrashift.SubstituteRequestRepository;
 import com.rssolplan.edu.domain.schedule.extrashift.SubstituteResponseRepository;
 import com.rssolplan.edu.domain.schedule.extrashift.entity.SubstituteRequest;
@@ -30,7 +29,6 @@ public class CommandPreviewService {
     private final SubstituteRequestRepository substituteRequestRepository;
     private final SubstituteResponseRepository substituteResponseRepository;
     private final SchoolUserRepository schoolUserRepository;
-    private final TeacherAttendanceService attendanceService;
     private final AuthorizationService authService;
 
     @Transactional(readOnly = true)
@@ -41,8 +39,6 @@ public class CommandPreviewService {
             case SUBSTITUTE_APPROVE   -> previewSubstituteApprove(intent);
             case AVAILABILITY_ADD,
                  AVAILABILITY_REPLACE -> previewAvailability(intent);
-            case ATTENDANCE_CHECK_IN  -> previewAttendance(userId, "출근");
-            case ATTENDANCE_CHECK_OUT -> previewAttendance(userId, "퇴근");
             case UNKNOWN              -> throw new IntentParseException("요청을 이해하지 못했습니다.");
         };
     }
@@ -120,15 +116,6 @@ public class CommandPreviewService {
                         "periodNumber", slot.periodNumber(),
                         "reason", slot.reason() != null ? slot.reason() : ""
                 )).toList()
-        );
-    }
-
-    private Map<String, Object> previewAttendance(Long userId, String action) {
-        var today = attendanceService.getTodayAttendance(userId);
-        return Map.of(
-                "action", action + " 처리",
-                "currentStatus", today.status() != null ? today.status() : "BEFORE_WORK",
-                "workDate", today.workDate()
         );
     }
 

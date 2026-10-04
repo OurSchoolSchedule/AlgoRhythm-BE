@@ -13,6 +13,8 @@ import java.time.LocalDateTime;
 @Builder
 public class NotificationResponseDto {
 
+    private Long id;
+
     private String schoolName;
     private String profileImageUrl;
 
@@ -24,6 +26,7 @@ public class NotificationResponseDto {
 
     private Long timetableSwapRequestId;
     private Long substituteRequestId;
+    private Long substituteResponseId;
 
     private TimetableSwapRequest.SwapStatus timetableSwapStatus;
     private TimetableSwapRequest.ManagerApprovalStatus timetableSwapManagerApprovalStatus;

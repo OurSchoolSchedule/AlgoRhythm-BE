@@ -1,7 +1,6 @@
 package com.rssolplan.edu.domain.voicecommand;
 
 import com.rssolplan.edu.domain.schedule.DayOfWeek;
-import com.rssolplan.edu.domain.schedule.attendance.TeacherAttendanceService;
 import com.rssolplan.edu.domain.schedule.extrashift.SubstituteService;
 import com.rssolplan.edu.domain.schedule.extrashift.dto.SubstituteApprovalRequest;
 import com.rssolplan.edu.domain.schedule.extrashift.dto.SubstituteCreateRequest;
@@ -23,7 +22,6 @@ public class CommandExecutorService {
 
     private final SubstituteService substituteService;
     private final TeacherAvailabilityService availabilityService;
-    private final TeacherAttendanceService attendanceService;
 
     public Object execute(Long userId, ParsedIntent intent) {
         return switch (intent.resolvedType()) {
@@ -32,8 +30,6 @@ public class CommandExecutorService {
             case SUBSTITUTE_APPROVE -> executeSubstituteApprove(userId, intent);
             case AVAILABILITY_ADD -> executeAvailabilityAdd(userId, intent);
             case AVAILABILITY_REPLACE -> executeAvailabilityReplace(userId, intent);
-            case ATTENDANCE_CHECK_IN -> attendanceService.checkIn(userId);
-            case ATTENDANCE_CHECK_OUT -> attendanceService.checkOut(userId);
             case UNKNOWN -> throw new IntentParseException("실행 가능한 명령이 아닙니다.");
         };
     }
