@@ -92,8 +92,6 @@ public class IntentParserService {
                 - SUBSTITUTE_APPROVE: 보결 최종 승인 (교감/교장, action: APPROVE 또는 REJECT)
                 - AVAILABILITY_ADD  : 불가 교시 추가 등록
                 - AVAILABILITY_REPLACE: 불가 교시 전체 교체
-                - ATTENDANCE_CHECK_IN : 출근 처리
-                - ATTENDANCE_CHECK_OUT: 퇴근 처리
                 - UNKNOWN: 위 기능에 해당하지 않는 경우
 
                 규칙:
@@ -111,8 +109,7 @@ public class IntentParserService {
 
         addEnumProp(properties, "intentType",
                 new String[]{"SUBSTITUTE_CREATE", "SUBSTITUTE_RESPOND", "SUBSTITUTE_APPROVE",
-                        "AVAILABILITY_ADD", "AVAILABILITY_REPLACE",
-                        "ATTENDANCE_CHECK_IN", "ATTENDANCE_CHECK_OUT", "UNKNOWN"},
+                        "AVAILABILITY_ADD", "AVAILABILITY_REPLACE", "UNKNOWN"},
                 "추출된 의도 유형");
 
         addEnumProp(properties, "confidence",

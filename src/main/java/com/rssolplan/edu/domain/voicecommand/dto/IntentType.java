@@ -6,7 +6,5 @@ public enum IntentType {
     SUBSTITUTE_APPROVE,     // 보결 최종 승인 (Admin)
     AVAILABILITY_ADD,       // 불가 교시 추가
     AVAILABILITY_REPLACE,   // 불가 교시 전체 교체
-    ATTENDANCE_CHECK_IN,    // 출근
-    ATTENDANCE_CHECK_OUT,   // 퇴근
     UNKNOWN
 }

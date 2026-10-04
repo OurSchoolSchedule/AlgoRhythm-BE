@@ -77,8 +77,6 @@ public class VoiceCommandService {
             case AVAILABILITY_REPLACE ->
                     String.format("불가 교시를 %d개로 전체 교체합니다.",
                             intent.unavailabilitySlots() != null ? intent.unavailabilitySlots().size() : 0);
-            case ATTENDANCE_CHECK_IN -> "출근 처리를 진행합니다.";
-            case ATTENDANCE_CHECK_OUT -> "퇴근 처리를 진행합니다.";
             default -> "명령을 실행합니다.";
         };
     }
