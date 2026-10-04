@@ -157,6 +157,7 @@ public class SubstituteService {
                 .targetType(Notification.TargetType.SUBSTITUTE_RESPONSE)
                 .targetId(response.getId())
                 .substituteRequestId(request.getId())
+                .substituteResponseId(response.getId())
                 .type(Notification.Type.SUBSTITUTE_NOTIFY_ADMIN)
                 .message(msg)
                 .requester(requester)

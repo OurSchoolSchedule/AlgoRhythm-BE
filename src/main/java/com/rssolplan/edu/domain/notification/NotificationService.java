@@ -109,6 +109,7 @@ public class NotificationService {
             }
 
             NotificationResponseDto dto = NotificationResponseDto.builder()
+                    .id(n.getId())
                     .profileImageUrl(n.getRequester() != null ? n.getRequester().getProfileImageUrl() : null)
                     .schoolName(n.getSchool() != null ? n.getSchool().getName() : null)
                     .category(n.getCategory())
@@ -117,6 +118,7 @@ public class NotificationService {
                     .createdAt(n.getCreatedAt())
                     .timetableSwapRequestId(n.getTimetableSwapRequestId())
                     .substituteRequestId(n.getSubstituteRequestId())
+                    .substituteResponseId(n.getSubstituteResponseId())
                     .timetableSwapStatus(swapRequest != null ? swapRequest.getStatus() : null)
                     .timetableSwapManagerApprovalStatus(swapRequest != null ? swapRequest.getManagerApprovalStatus() : null)
                     .substituteStatus(substituteRequest != null ? substituteRequest.getStatus() : null)
