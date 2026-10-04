@@ -89,8 +89,10 @@ public class NotificationService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<NotificationResponseDto> getNotifications(Long userId) {
+        // 조회 시점 기준 해당 사용자의 모든 미읽음 알림을 일괄 읽음 처리
+        notificationRepository.markAllAsReadByUserId(userId);
 
         List<Notification> notifications = notificationRepository.findByUserIdWithSchool(userId);
         List<NotificationResponseDto> dtos = new ArrayList<>();
