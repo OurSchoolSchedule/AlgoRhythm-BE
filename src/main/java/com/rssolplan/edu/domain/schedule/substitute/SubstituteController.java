@@ -1,6 +1,6 @@
-package com.rssolplan.edu.domain.schedule.extrashift;
+package com.rssolplan.edu.domain.schedule.substitute;
 
-import com.rssolplan.edu.domain.schedule.extrashift.dto.*;
+import com.rssolplan.edu.domain.schedule.substitute.dto.*;
 import com.rssolplan.edu.global.security.annotation.OwnerOnly;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

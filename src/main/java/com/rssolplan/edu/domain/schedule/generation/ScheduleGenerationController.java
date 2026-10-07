@@ -1,9 +1,10 @@
 package com.rssolplan.edu.domain.schedule.generation;
 
 import com.rssolplan.edu.domain.schedule.generation.dto.TimetableGenerationRequestDto;
+import com.rssolplan.edu.domain.schedule.generation.dto.TimetableRequestResponseDto;
+import com.rssolplan.edu.domain.schedule.generation.dto.UnsubmittedTeacherDto;
 import com.rssolplan.edu.domain.schedule.generation.dto.candidate.CandidateSchedule;
 import com.rssolplan.edu.domain.schedule.generation.dto.candidate.ConfirmTimetableRequestDto;
-import com.rssolplan.edu.domain.schedule.generation.entity.TimetableRequest;
 import com.rssolplan.edu.domain.schedule.generation.entity.TimetableSet;
 import com.rssolplan.edu.global.security.annotation.OwnerOnly;
 import lombok.RequiredArgsConstructor;
@@ -29,9 +30,9 @@ public class ScheduleGenerationController {
      */
     @OwnerOnly
     @PostMapping("/requests")
-    public ResponseEntity<TimetableRequest> requestTimetable(
+    public ResponseEntity<TimetableRequestResponseDto> requestTimetable(
             @AuthenticationPrincipal Long userId) {
-        TimetableRequest request = service.requestTimetable(userId);
+        TimetableRequestResponseDto request = service.requestTimetable(userId);
         return ResponseEntity.status(HttpStatus.CREATED).body(request);
     }
 
@@ -80,10 +81,11 @@ public class ScheduleGenerationController {
     @GetMapping("/teachers/without-availability")
     public ResponseEntity<Map<String, Object>> getTeachersWithoutAvailability(
             @AuthenticationPrincipal Long userId) {
-        List<Long> unsubmitted = service.getTeachersWithoutAvailability(userId);
+        List<UnsubmittedTeacherDto> unsubmitted = service.getTeachersWithoutAvailability(userId);
         return ResponseEntity.ok(Map.of(
                 "allSubmitted", unsubmitted.isEmpty(),
-                "unsubmittedUserIds", unsubmitted
+                "unsubmittedUserIds", unsubmitted.stream().map(UnsubmittedTeacherDto::userId).toList(),
+                "unsubmittedTeachers", unsubmitted
         ));
     }
 }

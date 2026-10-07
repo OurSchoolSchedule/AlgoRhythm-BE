@@ -1,4 +1,4 @@
-package com.rssolplan.edu.domain.schedule.extrashift.dto;
+package com.rssolplan.edu.domain.schedule.substitute.dto;
 
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;

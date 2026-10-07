@@ -9,6 +9,8 @@ import com.rssolplan.edu.domain.notification.NotificationService;
 import com.rssolplan.edu.domain.schedule.DayOfWeek;
 import com.rssolplan.edu.domain.schedule.generation.dto.TimetableGenerationRequestDto;
 import com.rssolplan.edu.domain.schedule.generation.dto.TimetableSlotRequirementDto;
+import com.rssolplan.edu.domain.schedule.generation.dto.TimetableRequestResponseDto;
+import com.rssolplan.edu.domain.schedule.generation.dto.UnsubmittedTeacherDto;
 import com.rssolplan.edu.domain.schedule.generation.dto.candidate.ConfirmTimetableRequestDto;
 import com.rssolplan.edu.domain.schedule.generation.dto.candidate.CandidateSchedule;
 import com.rssolplan.edu.domain.schedule.generation.dto.candidate.GenerationOptionsDto;
@@ -81,7 +83,7 @@ public class ScheduleGenerationService {
     // 1. 시간표 생성 요청 (교사들에게 불가 교시 제출 요청)
     // =========================================================
     @Transactional
-    public TimetableRequest requestTimetable(Long userId) {
+    public TimetableRequestResponseDto requestTimetable(Long userId) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
         SchoolUser admin = authService.getSchoolUserOrThrow(userId, schoolId);
 
@@ -97,11 +99,13 @@ public class ScheduleGenerationService {
                 .status(TimetableRequest.TimetableRequestStatus.REQUESTED)
                 .build();
 
-        timetableRequestRepository.save(request);
+        TimetableRequest savedRequest = timetableRequestRepository.save(request);
 
         notificationService.sendTimetableInputRequest(userId, schoolId);
 
-        return request;
+        return new TimetableRequestResponseDto(
+                savedRequest.getId(), savedRequest.getStatus(), schoolId,
+                savedRequest.getCreatedAt(), savedRequest.getUpdatedAt());
     }
 
     // =========================================================
@@ -315,13 +319,13 @@ public class ScheduleGenerationService {
     // 미제출 교사 목록 조회 (불가 교시를 하나도 제출하지 않은 교사)
     // =========================================================
     @Transactional(readOnly = true)
-    public List<Long> getTeachersWithoutAvailability(Long userId) {
+    public List<UnsubmittedTeacherDto> getTeachersWithoutAvailability(Long userId) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
         List<SchoolUser> teachers = schoolUserRepository.findBySchool_IdAndPosition(
                 schoolId, SchoolUser.Position.TEACHER);
         return teachers.stream()
                 .filter(t -> teacherAvailabilityRepository.findBySchoolUser_Id(t.getId()).isEmpty())
-                .map(t -> t.getUser().getId())
+                .map(t -> new UnsubmittedTeacherDto(t.getUser().getId(), t.getUser().getUsername()))
                 .collect(Collectors.toList());
     }
 

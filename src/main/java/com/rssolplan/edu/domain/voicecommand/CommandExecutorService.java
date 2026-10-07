@@ -1,10 +1,10 @@
 package com.rssolplan.edu.domain.voicecommand;
 
 import com.rssolplan.edu.domain.schedule.DayOfWeek;
-import com.rssolplan.edu.domain.schedule.extrashift.SubstituteService;
-import com.rssolplan.edu.domain.schedule.extrashift.dto.SubstituteApprovalRequest;
-import com.rssolplan.edu.domain.schedule.extrashift.dto.SubstituteCreateRequest;
-import com.rssolplan.edu.domain.schedule.extrashift.dto.SubstituteRespondRequest;
+import com.rssolplan.edu.domain.schedule.substitute.SubstituteService;
+import com.rssolplan.edu.domain.schedule.substitute.dto.SubstituteApprovalRequest;
+import com.rssolplan.edu.domain.schedule.substitute.dto.SubstituteCreateRequest;
+import com.rssolplan.edu.domain.schedule.substitute.dto.SubstituteRespondRequest;
 import com.rssolplan.edu.domain.schedule.workavailability.TeacherAvailabilityService;
 import com.rssolplan.edu.domain.schedule.workavailability.dto.TeacherAvailabilityRequestDto;
 import com.rssolplan.edu.domain.voicecommand.dto.ParsedIntent;

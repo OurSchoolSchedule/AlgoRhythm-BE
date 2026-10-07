@@ -1,6 +1,6 @@
-package com.rssolplan.edu.domain.schedule.extrashift.dto;
+package com.rssolplan.edu.domain.schedule.substitute.dto;
 
-import com.rssolplan.edu.domain.schedule.extrashift.entity.SubstituteRequest;
+import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteRequest;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
