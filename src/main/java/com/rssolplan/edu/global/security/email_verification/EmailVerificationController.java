@@ -1,5 +1,6 @@
 package com.rssolplan.edu.global.security.email_verification;
 
+import com.rssolplan.edu.domain.auth.email.EmailVerificationProperties;
 import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificationAuthResponse;
 import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificationRequest;
 import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificationResponse;
@@ -22,11 +23,12 @@ import org.springframework.web.bind.annotation.*;
 public class EmailVerificationController {
 
     private final EmailService emailService;
+    private final EmailVerificationProperties verificationProperties;
 
     /**
      * 인증 코드 발송 API
-     * - 교직원 이메일(@korea.kr)만 인증 가능
-     * - 6자리 코드를 이메일로 발송하고 5분 동안 유효
+     * - 설정된 수신 허용 도메인만 인증 가능
+     * - 6자리 코드를 이메일로 발송하고 설정된 만료 시간 동안 유효
      *
      * @param request 이메일 정보
      * @return 발송 결과
@@ -42,7 +44,8 @@ public class EmailVerificationController {
             return ResponseEntity.ok(
                     EmailVerificationResponse.builder()
                             .success(true)
-                            .message("인증 코드가 이메일로 발송되었습니다. (5분간 유효)")
+                            .message("인증 코드가 이메일로 발송되었습니다. ("
+                                    + verificationProperties.getExpiration() + "분간 유효)")
                             .build()
             );
         } catch (IllegalArgumentException e) {
