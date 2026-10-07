@@ -1,7 +1,7 @@
-package com.rssolplan.edu.domain.schedule.extrashift;
+package com.rssolplan.edu.domain.schedule.substitute;
 
-import com.rssolplan.edu.domain.schedule.extrashift.entity.SubstituteResponse;
-import com.rssolplan.edu.domain.schedule.extrashift.entity.SubstituteResponse.WorkerAction;
+import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteResponse;
+import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteResponse.WorkerAction;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

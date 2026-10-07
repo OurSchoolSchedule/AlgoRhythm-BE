@@ -1,4 +1,4 @@
-package com.rssolplan.edu.domain.schedule.extrashift.entity;
+package com.rssolplan.edu.domain.schedule.substitute.entity;
 
 import com.rssolplan.edu.domain.school.SchoolUser;
 import jakarta.persistence.*;

@@ -1,9 +1,9 @@
 package com.rssolplan.edu.domain.voicecommand;
 
-import com.rssolplan.edu.domain.schedule.extrashift.SubstituteRequestRepository;
-import com.rssolplan.edu.domain.schedule.extrashift.SubstituteResponseRepository;
-import com.rssolplan.edu.domain.schedule.extrashift.entity.SubstituteRequest;
-import com.rssolplan.edu.domain.schedule.extrashift.entity.SubstituteResponse;
+import com.rssolplan.edu.domain.schedule.substitute.SubstituteRequestRepository;
+import com.rssolplan.edu.domain.schedule.substitute.SubstituteResponseRepository;
+import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteRequest;
+import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteResponse;
 import com.rssolplan.edu.domain.schedule.generation.TimetableRepository;
 import com.rssolplan.edu.domain.schedule.generation.entity.Timetable;
 import com.rssolplan.edu.domain.school.SchoolUser;

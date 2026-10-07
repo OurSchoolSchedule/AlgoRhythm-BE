@@ -1,7 +1,7 @@
 package com.rssolplan.edu.domain.notification.dto;
 
 import com.rssolplan.edu.domain.notification.Notification;
-import com.rssolplan.edu.domain.schedule.extrashift.entity.SubstituteRequest;
+import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteRequest;
 import com.rssolplan.edu.domain.schedule.shiftswap.TimetableSwapRequest;
 import lombok.*;
 

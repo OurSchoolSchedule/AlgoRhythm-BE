@@ -1,11 +1,11 @@
-package com.rssolplan.edu.domain.schedule.extrashift;
+package com.rssolplan.edu.domain.schedule.substitute;
 
 import com.rssolplan.edu.domain.notification.Notification;
 import com.rssolplan.edu.domain.notification.NotificationRepository;
-import com.rssolplan.edu.domain.schedule.extrashift.dto.*;
-import com.rssolplan.edu.domain.schedule.extrashift.entity.SubstituteRequest;
-import com.rssolplan.edu.domain.schedule.extrashift.entity.SubstituteRequest.SubstituteStatus;
-import com.rssolplan.edu.domain.schedule.extrashift.entity.SubstituteResponse;
+import com.rssolplan.edu.domain.schedule.substitute.dto.*;
+import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteRequest;
+import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteRequest.SubstituteStatus;
+import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteResponse;
 import com.rssolplan.edu.domain.schedule.generation.TimetableRepository;
 import com.rssolplan.edu.domain.schedule.generation.entity.Timetable;
 import com.rssolplan.edu.domain.school.School;

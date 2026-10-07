@@ -1,8 +1,8 @@
 package com.rssolplan.edu.domain.notification;
 
 import com.rssolplan.edu.domain.notification.dto.NotificationResponseDto;
-import com.rssolplan.edu.domain.schedule.extrashift.SubstituteRequestRepository;
-import com.rssolplan.edu.domain.schedule.extrashift.entity.SubstituteRequest;
+import com.rssolplan.edu.domain.schedule.substitute.SubstituteRequestRepository;
+import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteRequest;
 import com.rssolplan.edu.domain.schedule.shiftswap.TimetableSwapRequest;
 import com.rssolplan.edu.domain.schedule.shiftswap.TimetableSwapRequestRepository;
 import com.rssolplan.edu.domain.school.School;
