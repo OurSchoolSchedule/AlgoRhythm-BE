@@ -22,7 +22,7 @@
         </div>
 
         <ul style="padding-left: 20px; font-size: 14px; color: #888; line-height: 1.8;">
-            <li>본 인증 번호는 발송 후 <strong>5분간</strong> 유효합니다.</li>
+            <li>본 인증 번호는 발송 후 <strong th:text="${expirationMinutes} + '분간'">5분간</strong> 유효합니다.</li>
             <li>본인이 요청하지 않은 경우, 이 메일을 무시하셔도 됩니다.</li>
         </ul>
 

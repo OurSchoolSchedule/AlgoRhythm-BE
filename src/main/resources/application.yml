@@ -28,22 +28,12 @@ spring:
           max-idle: 8 # 최대 유휴 연결 수
           min-idle: 0 # 최소 유휴 연결 수
 
-  mail:
-    properties:
-      mail:
-        smtp:
-          starttls:
-            enable: 'true'
-            required: 'true'
-          timeout: '30000'
-          auth: 'true'
-          connectiontimeout: '30000'
-          writetimeout: '30000'
-    host: smtp.gmail.com
-    username: ${MAIL_USERNAME:admin@example.com}
-    password: ${MAIL_PASSWORD:default_password}
-    port: '587'
 email:
+  resend:
+    api-key: ${RESEND_API_KEY:}
+    from: ${RESEND_FROM_EMAIL:}
+    connect-timeout: 10s
+    read-timeout: 30s
   verification:
     expiration: '5'
     allowed-domains:
@@ -65,7 +55,7 @@ oauth:
     redirect-uri: ${KAKAO_REDIRECT_URI:http://localhost:8080/api/auth/kakao/callback}
 
 jwt:
-  secret: ${JWT_SECRET:default_secret_key_change_in_production}
+  secret: ${JWT_SECRET}
 
 logging:
   level:
