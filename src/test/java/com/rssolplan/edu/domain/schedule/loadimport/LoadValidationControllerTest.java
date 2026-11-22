@@ -15,7 +15,8 @@ import java.util.Map;
 class LoadValidationControllerTest {
     private final LoadValidationService service = mock(LoadValidationService.class);
     private final MockMvc api =
-            MockMvcBuilders.standaloneSetup(new LoadValidationController(service))
+            MockMvcBuilders.standaloneSetup(
+                            new LoadValidationController(service, mock(LoadPreviewStore.class)))
                     .setCustomArgumentResolvers(
                             new org.springframework.security.web.method.annotation
                                     .AuthenticationPrincipalArgumentResolver())

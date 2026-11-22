@@ -8,6 +8,8 @@ import java.util.Optional;
 
 public interface TeacherAvailabilityRepository extends JpaRepository<TeacherAvailability, Long> {
 
+    List<TeacherAvailability> findBySchoolUser_School_Id(Long schoolId);
+
     List<TeacherAvailability> findBySchoolUser_Id(Long schoolUserId);
 
     List<TeacherAvailability> findBySchoolUser_IdAndDayOfWeek(Long schoolUserId, DayOfWeek dayOfWeek);

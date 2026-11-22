@@ -7,15 +7,26 @@ import org.apache.poi.ss.util.CellAddress;
 import java.math.BigDecimal;
 import java.util.*;
 
-final class LoadWorkbookParser {
-    record Demand(
+public final class LoadWorkbookParser {
+    public record Demand(
             String teacherId,
             String subjectId,
             String classId,
             int weeklyPeriods,
             String sourceCell) {}
 
-    record Result(String sheet, int dataRows, long totalPeriods, List<Demand> demands) {}
+    @com.fasterxml.jackson.annotation.JsonInclude(
+            com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public record Result(
+            String sheet,
+            int dataRows,
+            long totalPeriods,
+            List<Demand> demands,
+            UUID validatedLoadId) {
+        Result(String sheet, int dataRows, long totalPeriods, List<Demand> demands) {
+            this(sheet, dataRows, totalPeriods, demands, null);
+        }
+    }
 
     private record Identity(long teacher, long subject, long schoolClass) {}
 

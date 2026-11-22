@@ -16,6 +16,7 @@ import java.util.*;
 @RequestMapping("/api/v2")
 public class LoadValidationController {
     private final LoadValidationService service;
+    private final LoadPreviewStore previews;
     private final LoadWorkbookParser parser = new LoadWorkbookParser();
 
     @PostMapping(
@@ -26,10 +27,15 @@ public class LoadValidationController {
             @PathVariable Long termId,
             @RequestPart(required = false) MultipartFile file,
             @RequestParam(required = false) String sheet,
+            @RequestParam(defaultValue = "false") boolean forGeneration,
             @RequestPart(required = false) Map<String, Long> subjectAliases)
             throws IOException {
         return validate(
-                file, sheet, service.catalog(userId, termId, null, aliases(subjectAliases)));
+                file,
+                sheet,
+                forGeneration,
+                termId,
+                service.catalog(userId, termId, null, aliases(subjectAliases)));
     }
 
     // A school can validate its first upload before it has ever published a timetable_set.
@@ -41,10 +47,15 @@ public class LoadValidationController {
             @RequestParam Integer academicYear,
             @RequestPart(required = false) MultipartFile file,
             @RequestParam(required = false) String sheet,
+            @RequestParam(defaultValue = "false") boolean forGeneration,
             @RequestPart(required = false) Map<String, Long> subjectAliases)
             throws IOException {
         return validate(
-                file, sheet, service.catalog(userId, null, academicYear, aliases(subjectAliases)));
+                file,
+                sheet,
+                forGeneration,
+                null,
+                service.catalog(userId, null, academicYear, aliases(subjectAliases)));
     }
 
     private Map<String, Long> aliases(Map<String, Long> aliases) {
@@ -52,13 +63,19 @@ public class LoadValidationController {
     }
 
     private LoadWorkbookParser.Result validate(
-            MultipartFile file, String sheet, LoadCatalog catalog) throws IOException {
+            MultipartFile file,
+            String sheet,
+            boolean forGeneration,
+            Long termId,
+            LoadCatalog catalog)
+            throws IOException {
         if (file == null || file.isEmpty())
             throw LoadProblem.file(HttpStatus.BAD_REQUEST, "MISSING_FILE", "엑셀 파일을 첨부하세요.");
         if (file.getSize() > LoadSheet.FILE_LIMIT)
             throw LoadProblem.file(
                     HttpStatus.PAYLOAD_TOO_LARGE, "WORKBOOK_LIMIT", "파일은 5 MiB까지 허용됩니다.");
-        return parser.parse(file.getBytes(), sheet, catalog);
+        var result = parser.parse(file.getBytes(), sheet, catalog);
+        return forGeneration ? previews.retain(catalog, termId, result) : result;
     }
 
     record ErrorBody(String code, String message, List<LoadProblem.Issue> fieldErrors) {}

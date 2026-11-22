@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-class LoadValidationService {
+public class LoadValidationService {
     private final AuthorizationService auth;
     private final TimetableSetRepository terms;
     private final SchoolUserRepository members;
@@ -59,6 +59,6 @@ class LoadValidationService {
         var classMap = new HashMap<LoadCatalog.ClassKey, Long>();
         for (SchoolClass sc : classes.findBySchool_IdAndAcademicYear(schoolId, year))
             classMap.put(new LoadCatalog.ClassKey(sc.getGrade(), sc.getClassNumber()), sc.getId());
-        return new LoadCatalog(new LoadCatalog.Names(teachers), names, classMap);
+        return new LoadCatalog(schoolId, year, new LoadCatalog.Names(teachers), names, classMap);
     }
 }
