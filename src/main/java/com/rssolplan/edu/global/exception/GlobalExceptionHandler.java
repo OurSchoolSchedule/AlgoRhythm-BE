@@ -9,6 +9,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
+    public java.util.Map<String,Object> handleUploadLimit() {
+        return java.util.Map.of("code", "WORKBOOK_LIMIT", "message", "업로드 용량 제한을 초과했습니다.", "fieldErrors", java.util.List.of());
+    }
+
     // 400 Bad Request - 잘못된 시간 범위 등
     @ExceptionHandler(BadRequestException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
