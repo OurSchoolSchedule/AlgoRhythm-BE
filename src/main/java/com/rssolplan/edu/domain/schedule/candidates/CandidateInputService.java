@@ -23,10 +23,43 @@ class CandidateInputService {
     private final SchoolSettingRepository settings;
     private final TeacherAvailabilityRepository unavailability;
 
+    record Snapshot(
+            long schoolId,
+            int year,
+            Long termId,
+            LoadWorkbookParser.Result load,
+            Request request,
+            List<Slot> slots,
+            Map<String, Set<Slot>> blocked,
+            Map<Integer, Bell> bells) {
+        TimetableProblem problem() {
+            return new TimetableProblem(load.demands(), slots, blocked, request.preferences());
+        }
+    }
+
+    record Bell(long id, java.time.LocalTime start, java.time.LocalTime end) {}
+
     @Transactional(readOnly = true)
-    public TimetableProblem load(Long userId, Long termId, Integer year, Request request) {
+    public Snapshot freeze(Long userId, Long termId, Integer year, Request request) {
+        if (request == null || request.validatedLoadId() == null)
+            throw new BadRequestException("validatedLoadId가 필요합니다.");
+        if (termId == null && (year == null || year < 1900 || year > 9999))
+            throw new BadRequestException("학년도 범위를 확인하세요.");
         var catalog = catalogs.catalog(userId, termId, year, Map.of());
         var preview = previews.read(catalog, termId, request.validatedLoadId());
+        return current(catalog, termId, preview, request);
+    }
+
+    public Snapshot refresh(Long userId, long termId, Snapshot original) {
+        var catalog = catalogs.catalog(userId, termId, null, Map.of());
+        if (catalog.academicYear() != original.year() || catalog.schoolId() != original.schoolId())
+            throw new IllegalStateException("학기 범위가 변경되었습니다.");
+        catalog.verify(original.load().demands());
+        return current(catalog, termId, original.load(), original.request());
+    }
+
+    private Snapshot current(
+            LoadCatalog catalog, Long termId, LoadWorkbookParser.Result preview, Request request) {
         var setting =
                 settings.findBySchool_Id(catalog.schoolId())
                         .orElseThrow(() -> new IllegalStateException("학교 교시 설정을 먼저 등록하세요."));
@@ -35,7 +68,18 @@ class CandidateInputService {
         for (var row : unavailability.findBySchoolUser_School_Id(catalog.schoolId()))
             blocked.computeIfAbsent(row.getSchoolUser().getId().toString(), k -> new HashSet<>())
                     .add(new Slot(row.getDayOfWeek(), row.getPeriodNumber()));
-        return new TimetableProblem(preview.demands(), slots, blocked, request.preferences());
+        Map<Integer, Bell> bells = new TreeMap<>();
+        for (var p : setting.getPeriods())
+            bells.put(p.getPeriodNumber(), new Bell(p.getId(), p.getStartTime(), p.getEndTime()));
+        return new Snapshot(
+                catalog.schoolId(),
+                catalog.academicYear(),
+                termId,
+                preview,
+                request,
+                slots,
+                blocked,
+                bells);
     }
 
     static List<Slot> teachingSlots(List<PeriodSetting> periods, List<Slot> requested) {

@@ -55,5 +55,17 @@ public final class CandidateApi {
             Stop stopReason,
             String detail,
             long elapsedMs,
-            List<Candidate> candidates) {}
+            List<Candidate> candidates,
+            UUID jobId,
+            Long expectedPublishRev) {
+        Response(
+                UUID id,
+                Status status,
+                Stop stop,
+                String detail,
+                long elapsedMs,
+                List<Candidate> candidates) {
+            this(id, status, stop, detail, elapsedMs, candidates, null, null);
+        }
+    }
 }

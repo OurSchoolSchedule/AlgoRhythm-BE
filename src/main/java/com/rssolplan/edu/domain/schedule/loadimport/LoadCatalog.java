@@ -14,6 +14,13 @@ public record LoadCatalog(
                 && subjects.knownIds.contains(Long.valueOf(row.subjectId()));
     }
 
+    public void verify(List<LoadWorkbookParser.Demand> rows) {
+        var allowed = Set.copyOf(classes.values());
+        for (var row : rows)
+            if (!hasTeacherAndSubject(row) || !allowed.contains(Long.valueOf(row.classId())))
+                throw new IllegalStateException(row.sourceCell() + "의 명부가 변경되었습니다. 다시 검증하세요.");
+    }
+
     record ClassKey(int grade, int number) {}
 
     record Name(long id, String label) {}

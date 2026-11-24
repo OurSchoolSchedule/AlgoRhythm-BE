@@ -19,8 +19,7 @@ import java.util.concurrent.RejectedExecutionException;
 @RequestMapping("/api/v2")
 @RequiredArgsConstructor
 public class CandidateController {
-    private final CandidateInputService inputs;
-    private final CandidateRunner runner;
+    private final GenerationJobs jobs;
 
     @PostMapping("/terms/{termId}/schedule-candidates")
     public Response term(
@@ -41,8 +40,7 @@ public class CandidateController {
     private Response generate(Long userId, Long termId, Integer year, Request request) {
         if (request.validatedLoadId() == null)
             throw new BadRequestException("마일스톤 1 검증 응답의 validatedLoadId가 필요합니다.");
-        return runner.generate(
-                request.validatedLoadId(), () -> inputs.load(userId, termId, year, request));
+        return jobs.sync(userId, termId, year, request);
     }
 
     @ExceptionHandler(RejectedExecutionException.class)

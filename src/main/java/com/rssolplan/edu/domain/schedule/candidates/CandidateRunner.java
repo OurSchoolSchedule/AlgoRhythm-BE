@@ -39,9 +39,22 @@ final class CandidateRunner {
     }
 
     Response generate(UUID loadId, Supplier<TimetableProblem> snapshot) {
+        return generate(loadId, snapshot, limit);
+    }
+
+    Response generate(UUID loadId, Supplier<TimetableProblem> snapshot, Duration remaining) {
+        Duration allowed = remaining.compareTo(limit) < 0 ? remaining : limit;
+        if (allowed.isNegative() || allowed.isZero())
+            return new Response(
+                    loadId,
+                    Status.TIME_LIMIT_NO_SOLUTION,
+                    Stop.TIME_LIMIT,
+                    null,
+                    0,
+                    java.util.List.of());
         // Leave a small margin for waking the caller and returning the last published snapshot.
-        long margin = Math.min(TimeUnit.MILLISECONDS.toNanos(250), limit.toNanos() / 100);
-        var budget = new SearchBudget(limit.minusNanos(margin), System::nanoTime);
+        long margin = Math.min(TimeUnit.MILLISECONDS.toNanos(250), allowed.toNanos() / 100);
+        var budget = new SearchBudget(allowed.minusNanos(margin), System::nanoTime);
         var ranking = new CandidateRanking();
         Future<Outcome> task =
                 workers.submit(
