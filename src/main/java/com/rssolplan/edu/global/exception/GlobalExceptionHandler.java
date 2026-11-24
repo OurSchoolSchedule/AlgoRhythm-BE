@@ -9,6 +9,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(com.rssolplan.edu.domain.schedule.loadimport.LoadPreviewStore.Unavailable.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public ApiResponse<Object> handleLoadPreviewUnavailable(RuntimeException ex) {
+        return ApiResponse.error("LOAD_PREVIEW_UNAVAILABLE", ex.getMessage());
+    }
+
     @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
     @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
     public java.util.Map<String,Object> handleUploadLimit() {

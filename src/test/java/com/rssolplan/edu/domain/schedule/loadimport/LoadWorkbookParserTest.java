@@ -18,6 +18,8 @@ class LoadWorkbookParserTest {
 
     static LoadCatalog catalog() {
         return new LoadCatalog(
+                1L,
+                2026,
                 new LoadCatalog.Names(List.of(new LoadCatalog.Name(10, "김교사"))),
                 new LoadCatalog.Names(
                         List.of(new LoadCatalog.Name(20, "공통수학I"), new LoadCatalog.Name(21, "국어"))),
@@ -211,7 +213,8 @@ class LoadWorkbookParserTest {
                                 parser.parse(
                                         file(s -> {}),
                                         null,
-                                        new LoadCatalog(names, c.subjects(), c.classes())));
+                                        new LoadCatalog(
+                                                1L, 2026, names, c.subjects(), c.classes())));
         assertThat(ex.fieldErrors)
                 .anyMatch(i -> i.code().equals("AMBIGUOUS_TEACHER") && i.cell().equals("A3"));
     }

@@ -3,7 +3,17 @@ package com.rssolplan.edu.domain.schedule.loadimport;
 import java.text.Normalizer;
 import java.util.*;
 
-record LoadCatalog(Names teachers, Names subjects, Map<ClassKey, Long> classes) {
+public record LoadCatalog(
+        long schoolId,
+        int academicYear,
+        Names teachers,
+        Names subjects,
+        Map<ClassKey, Long> classes) {
+    boolean hasTeacherAndSubject(LoadWorkbookParser.Demand row) {
+        return teachers.knownIds.contains(Long.valueOf(row.teacherId()))
+                && subjects.knownIds.contains(Long.valueOf(row.subjectId()));
+    }
+
     record ClassKey(int grade, int number) {}
 
     record Name(long id, String label) {}
@@ -18,8 +28,11 @@ record LoadCatalog(Names teachers, Names subjects, Map<ClassKey, Long> classes) 
     static final class Names {
         private final Map<String, Set<Long>> ids = new HashMap<>();
 
+        private final Set<Long> knownIds = new HashSet<>();
+
         Names(List<Name> entries) {
             for (Name entry : entries) {
+                knownIds.add(entry.id());
                 String key = key(entry.label());
                 if (!key.isEmpty())
                     ids.computeIfAbsent(key, ignored -> new HashSet<>()).add(entry.id());
