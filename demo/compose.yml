@@ -1,0 +1,33 @@
+name: algorhythm-local-demo
+services:
+  db:
+    image: mysql:8.0
+    ports:
+      - "127.0.0.1:33306:3306"
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: algorhythm_demo
+      MYSQL_USER: demo
+      MYSQL_PASSWORD: ${DEMO_DB_PASSWORD:?Set DEMO_DB_PASSWORD first}
+    volumes:
+      - data:/var/lib/mysql
+      - ./init-test.sql:/docker-entrypoint-initdb.d/20-test.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -h 127.0.0.1 -udemo -Dalgorhythm_demo -e 'SELECT 1'"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "${DEMO_DB_PASSWORD:?Set DEMO_DB_PASSWORD first}"]
+    environment:
+      REDISCLI_AUTH: ${DEMO_DB_PASSWORD:?Set DEMO_DB_PASSWORD first}
+    ports:
+      - "127.0.0.1:36379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+volumes:
+  data:

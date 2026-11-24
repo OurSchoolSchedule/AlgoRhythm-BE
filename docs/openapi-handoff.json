@@ -1,0 +1,6064 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OurSchoolSchedule-BE API",
+    "description": "2026-11-24 Spring MVC 업무 API. 역할·실제 성공 상태와 M1~M3 입력·오류를 구현 기준으로 보완한 프런트 인계본. 외부 인증·메일은 별도 설정이 필요하다.",
+    "version": "develop-58d55e3"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "로컬 시연 서버"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/todos/{todoId}": {
+      "put": {
+        "tags": [
+          "할 일"
+        ],
+        "operationId": "updateTodo",
+        "parameters": [
+          {
+            "name": "todoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TodoUpdateRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodoResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "할 일 수정",
+        "description": "권한 로그인. "
+      },
+      "delete": {
+        "tags": [
+          "할 일"
+        ],
+        "operationId": "deleteTodo",
+        "parameters": [
+          {
+            "name": "todoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "할 일 삭제",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/school/subjects/{subjectId}": {
+      "put": {
+        "tags": [
+          "과목"
+        ],
+        "operationId": "updateSubject",
+        "parameters": [
+          {
+            "name": "subjectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "과목 수정",
+        "description": "권한 학교 관리자. "
+      },
+      "delete": {
+        "tags": [
+          "과목"
+        ],
+        "operationId": "deleteSubject",
+        "parameters": [
+          {
+            "name": "subjectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "과목 삭제",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/school/classes/{classId}": {
+      "put": {
+        "tags": [
+          "학급"
+        ],
+        "operationId": "updateClass",
+        "parameters": [
+          {
+            "name": "classId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchoolClassRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolClassResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "학급 수정",
+        "description": "권한 학교 관리자. "
+      },
+      "delete": {
+        "tags": [
+          "학급"
+        ],
+        "operationId": "deleteClass",
+        "parameters": [
+          {
+            "name": "classId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "학급 삭제",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/school-setting/periods/{periodId}": {
+      "put": {
+        "tags": [
+          "학교 설정"
+        ],
+        "operationId": "updatePeriod",
+        "parameters": [
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeriodSettingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeriodSettingResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "교시 시간 수정",
+        "description": "권한 학교 관리자. "
+      },
+      "delete": {
+        "tags": [
+          "학교 설정"
+        ],
+        "operationId": "deletePeriod",
+        "parameters": [
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "교시 삭제",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/mypage/teacher/profile": {
+      "get": {
+        "tags": [
+          "마이페이지"
+        ],
+        "operationId": "getTeacherProfile",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeacherProfileResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "교사 프로필 조회",
+        "description": "권한 소속 교사. "
+      },
+      "put": {
+        "tags": [
+          "마이페이지"
+        ],
+        "operationId": "updateTeacherProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeacherProfileUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeacherProfileResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "교사 프로필 수정",
+        "description": "권한 소속 교사. "
+      }
+    },
+    "/api/mypage/admin/school": {
+      "get": {
+        "tags": [
+          "마이페이지"
+        ],
+        "operationId": "getAdminActiveSchool",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSchoolResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "관리자의 활성 학교 조회",
+        "description": "권한 학교 관리자. "
+      },
+      "put": {
+        "tags": [
+          "마이페이지"
+        ],
+        "operationId": "updateAdminActiveSchool",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminSchoolUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSchoolResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "관리자의 활성 학교 수정",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/mypage/admin/profile": {
+      "get": {
+        "tags": [
+          "마이페이지"
+        ],
+        "operationId": "getAdminProfile",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProfileResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "관리자 프로필 조회",
+        "description": "권한 학교 관리자. "
+      },
+      "put": {
+        "tags": [
+          "마이페이지"
+        ],
+        "operationId": "updateAdminProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminProfileUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProfileResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "관리자 프로필 수정",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/me/unavailabilities": {
+      "get": {
+        "tags": [
+          "불가 교시"
+        ],
+        "operationId": "getMyUnavailabilities",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeacherAvailabilityResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "내 불가 교시 조회",
+        "description": "권한 로그인. "
+      },
+      "put": {
+        "tags": [
+          "불가 교시"
+        ],
+        "operationId": "replaceUnavailabilities",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeacherAvailabilityRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeacherAvailabilityResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "내 불가 교시 전체 교체",
+        "description": "권한 로그인. "
+      },
+      "post": {
+        "tags": [
+          "불가 교시"
+        ],
+        "operationId": "addUnavailabilities",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeacherAvailabilityRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeacherAvailabilityResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "내 불가 교시 추가",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/voice-commands/preview": {
+      "post": {
+        "tags": [
+          "자연어 명령"
+        ],
+        "operationId": "preview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoiceCommandRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCommandPreviewResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "422": {
+            "description": "422 INTENT_PARSE_FAILED / 외부 서비스 호출 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          }
+        },
+        "summary": "자연어 명령 해석·미리보기",
+        "description": "권한 로그인. 자연어 처리는 외부 모델 설정을 사용한다."
+      }
+    },
+    "/api/voice-commands/confirm": {
+      "post": {
+        "tags": [
+          "자연어 명령"
+        ],
+        "operationId": "confirm",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "401": {
+            "description": "401 DRAFT_NOT_FOUND_OR_EXPIRED / 403 실행 권한",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "401 DRAFT_NOT_FOUND_OR_EXPIRED / 403 실행 권한",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          }
+        },
+        "summary": "미리 본 명령 실행",
+        "description": "권한 로그인. 미리보기에서 받은 식별자를 사용한다. 만료된 초안은 다시 생성한다."
+      }
+    },
+    "/api/v2/terms": {
+      "post": {
+        "tags": [
+          "편성·게시"
+        ],
+        "operationId": "term",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewTerm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "termId": {
+                      "type": "integer",
+                      "format": "int64"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "400": {
+            "description": "400 잘못된 기간 / 409 TERM_EXISTS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "400 잘못된 기간 / 409 TERM_EXISTS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ScheduleError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "학기 등록",
+        "description": "권한 재직 관리자. 기간은 최대 1년이다. termId로 학기 경로를 구성한다."
+      }
+    },
+    "/api/v2/terms/{term}/publications": {
+      "post": {
+        "tags": [
+          "편성·게시"
+        ],
+        "operationId": "publish",
+        "parameters": [
+          {
+            "name": "term",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Publish"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Published"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "404": {
+            "description": "404 후보·작업 / 409 JOB_NOT_READY, JOB_EXPIRED, STALE_INPUT, STALE_PUBLICATION, JOB_ALREADY_PUBLISHED, DATED_CHANGES_EXIST",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "404 후보·작업 / 409 JOB_NOT_READY, JOB_EXPIRED, STALE_INPUT, STALE_PUBLICATION, JOB_ALREADY_PUBLISHED, DATED_CHANGES_EXIST",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ScheduleError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "선택한 후보 게시",
+        "description": "권한 재직 관리자. 프런트는 후보 ID와 적용일을 보낸다. 같은 게시를 재전송하면 같은 버전을 반환한다. 서버가 주간 원본과 날짜 수업을 함께 저장한다."
+      }
+    },
+    "/api/v2/terms/{term}/lesson-changes": {
+      "get": {
+        "tags": [
+          "수업 운영"
+        ],
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "term",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Change"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "403": {
+            "description": "403 소속 / 404 학기",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "403 소속 / 404 학기",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          }
+        },
+        "summary": "보결·교환 신청 목록 조회",
+        "description": "권한 재직 교직원. 관리자는 학기 전체, 교사는 본인이 신청했거나 응답할 건을 조회한다."
+      },
+      "post": {
+        "tags": [
+          "수업 운영"
+        ],
+        "operationId": "create",
+        "parameters": [
+          {
+            "name": "term",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "400": {
+            "description": "400 종류별 필수 필드 / 403 신청 권한 / 404 수업·교사 / 409 STALE_LESSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "400 종류별 필수 필드 / 403 신청 권한 / 404 수업·교사 / 409 STALE_LESSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "400 종류별 필수 필드 / 403 신청 권한 / 404 수업·교사 / 409 STALE_LESSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "400 종류별 필수 필드 / 403 신청 권한 / 404 수업·교사 / 409 STALE_LESSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ScheduleError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "날짜별 보결·교환 신청",
+        "description": "권한 보결 담당 관리자 · 교환 수업 담당자. SUBSTITUTE는 firstId·firstRev·substituteTeacherId를, SWAP은 firstId·firstRev·secondId·secondRev를 사용한다. 두 번째 수업은 다른 교사가 담당해야 한다."
+      }
+    },
+    "/api/v2/terms/{term}/lesson-changes/{id}/response": {
+      "post": {
+        "tags": [
+          "수업 운영"
+        ],
+        "operationId": "respond",
+        "parameters": [
+          {
+            "name": "term",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Decision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "403": {
+            "description": "403 지정 응답자 / 404 신청 / 409 STALE_REQUEST",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "403 지정 응답자 / 404 신청 / 409 STALE_REQUEST",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "403 지정 응답자 / 404 신청 / 409 STALE_REQUEST",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ScheduleError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "보결·교환 수락 또는 거절",
+        "description": "권한 지정 응답자. 지정된 응답자가 PENDING 상태 요청의 rev를 보낸다. accept 값에 따라 ACCEPTED 또는 REJECTED가 된다."
+      }
+    },
+    "/api/v2/terms/{term}/lesson-changes/{id}/approval": {
+      "post": {
+        "tags": [
+          "수업 운영"
+        ],
+        "operationId": "approve",
+        "parameters": [
+          {
+            "name": "term",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Approval"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Outcome"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "400": {
+            "description": "400 필수 헤더·버전 / 403 관리자 / 404 신청 / 409 STALE_LESSON, STALE_REQUEST, SLOT_CONFLICT, IDEMPOTENCY_KEY_REUSED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "400 필수 헤더·버전 / 403 관리자 / 404 신청 / 409 STALE_LESSON, STALE_REQUEST, SLOT_CONFLICT, IDEMPOTENCY_KEY_REUSED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "400 필수 헤더·버전 / 403 관리자 / 404 신청 / 409 STALE_LESSON, STALE_REQUEST, SLOT_CONFLICT, IDEMPOTENCY_KEY_REUSED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "400 필수 헤더·버전 / 403 관리자 / 404 신청 / 409 STALE_LESSON, STALE_REQUEST, SLOT_CONFLICT, IDEMPOTENCY_KEY_REUSED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ScheduleError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "수락된 보결·교환 승인",
+        "description": "권한 재직 관리자. Idempotency-Key(UUID)는 필수다. 교환이면 expectedSecondRev도 보낸다. 동일 승인 재전송 시 같은 키를 사용한다. 409이면 최신 요청·수업을 다시 조회한다."
+      }
+    },
+    "/api/v2/terms/{term}/generations": {
+      "post": {
+        "tags": [
+          "편성·게시"
+        ],
+        "operationId": "start",
+        "parameters": [
+          {
+            "name": "term",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "example": 2
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "400": {
+            "description": "400 입력 / 404 검증본·학기 / 409 GENERATION_ACTIVE / 503 임시 저장소 장애",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "400 입력 / 404 검증본·학기 / 409 GENERATION_ACTIVE / 503 임시 저장소 장애",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "400 입력 / 404 검증본·학기 / 409 GENERATION_ACTIVE / 503 임시 저장소 장애",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ScheduleError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "400 입력 / 404 검증본·학기 / 409 GENERATION_ACTIVE / 503 임시 저장소 장애",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          }
+        },
+        "summary": "후보 생성 작업 접수",
+        "description": "권한 재직 관리자. Location과 응답 statusUrl이 조회 경로다. Retry-After는 2초다. 성공은 202이며, 학교당 동시 작업은 1개다."
+      }
+    },
+    "/api/v2/terms/{termId}/schedule-candidates": {
+      "post": {
+        "tags": [
+          "편성 후보"
+        ],
+        "operationId": "term_1",
+        "parameters": [
+          {
+            "name": "termId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "400": {
+            "description": "400 입력 / 404 검증본 / 409 현재 명부·진행 중 작업 / 503 GENERATION_BUSY·LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "400 입력 / 404 검증본 / 409 현재 명부·진행 중 작업 / 503 GENERATION_BUSY·LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "400 입력 / 404 검증본 / 409 현재 명부·진행 중 작업 / 503 GENERATION_BUSY·LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ScheduleError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "400 입력 / 404 검증본 / 409 현재 명부·진행 중 작업 / 503 GENERATION_BUSY·LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          }
+        },
+        "summary": "학기 시수표로 후보 즉시 생성",
+        "description": "권한 재직 관리자. 동기 응답까지 최대 60초 탐색한다. 시수가 맞고 교사·학급 중복이 없는 후보를 최대 4개 반환한다. jobId와 expectedPublishRev를 보관한다."
+      }
+    },
+    "/api/v2/terms/{termId}/load-imports/validate": {
+      "post": {
+        "tags": [
+          "시수표"
+        ],
+        "operationId": "validateTerm",
+        "parameters": [
+          {
+            "name": "termId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "sheet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "forGeneration",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "subjectAliases": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "integer",
+                      "format": "int64"
+                    }
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              },
+              "encoding": {
+                "subjectAliases": {
+                  "contentType": "application/json"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "400": {
+            "description": "400 입력·별칭 / 413 WORKBOOK_LIMIT·ROW_LIMIT / 415 XLSX_REQUIRED·UNSUPPORTED_WORKBOOK / 422 INVALID_LOAD_SHEET·SELECT_SHEET·UNREADABLE_XLSX / 503 LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/WorkbookProblem"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "400 입력·별칭 / 413 WORKBOOK_LIMIT·ROW_LIMIT / 415 XLSX_REQUIRED·UNSUPPORTED_WORKBOOK / 422 INVALID_LOAD_SHEET·SELECT_SHEET·UNREADABLE_XLSX / 503 LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkbookProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "400 입력·별칭 / 413 WORKBOOK_LIMIT·ROW_LIMIT / 415 XLSX_REQUIRED·UNSUPPORTED_WORKBOOK / 422 INVALID_LOAD_SHEET·SELECT_SHEET·UNREADABLE_XLSX / 503 LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkbookProblem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "400 입력·별칭 / 413 WORKBOOK_LIMIT·ROW_LIMIT / 415 XLSX_REQUIRED·UNSUPPORTED_WORKBOOK / 422 INVALID_LOAD_SHEET·SELECT_SHEET·UNREADABLE_XLSX / 503 LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkbookProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "400 입력·별칭 / 413 WORKBOOK_LIMIT·ROW_LIMIT / 415 XLSX_REQUIRED·UNSUPPORTED_WORKBOOK / 422 INVALID_LOAD_SHEET·SELECT_SHEET·UNREADABLE_XLSX / 503 LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          }
+        },
+        "summary": "학기별 시수 엑셀 검증",
+        "description": "권한 재직 관리자. file은 필수 .xlsx(최대 5 MiB). 복수 시트이면 sheet를 선택한다. subjectAliases는 application/json 파트다. forGeneration=true이면 30분간 쓸 validatedLoadId를 발급한다."
+      }
+    },
+    "/api/v2/school/schedule-candidates": {
+      "post": {
+        "tags": [
+          "편성 후보"
+        ],
+        "operationId": "school",
+        "parameters": [
+          {
+            "name": "academicYear",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "400": {
+            "description": "400 입력 / 404 검증본 / 409 현재 명부·진행 중 작업 / 503 GENERATION_BUSY·LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "400 입력 / 404 검증본 / 409 현재 명부·진행 중 작업 / 503 GENERATION_BUSY·LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "400 입력 / 404 검증본 / 409 현재 명부·진행 중 작업 / 503 GENERATION_BUSY·LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ScheduleError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "400 입력 / 404 검증본 / 409 현재 명부·진행 중 작업 / 503 GENERATION_BUSY·LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          }
+        },
+        "summary": "학교 설정에서 후보 즉시 생성",
+        "description": "권한 재직 관리자. 첫 학기 생성 전 사용한다. academicYear를 지정한다. 같은 학교·학년도의 첫 게시에 jobId를 사용할 수 있다."
+      }
+    },
+    "/api/v2/school/load-imports/validate": {
+      "post": {
+        "tags": [
+          "시수표"
+        ],
+        "operationId": "validateYear",
+        "parameters": [
+          {
+            "name": "academicYear",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "sheet",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "forGeneration",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "subjectAliases": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "integer",
+                      "format": "int64"
+                    }
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              },
+              "encoding": {
+                "subjectAliases": {
+                  "contentType": "application/json"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "400": {
+            "description": "400 입력·별칭 / 413 WORKBOOK_LIMIT·ROW_LIMIT / 415 XLSX_REQUIRED·UNSUPPORTED_WORKBOOK / 422 INVALID_LOAD_SHEET·SELECT_SHEET·UNREADABLE_XLSX / 503 LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/WorkbookProblem"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "400 입력·별칭 / 413 WORKBOOK_LIMIT·ROW_LIMIT / 415 XLSX_REQUIRED·UNSUPPORTED_WORKBOOK / 422 INVALID_LOAD_SHEET·SELECT_SHEET·UNREADABLE_XLSX / 503 LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkbookProblem"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "400 입력·별칭 / 413 WORKBOOK_LIMIT·ROW_LIMIT / 415 XLSX_REQUIRED·UNSUPPORTED_WORKBOOK / 422 INVALID_LOAD_SHEET·SELECT_SHEET·UNREADABLE_XLSX / 503 LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkbookProblem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "400 입력·별칭 / 413 WORKBOOK_LIMIT·ROW_LIMIT / 415 XLSX_REQUIRED·UNSUPPORTED_WORKBOOK / 422 INVALID_LOAD_SHEET·SELECT_SHEET·UNREADABLE_XLSX / 503 LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkbookProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "400 입력·별칭 / 413 WORKBOOK_LIMIT·ROW_LIMIT / 415 XLSX_REQUIRED·UNSUPPORTED_WORKBOOK / 422 INVALID_LOAD_SHEET·SELECT_SHEET·UNREADABLE_XLSX / 503 LOAD_PREVIEW_UNAVAILABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          }
+        },
+        "summary": "학교 설정에서 시수 엑셀 검증",
+        "description": "권한 재직 관리자. academicYear는 필수다. 같은 학교·학년도의 학기에 사용할 수 있다. file은 필수 .xlsx. subjectAliases는 application/json 파트, forGeneration=true일 때 검증본 유효시간은 30분이다."
+      }
+    },
+    "/api/todos": {
+      "get": {
+        "tags": [
+          "할 일"
+        ],
+        "operationId": "getTodosByDate",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodoListResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "날짜별 할 일 조회",
+        "description": "권한 로그인. "
+      },
+      "post": {
+        "tags": [
+          "할 일"
+        ],
+        "operationId": "createTodo",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TodoCreateRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodoResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "할 일 등록",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/timetable": {
+      "get": {
+        "tags": [
+          "주간 시간표"
+        ],
+        "operationId": "getTimetables",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TimetableDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "학교 주간 시간표 조회",
+        "description": "권한 로그인. "
+      },
+      "post": {
+        "tags": [
+          "주간 시간표"
+        ],
+        "operationId": "createTimetable",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimetableCreateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimetableDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "주간 수업 등록",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/timetable-swap/requests": {
+      "post": {
+        "tags": [
+          "기존 교환"
+        ],
+        "operationId": "create_1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSwapRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimetableSwapResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "수업 교환 요청 생성",
+        "description": "권한 수업 담당자. 신청 시점의 수업 버전을 기록해 승인 시 변경 여부를 검사한다."
+      }
+    },
+    "/api/timetable-swap/requests/{requestId}/respond": {
+      "post": {
+        "tags": [
+          "기존 교환"
+        ],
+        "operationId": "respond_1",
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimetableSwapResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "기존 교환 요청에 응답",
+        "description": "권한 지정 응답자. 이미 처리한 신청의 중복 응답을 제어한다."
+      }
+    },
+    "/api/timetable-swap/requests/{requestId}/approve": {
+      "post": {
+        "tags": [
+          "기존 교환"
+        ],
+        "operationId": "managerApproval",
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimetableSwapResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "403": {
+            "description": "403 승인 권한 / 409 STALE_LESSON, SLOT_CONFLICT, IDEMPOTENCY_KEY_REUSED 등. 수업과 신청을 새로 조회한다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "403 승인 권한 / 409 STALE_LESSON, SLOT_CONFLICT, IDEMPOTENCY_KEY_REUSED 등. 수업과 신청을 새로 조회한다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ScheduleError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "기존 교환 요청 승인·거절",
+        "description": "권한 학교 관리자. Idempotency-Key(UUID)는 선택이다. 승인 시 두 수업의 경합을 확인한다."
+      }
+    },
+    "/api/timetable-generation/requests": {
+      "post": {
+        "tags": [
+          "기존 편성"
+        ],
+        "operationId": "requestTimetable",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimetableRequestResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "교사 불가 교시 제출 요청",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/timetable-generation/requests/{timetableRequestId}/generate": {
+      "post": {
+        "tags": [
+          "기존 편성"
+        ],
+        "operationId": "generateTimetable",
+        "parameters": [
+          {
+            "name": "timetableRequestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimetableGenerationRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "timetableRequestId": {
+                      "type": "integer",
+                      "format": "int64"
+                    },
+                    "schoolId": {
+                      "type": "integer",
+                      "format": "int64"
+                    },
+                    "academicYear": {
+                      "type": "integer",
+                      "format": "int64"
+                    },
+                    "semester": {
+                      "type": "integer",
+                      "format": "int64"
+                    },
+                    "candidateTimetableKey": {
+                      "type": "string"
+                    },
+                    "generatedCount": {
+                      "type": "integer",
+                      "format": "int64"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "기존 편성 후보 생성",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/timetable-generation/requests/{timetableRequestId}/confirm": {
+      "post": {
+        "tags": [
+          "기존 편성"
+        ],
+        "operationId": "confirmTimetable",
+        "parameters": [
+          {
+            "name": "timetableRequestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmTimetableRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "timetableSetId": {
+                      "type": "integer",
+                      "format": "int64"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "기존 시간표 확정",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/substitutes/requests": {
+      "get": {
+        "tags": [
+          "기존 보결"
+        ],
+        "operationId": "getRequests",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "OPEN"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SubstituteRequestDetail"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "보결 요청 목록 조회",
+        "description": "권한 로그인. "
+      },
+      "post": {
+        "tags": [
+          "기존 보결"
+        ],
+        "operationId": "create_2",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubstituteCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubstituteRequestDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "보결 요청 생성",
+        "description": "권한 학교 관리자. 신청 시점의 수업 버전을 기록해 승인 시 변경 여부를 검사한다."
+      }
+    },
+    "/api/school/subjects": {
+      "get": {
+        "tags": [
+          "과목"
+        ],
+        "operationId": "getSubjects",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SubjectResponse"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "과목 목록 조회",
+        "description": "권한 로그인. "
+      },
+      "post": {
+        "tags": [
+          "과목"
+        ],
+        "operationId": "createSubject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "과목 등록",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/school/classes": {
+      "get": {
+        "tags": [
+          "학급"
+        ],
+        "operationId": "getClasses",
+        "parameters": [
+          {
+            "name": "academicYear",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SchoolClassResponse"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "학급 목록 조회",
+        "description": "권한 로그인. "
+      },
+      "post": {
+        "tags": [
+          "학급"
+        ],
+        "operationId": "createClass",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchoolClassRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolClassResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "학급 등록",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/school-setting": {
+      "get": {
+        "tags": [
+          "학교 설정"
+        ],
+        "operationId": "getSetting",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolSettingResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "학교 기본 설정 조회",
+        "description": "권한 로그인. "
+      },
+      "post": {
+        "tags": [
+          "학교 설정"
+        ],
+        "operationId": "createOrUpdateSetting",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchoolSettingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolSettingResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "학교 기본 설정 저장",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/school-setting/periods": {
+      "get": {
+        "tags": [
+          "학교 설정"
+        ],
+        "operationId": "getPeriods",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PeriodSettingResponse"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "교시 목록 조회",
+        "description": "권한 로그인. "
+      },
+      "post": {
+        "tags": [
+          "학교 설정"
+        ],
+        "operationId": "addPeriod",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeriodSettingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeriodSettingResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "교시 추가",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/mypage/teacher/schools": {
+      "get": {
+        "tags": [
+          "마이페이지"
+        ],
+        "operationId": "listTeacherSchools",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SchoolSimpleResponse"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "교사 소속 학교 목록",
+        "description": "권한 로그인. "
+      },
+      "post": {
+        "tags": [
+          "마이페이지"
+        ],
+        "operationId": "joinTeacherSchool",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeacherJoinSchoolRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolSimpleResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "교사 학교 가입",
+        "description": "권한 로그인. 로그인 사용자가 학교에 가입하며 새 소속은 TEACHER다."
+      }
+    },
+    "/api/mypage/admin/schools": {
+      "get": {
+        "tags": [
+          "마이페이지"
+        ],
+        "operationId": "listAdminSchools",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SchoolSimpleResponse"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "관리자 소속 학교 목록",
+        "description": "권한 로그인. "
+      },
+      "post": {
+        "tags": [
+          "마이페이지"
+        ],
+        "operationId": "addAdminSchool",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCreateSchoolRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolSimpleResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "관리자 학교 추가",
+        "description": "권한 로그인. 로그인 사용자가 학교를 추가하며 새 소속은 ADMIN이다."
+      }
+    },
+    "/api/auth/refresh-token": {
+      "post": {
+        "tags": [
+          "인증"
+        ],
+        "operationId": "refresh",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshTokenResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "토큰 갱신",
+        "description": "권한 리프레시 토큰. Authorization 헤더에 Bearer 형식의 refresh token을 보낸다."
+      }
+    },
+    "/api/auth/onboarding": {
+      "post": {
+        "tags": [
+          "온보딩"
+        ],
+        "operationId": "onboarding",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "학교·역할 온보딩",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "인증"
+        ],
+        "operationId": "logout",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "로그아웃",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/auth/email-verification/verify": {
+      "post": {
+        "tags": [
+          "인증"
+        ],
+        "operationId": "verifyCode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailVerificationVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailVerificationAuthResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "400": {
+            "description": "400 인증 코드 불일치·만료 / 500 인증 처리 실패. success·message를 확인한다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailVerificationAuthResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "400 인증 코드 불일치·만료 / 500 인증 처리 실패. success·message를 확인한다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailVerificationAuthResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "summary": "이메일 인증 코드 확인",
+        "description": "권한 공개. "
+      }
+    },
+    "/api/auth/email-verification/send": {
+      "post": {
+        "tags": [
+          "인증"
+        ],
+        "operationId": "sendVerificationCode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailVerificationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailVerificationResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "400": {
+            "description": "400 허용 도메인·주소 / 500 발송 처리 실패. success·message를 확인한다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailVerificationResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "400 허용 도메인·주소 / 500 발송 처리 실패. success·message를 확인한다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailVerificationResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "summary": "이메일 인증 코드 발송",
+        "description": "권한 공개. "
+      }
+    },
+    "/api/auth/dev-token": {
+      "post": {
+        "tags": [
+          "인증"
+        ],
+        "operationId": "generateDevToken",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "security": [],
+        "summary": "로컬 시연 토큰 발급",
+        "description": "권한 공개. 로컬 시연에서는 demo/seed.sql의 합성 계정을 사용한다. 성공 본문은 JWT 문자열이다."
+      }
+    },
+    "/api/todos/{todoId}/toggle": {
+      "patch": {
+        "tags": [
+          "할 일"
+        ],
+        "operationId": "toggleTodoCompleted",
+        "parameters": [
+          {
+            "name": "todoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodoResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "할 일 완료 상태 전환",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/timetable/{timetableId}": {
+      "delete": {
+        "tags": [
+          "주간 시간표"
+        ],
+        "operationId": "deleteTimetable",
+        "parameters": [
+          {
+            "name": "timetableId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "주간 수업 삭제",
+        "description": "권한 학교 관리자. "
+      },
+      "patch": {
+        "tags": [
+          "주간 시간표"
+        ],
+        "operationId": "updateTimetable",
+        "parameters": [
+          {
+            "name": "timetableId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimetableCreateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimetableDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "주간 수업 수정",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/substitutes/responses/{responseId}/approval": {
+      "patch": {
+        "tags": [
+          "기존 보결"
+        ],
+        "operationId": "approve_1",
+        "parameters": [
+          {
+            "name": "responseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubstituteApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubstituteApprovalDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "403": {
+            "description": "403 승인 권한 / 409 STALE_LESSON, SLOT_CONFLICT, IDEMPOTENCY_KEY_REUSED 등. 수업과 신청을 새로 조회한다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "403 승인 권한 / 409 STALE_LESSON, SLOT_CONFLICT, IDEMPOTENCY_KEY_REUSED 등. 수업과 신청을 새로 조회한다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ScheduleError"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "기존 보결 응답 승인·거절",
+        "description": "권한 학교 관리자. Idempotency-Key(UUID)는 선택이다. 승인 시 날짜 수업의 경합을 확인한다."
+      }
+    },
+    "/api/substitutes/requests/{requestId}/response": {
+      "patch": {
+        "tags": [
+          "기존 보결"
+        ],
+        "operationId": "respond_2",
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubstituteRespondRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubstituteResponseDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "보결 요청에 응답",
+        "description": "권한 지정 응답자. 이미 처리한 요청의 경합을 제어한다."
+      }
+    },
+    "/api/mypage/active-school/{schoolId}": {
+      "patch": {
+        "tags": [
+          "마이페이지"
+        ],
+        "operationId": "updateActiveSchool",
+        "parameters": [
+          {
+            "name": "schoolId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveSchoolResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "활성 학교 전환",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/v2/terms/{term}/lessons": {
+      "get": {
+        "tags": [
+          "수업 운영"
+        ],
+        "operationId": "lessons",
+        "parameters": [
+          {
+            "name": "term",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Lesson"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "400": {
+            "description": "400 날짜 형식 / 403 소속 / 404 학기",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponseObject"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "400 날짜 형식 / 403 소속 / 404 학기",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "400 날짜 형식 / 403 소속 / 404 학기",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          }
+        },
+        "summary": "날짜별 예정·실제 수업 조회",
+        "description": "권한 재직 교직원. id는 날짜 수업 ID다. rev를 신청과 승인까지 보관한다. planned는 예정, actual은 보결을 반영한 배정이다. periodId는 DB 식별자다."
+      }
+    },
+    "/api/v2/terms/{term}/generations/{id}": {
+      "get": {
+        "tags": [
+          "편성·게시"
+        ],
+        "operationId": "poll",
+        "parameters": [
+          {
+            "name": "term",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Poll"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "403": {
+            "description": "403 권한 / 404 학기·작업. 후보 미발견은 HTTP 200의 종료 상태로 구분한다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "403 권한 / 404 학기·작업. 후보 미발견은 HTTP 200의 종료 상태로 구분한다.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseObject"
+                }
+              }
+            }
+          }
+        },
+        "summary": "후보 생성 상태·결과 조회",
+        "description": "권한 재직 관리자. QUEUED/RUNNING이면 약 2초 후 재조회한다. READY이면 result.candidates를 표시한다. INFEASIBLE, TIME_LIMIT_NO_SOLUTION, FAILED도 종료 상태다."
+      }
+    },
+    "/api/timetable/year/{year}/semester/{semester}": {
+      "get": {
+        "tags": [
+          "주간 시간표"
+        ],
+        "operationId": "getTimetablesByYearSemester",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "semester",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TimetableDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "학년도·학기별 학교 시간표 조회",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/timetable/me": {
+      "get": {
+        "tags": [
+          "주간 시간표"
+        ],
+        "operationId": "getMyTimetable",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TimetableDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "내 주간 시간표 조회",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/timetable/me/year/{year}/semester/{semester}": {
+      "get": {
+        "tags": [
+          "주간 시간표"
+        ],
+        "operationId": "getMyTimetableByYearSemester",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "semester",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TimetableDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "학년도·학기별 내 시간표 조회",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/timetable-swap/requests/me": {
+      "get": {
+        "tags": [
+          "기존 교환"
+        ],
+        "operationId": "getMyRequests",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TimetableSwapResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "내 교환 요청 목록 조회",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/timetable-generation/teachers/without-availability": {
+      "get": {
+        "tags": [
+          "기존 편성"
+        ],
+        "operationId": "getTeachersWithoutAvailability",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "allSubmitted": {
+                      "type": "boolean"
+                    },
+                    "unsubmittedUserIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "format": "int64"
+                      }
+                    },
+                    "unsubmittedTeachers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "불가 교시 미제출 교사 조회",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/timetable-generation/candidates": {
+      "get": {
+        "tags": [
+          "기존 편성"
+        ],
+        "operationId": "getCandidates",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CandidateSchedule"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "기존 편성 후보 목록 조회",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/school/unavailabilities": {
+      "get": {
+        "tags": [
+          "불가 교시"
+        ],
+        "operationId": "getAllUnavailabilities",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeacherAvailabilityResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "학교 전체 불가 교시 조회",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/school/teachers": {
+      "get": {
+        "tags": [
+          "학교"
+        ],
+        "operationId": "getTeachers",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeacherSummaryResponse"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "교사 명부 조회",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/school/members": {
+      "get": {
+        "tags": [
+          "학교"
+        ],
+        "operationId": "getMembers",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeacherSummaryResponse"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "전체 교직원 조회",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/school/me": {
+      "get": {
+        "tags": [
+          "학교"
+        ],
+        "operationId": "getActiveSchool",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolSummaryResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "현재 학교 요약 조회",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "tags": [
+          "알림"
+        ],
+        "operationId": "getNotifications",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "내 알림 목록 조회",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/mypage/active-school": {
+      "get": {
+        "tags": [
+          "마이페이지"
+        ],
+        "operationId": "getActiveSchool_1",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveSchoolResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "내 활성 학교 조회",
+        "description": "권한 로그인. "
+      }
+    },
+    "/api/auth/kakao/callback": {
+      "get": {
+        "tags": [
+          "인증"
+        ],
+        "operationId": "kakaoCallback",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "redirect_uri",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Found",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "security": [],
+        "summary": "카카오 로그인 콜백",
+        "description": "권한 공개. 성공하면 Location으로 프런트에 리디렉션한다. 외부 카카오 설정이 필요하다."
+      }
+    },
+    "/api/mypage/teacher/schools/{schoolId}": {
+      "delete": {
+        "tags": [
+          "마이페이지"
+        ],
+        "operationId": "leaveTeacherSchool",
+        "parameters": [
+          {
+            "name": "schoolId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "교사 학교 탈퇴",
+        "description": "권한 소속 교사. "
+      }
+    },
+    "/api/mypage/admin/schools/{schoolId}": {
+      "delete": {
+        "tags": [
+          "마이페이지"
+        ],
+        "operationId": "removeAdminSchool",
+        "parameters": [
+          {
+            "name": "schoolId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "관리자 소속 학교 해제",
+        "description": "권한 학교 관리자. "
+      }
+    },
+    "/api/me/unavailabilities/{availabilityId}": {
+      "delete": {
+        "tags": [
+          "불가 교시"
+        ],
+        "operationId": "deleteUnavailability",
+        "parameters": [
+          {
+            "name": "availabilityId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          }
+        },
+        "summary": "내 불가 교시 삭제",
+        "description": "권한 로그인. "
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiResponseObject": {
+        "type": "object",
+        "description": "API 공통 응답 구조",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "성공 여부",
+            "example": false
+          },
+          "error": {
+            "type": "string",
+            "description": "에러 코드",
+            "example": "BAD_REQUEST"
+          },
+          "message": {
+            "type": "string",
+            "description": "에러/메시지 내용",
+            "example": "잘못된 요청입니다."
+          },
+          "data": {
+            "description": "응답 데이터"
+          }
+        }
+      },
+      "ScheduleError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "currentRev": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "activeJobId": {
+            "type": "string"
+          }
+        }
+      },
+      "TodoUpdateRequestDto": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 0
+          },
+          "completed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TodoResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "todoType": {
+            "type": "string",
+            "enum": [
+              "SCHOOL",
+              "HANDOVER",
+              "PERSONAL"
+            ]
+          },
+          "content": {
+            "type": "string"
+          },
+          "completed": {
+            "type": "boolean"
+          },
+          "authorId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "authorName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SubjectRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "SubjectResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "SchoolClassRequest": {
+        "type": "object",
+        "properties": {
+          "academicYear": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "grade": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "classNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "homeroomTeacherSchoolUserId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SchoolClassResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "academicYear": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "grade": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "classNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "homeroomTeacherSchoolUserId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "homeroomTeacherName": {
+            "type": "string"
+          }
+        }
+      },
+      "PeriodSettingRequest": {
+        "type": "object",
+        "properties": {
+          "periodNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "endTime": {
+            "type": "string"
+          }
+        }
+      },
+      "PeriodSettingResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "periodNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "endTime": {
+            "type": "string"
+          }
+        }
+      },
+      "TeacherProfileUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        }
+      },
+      "CurrentSchool": {
+        "type": "object",
+        "properties": {
+          "schoolId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schoolCode": {
+            "type": "string"
+          }
+        }
+      },
+      "TeacherProfileResponse": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "username": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "profileImageUrl": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          },
+          "employmentStatus": {
+            "type": "string"
+          },
+          "currentSchool": {
+            "$ref": "#/components/schemas/CurrentSchool"
+          }
+        }
+      },
+      "AdminSchoolUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "phoneNumber": {
+            "type": "string"
+          }
+        }
+      },
+      "AdminSchoolResponse": {
+        "type": "object",
+        "properties": {
+          "schoolId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "schoolCode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "phoneNumber": {
+            "type": "string"
+          }
+        }
+      },
+      "AdminProfileUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        }
+      },
+      "AdminProfileResponse": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "username": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "profileImageUrl": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          },
+          "employmentStatus": {
+            "type": "string"
+          }
+        }
+      },
+      "AvailabilityItem": {
+        "type": "object",
+        "properties": {
+          "dayOfWeek": {
+            "type": "string",
+            "enum": [
+              "MON",
+              "TUE",
+              "WED",
+              "THU",
+              "FRI",
+              "SAT",
+              "SUN"
+            ]
+          },
+          "periodNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "TeacherAvailabilityRequestDto": {
+        "type": "object",
+        "properties": {
+          "unavailabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityItem"
+            }
+          }
+        }
+      },
+      "TeacherAvailabilityResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "schoolUserId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "dayOfWeek": {
+            "type": "string",
+            "enum": [
+              "MON",
+              "TUE",
+              "WED",
+              "THU",
+              "FRI",
+              "SAT",
+              "SUN"
+            ]
+          },
+          "periodNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "VoiceCommandRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lang": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "ApiResponseCommandPreviewResponse": {
+        "type": "object",
+        "description": "API 공통 응답 구조",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "성공 여부",
+            "example": false
+          },
+          "error": {
+            "type": "string",
+            "description": "에러 코드",
+            "example": "BAD_REQUEST"
+          },
+          "message": {
+            "type": "string",
+            "description": "에러/메시지 내용",
+            "example": "잘못된 요청입니다."
+          },
+          "data": {
+            "$ref": "#/components/schemas/CommandPreviewResponse",
+            "description": "응답 데이터"
+          }
+        }
+      },
+      "CommandPreviewResponse": {
+        "type": "object",
+        "properties": {
+          "draftToken": {
+            "type": "string"
+          },
+          "intentType": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "preview": {},
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CommandConfirmRequest": {
+        "type": "object",
+        "properties": {
+          "draftToken": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "draftToken"
+        ]
+      },
+      "NewTerm": {
+        "type": "object",
+        "properties": {
+          "academicYear": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 9999,
+            "minimum": 1900
+          },
+          "semester": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 2,
+            "minimum": 1
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "endDate",
+          "startDate"
+        ]
+      },
+      "Publish": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "candidateId": {
+            "type": "string",
+            "pattern": "[a-f0-9]{64}"
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "expectedPublishRev": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "candidateId",
+          "effectiveFrom",
+          "expectedPublishRev",
+          "jobId"
+        ]
+      },
+      "Published": {
+        "type": "object",
+        "properties": {
+          "versionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "publishRev": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "weeklyLessons": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "NewChange": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "SUBSTITUTE",
+              "SWAP"
+            ]
+          },
+          "firstId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "firstRev": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "secondId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "secondRev": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "substituteTeacherId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "firstId",
+          "firstRev",
+          "kind"
+        ]
+      },
+      "Change": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "termId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "requester": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "responder": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "firstId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "firstRev": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "secondId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "secondRev": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "state": {
+            "type": "string"
+          },
+          "rev": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "Decision": {
+        "type": "object",
+        "properties": {
+          "accept": {
+            "type": "boolean"
+          },
+          "expectedRequestRev": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "accept",
+          "expectedRequestRev"
+        ]
+      },
+      "Approval": {
+        "type": "object",
+        "properties": {
+          "expectedRequestRev": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expectedLessonRev": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expectedSecondRev": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "expectedLessonRev",
+          "expectedRequestRev"
+        ]
+      },
+      "Assignment": {
+        "type": "object",
+        "properties": {
+          "teacherId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "periodId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "Lesson": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "originId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "termId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "versionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "originDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "classId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subjectId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "planned": {
+            "$ref": "#/components/schemas/Assignment"
+          },
+          "actual": {
+            "$ref": "#/components/schemas/Assignment"
+          },
+          "rev": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "Outcome": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "state": {
+            "type": "string"
+          },
+          "requestRev": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lessons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Lesson"
+            }
+          }
+        }
+      },
+      "Preference": {
+        "type": "object",
+        "properties": {
+          "teacherId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "WANT",
+              "AVOID"
+            ]
+          },
+          "anyOf": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Slot"
+            }
+          }
+        }
+      },
+      "Request": {
+        "type": "object",
+        "properties": {
+          "validatedLoadId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "teachingSlots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Slot"
+            }
+          },
+          "preferences": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Preference"
+            }
+          }
+        },
+        "required": [
+          "validatedLoadId"
+        ]
+      },
+      "Slot": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "enum": [
+              "MON",
+              "TUE",
+              "WED",
+              "THU",
+              "FRI",
+              "SAT",
+              "SUN"
+            ]
+          },
+          "period": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "Accepted": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string"
+          },
+          "statusUrl": {
+            "type": "string"
+          },
+          "expectedPublishRev": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "Candidate": {
+        "type": "object",
+        "properties": {
+          "candidateId": {
+            "type": "string"
+          },
+          "score": {
+            "$ref": "#/components/schemas/Score"
+          },
+          "placements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Placement"
+            }
+          }
+        }
+      },
+      "Placement": {
+        "type": "object",
+        "properties": {
+          "teacherId": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "classId": {
+            "type": "string"
+          },
+          "slot": {
+            "$ref": "#/components/schemas/Slot"
+          }
+        }
+      },
+      "Response": {
+        "type": "object",
+        "properties": {
+          "validatedLoadId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "READY",
+              "INFEASIBLE",
+              "TIME_LIMIT_NO_SOLUTION"
+            ]
+          },
+          "stopReason": {
+            "type": "string",
+            "enum": [
+              "SEARCH_EXHAUSTED",
+              "TOP_FOUR_AT_BOUND",
+              "CAPACITY",
+              "TIME_LIMIT"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          },
+          "elapsedMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Candidate"
+            }
+          },
+          "jobId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedPublishRev": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "Score": {
+        "type": "object",
+        "properties": {
+          "wantsMet": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "wantsTotal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "teachersWithNoWantMet": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "avoidsMet": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "avoidsTotal": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "Demand": {
+        "type": "object",
+        "properties": {
+          "teacherId": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "classId": {
+            "type": "string"
+          },
+          "weeklyPeriods": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sourceCell": {
+            "type": "string"
+          }
+        }
+      },
+      "Result": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string"
+          },
+          "dataRows": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalPeriods": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "demands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Demand"
+            }
+          },
+          "validatedLoadId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "TodoCreateRequestDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "todoType": {
+            "type": "string",
+            "enum": [
+              "SCHOOL",
+              "HANDOVER",
+              "PERSONAL"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "content",
+          "date",
+          "todoType"
+        ]
+      },
+      "TimetableCreateDto": {
+        "type": "object",
+        "properties": {
+          "academicYear": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "semester": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "schoolClassId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "periodSettingId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "dayOfWeek": {
+            "type": "string",
+            "enum": [
+              "MON",
+              "TUE",
+              "WED",
+              "THU",
+              "FRI",
+              "SAT",
+              "SUN"
+            ]
+          },
+          "subjectId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "teacherSchoolUserId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "TimetableDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "schoolId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "academicYear": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "semester": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "schoolClassId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "grade": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "classNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "periodSettingId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "periodNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "periodStartTime": {
+            "type": "string"
+          },
+          "periodEndTime": {
+            "type": "string"
+          },
+          "dayOfWeek": {
+            "type": "string",
+            "enum": [
+              "MON",
+              "TUE",
+              "WED",
+              "THU",
+              "FRI",
+              "SAT",
+              "SUN"
+            ]
+          },
+          "subjectId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "teacherId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "teacherName": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateSwapRequestDto": {
+        "type": "object",
+        "properties": {
+          "requesterTimetableId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "requesterDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "receiverTimetableId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "receiverDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "TimetableSwapResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "schoolId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "requesterTimetableId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "requesterDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "requesterSchoolUserId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "requesterUsername": {
+            "type": "string"
+          },
+          "receiverTimetableId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "receiverDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "receiverSchoolUserId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "receiverUsername": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "managerApprovalStatus": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ActionDto": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "respond: ACCEPT|REJECT, approve: APPROVE|REJECT",
+            "enum": [
+              "ACCEPT",
+              "REJECT",
+              "APPROVE"
+            ]
+          }
+        }
+      },
+      "TimetableRequestResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "REQUESTED",
+              "GENERATED",
+              "CONFIRMED"
+            ]
+          },
+          "schoolId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "GenerationOptionsDto": {
+        "type": "object",
+        "properties": {
+          "candidateCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "strategies": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "BALANCED",
+                "COVERAGE_FIRST",
+                "SENIOR_PRIORITY",
+                "FAIR_DISTRIBUTION"
+              ]
+            }
+          }
+        }
+      },
+      "TimetableGenerationRequestDto": {
+        "type": "object",
+        "properties": {
+          "academicYear": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "semester": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "slotRequirements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimetableSlotRequirementDto"
+            }
+          },
+          "generationOptions": {
+            "$ref": "#/components/schemas/GenerationOptionsDto"
+          }
+        }
+      },
+      "TimetableSlotRequirementDto": {
+        "type": "object",
+        "properties": {
+          "schoolClassId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "dayOfWeek": {
+            "type": "string",
+            "enum": [
+              "MON",
+              "TUE",
+              "WED",
+              "THU",
+              "FRI",
+              "SAT",
+              "SUN"
+            ]
+          },
+          "periodNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "subjectId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ConfirmTimetableRequestDto": {
+        "type": "object",
+        "properties": {
+          "candidateIndex": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "academicYear": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "semester": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "SubstituteCreateRequest": {
+        "type": "object",
+        "properties": {
+          "timetableId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "substituteDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "substituteDate",
+          "timetableId"
+        ]
+      },
+      "SubstituteRequestDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "schoolId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "timetableId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "dayOfWeek": {
+            "type": "string"
+          },
+          "periodNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "substituteDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SchoolSettingRequest": {
+        "type": "object",
+        "properties": {
+          "periodDuration": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "breakDuration": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lunchStartTime": {
+            "type": "string"
+          },
+          "lunchEndTime": {
+            "type": "string"
+          }
+        }
+      },
+      "SchoolSettingResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "periodDuration": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "breakDuration": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lunchStartTime": {
+            "type": "string"
+          },
+          "lunchEndTime": {
+            "type": "string"
+          },
+          "periods": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PeriodSettingResponse"
+            }
+          }
+        }
+      },
+      "TeacherJoinSchoolRequest": {
+        "type": "object",
+        "properties": {
+          "schoolCode": {
+            "type": "string"
+          },
+          "hireDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "SchoolSimpleResponse": {
+        "type": "object",
+        "properties": {
+          "schoolId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "schoolCode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "phoneNumber": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          },
+          "employmentStatus": {
+            "type": "string"
+          },
+          "hireDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "AdminCreateSchoolRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "phoneNumber": {
+            "type": "string"
+          },
+          "hireDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "RefreshTokenResponse": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          }
+        }
+      },
+      "OnboardingRequest": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "schoolCode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "phoneNumber": {
+            "type": "string"
+          },
+          "hireDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "OnboardingResponse": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "schoolUserId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "schoolId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "position": {
+            "type": "string"
+          },
+          "employmentStatus": {
+            "type": "string"
+          },
+          "schoolCode": {
+            "type": "string"
+          },
+          "schoolName": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "phoneNumber": {
+            "type": "string"
+          },
+          "hireDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "EmailVerificationVerifyRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "minLength": 1
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^\\d{6}$"
+          }
+        },
+        "required": [
+          "code",
+          "email"
+        ]
+      },
+      "EmailVerificationAuthResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "accessToken": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "newUser": {
+            "type": "boolean"
+          }
+        }
+      },
+      "EmailVerificationRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "EmailVerificationResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "DevTokenRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          }
+        }
+      },
+      "SubstituteApprovalRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "SubstituteApprovalDetail": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "responseId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "requestStatus": {
+            "type": "string"
+          },
+          "teacherAction": {
+            "type": "string"
+          },
+          "managerApproval": {
+            "type": "string"
+          }
+        }
+      },
+      "SubstituteRespondRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "SubstituteResponseDetail": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "responseId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "candidateSchoolUserId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "teacherName": {
+            "type": "string"
+          },
+          "teacherAction": {
+            "type": "string"
+          },
+          "managerApproval": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ActiveSchoolResponse": {
+        "type": "object",
+        "properties": {
+          "schoolId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "schoolCode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "phoneNumber": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          },
+          "employmentStatus": {
+            "type": "string"
+          }
+        }
+      },
+      "Poll": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string"
+          },
+          "expectedPublishRev": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Response"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "TodoListResponseDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "schoolTodos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TodoResponseDto"
+            }
+          },
+          "handoverTodos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TodoResponseDto"
+            }
+          },
+          "personalTodos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TodoResponseDto"
+            }
+          }
+        }
+      },
+      "CandidateSchedule": {
+        "type": "object",
+        "properties": {
+          "schoolId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "shifts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CandidateShift"
+            }
+          },
+          "strategyName": {
+            "type": "string"
+          },
+          "strategyDescription": {
+            "type": "string"
+          },
+          "totalShifts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unassignedCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "coverageRate": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "CandidateShift": {
+        "type": "object",
+        "properties": {
+          "schoolUserId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "teacherName": {
+            "type": "string"
+          },
+          "schoolClassId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "dayOfWeek": {
+            "type": "string",
+            "enum": [
+              "MON",
+              "TUE",
+              "WED",
+              "THU",
+              "FRI",
+              "SAT",
+              "SUN"
+            ]
+          },
+          "periodNumber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "subjectId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "HomeroomClassInfo": {
+        "type": "object",
+        "properties": {
+          "classId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "academicYear": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "grade": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "classNumber": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SubjectInfo": {
+        "type": "object",
+        "properties": {
+          "subjectId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subjectName": {
+            "type": "string"
+          }
+        }
+      },
+      "TeacherSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "schoolUserId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "username": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          },
+          "employmentStatus": {
+            "type": "string"
+          },
+          "subjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubjectInfo"
+            }
+          },
+          "homeroomClasses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HomeroomClassInfo"
+            }
+          },
+          "weeklyLessonCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SchoolSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "schoolId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "schoolCode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "totalMemberCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "teacherCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "adminCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "NotificationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "schoolName": {
+            "type": "string"
+          },
+          "profileImageUrl": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "SCHEDULE_INPUT",
+              "TIMETABLE_SWAP",
+              "SUBSTITUTE"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "SCHEDULE_INPUT_REQUEST",
+              "TIMETABLE_SWAP_REQUEST",
+              "TIMETABLE_SWAP_NOTIFY_ADMIN",
+              "TIMETABLE_SWAP_ADMIN_APPROVED_REQUESTER",
+              "TIMETABLE_SWAP_ADMIN_APPROVED_RECEIVER",
+              "TIMETABLE_SWAP_ADMIN_REJECTED_REQUESTER",
+              "TIMETABLE_SWAP_ADMIN_REJECTED_RECEIVER",
+              "SUBSTITUTE_REQUEST_INVITE",
+              "SUBSTITUTE_NOTIFY_ADMIN",
+              "SUBSTITUTE_ADMIN_APPROVED_TEACHER",
+              "SUBSTITUTE_ADMIN_REJECTED_TEACHER",
+              "SUBSTITUTE_FILLED_BROADCAST"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timetableSwapRequestId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "substituteRequestId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "substituteResponseId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "timetableSwapStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "ACCEPTED",
+              "REJECTED",
+              "CANCELLED"
+            ]
+          },
+          "timetableSwapManagerApprovalStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "APPROVED",
+              "REJECTED"
+            ]
+          },
+          "substituteStatus": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "FILLED",
+              "CANCELLED",
+              "EXPIRED"
+            ]
+          },
+          "read": {
+            "type": "boolean"
+          }
+        }
+      },
+      "WorkbookCellError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "sheet": {
+            "type": "string"
+          },
+          "row": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "column": {
+            "type": "string"
+          },
+          "cell": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkbookProblem": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "fieldErrors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkbookCellError"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

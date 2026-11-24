@@ -1,0 +1,18 @@
+server:
+  address: 127.0.0.1
+spring:
+  jpa:
+    defer-datasource-initialization: true
+  sql:
+    init:
+      mode: always
+      encoding: UTF-8
+      schema-locations:
+        - classpath:db/migration/V20261122_01__school_load_and_schedule_versions.sql
+        - classpath:db/migration/V20261124_01__generation_and_lesson_operations.sql
+      data-locations: file:./demo/seed.sql
+springdoc:
+  swagger-ui:
+    enabled: true
+  api-docs:
+    enabled: true
