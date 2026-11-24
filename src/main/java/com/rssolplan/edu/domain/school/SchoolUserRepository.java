@@ -22,6 +22,9 @@ public interface SchoolUserRepository extends JpaRepository<SchoolUser, Long> {
 
     List<SchoolUser> findBySchool_Id(Long schoolId);
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "user")
+    List<SchoolUser> findBySchool_IdAndEmploymentStatus(Long schoolId, SchoolUser.EmploymentStatus status);
+
     List<SchoolUser> findBySchool_IdAndPosition(Long schoolId, Position position);
 
     @Query("""
