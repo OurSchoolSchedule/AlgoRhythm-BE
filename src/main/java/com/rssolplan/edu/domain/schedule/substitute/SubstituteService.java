@@ -2,12 +2,14 @@ package com.rssolplan.edu.domain.schedule.substitute;
 
 import com.rssolplan.edu.domain.notification.Notification;
 import com.rssolplan.edu.domain.notification.NotificationRepository;
+import com.rssolplan.edu.domain.schedule.generation.TimetableRepository;
+import com.rssolplan.edu.domain.schedule.generation.entity.Timetable;
+import com.rssolplan.edu.domain.schedule.operations.*;
+import com.rssolplan.edu.domain.schedule.operations.LegacyApprovalGuard.Target;
 import com.rssolplan.edu.domain.schedule.substitute.dto.*;
 import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteRequest;
 import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteRequest.SubstituteStatus;
 import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteResponse;
-import com.rssolplan.edu.domain.schedule.generation.TimetableRepository;
-import com.rssolplan.edu.domain.schedule.generation.entity.Timetable;
 import com.rssolplan.edu.domain.school.School;
 import com.rssolplan.edu.domain.school.SchoolRepository;
 import com.rssolplan.edu.domain.school.SchoolUser;
@@ -17,13 +19,16 @@ import com.rssolplan.edu.domain.user.UserRepository;
 import com.rssolplan.edu.global.exception.ForbiddenException;
 import com.rssolplan.edu.global.exception.NotFoundException;
 import com.rssolplan.edu.global.security.AuthorizationService;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +42,8 @@ public class SubstituteService {
     private final NotificationRepository notificationRepo;
     private final UserRepository userRepository;
     private final AuthorizationService authService;
+    private final LegacyApprovalGuard guard;
+    private final ChangeService approvals;
 
     // 교감/교장: 보결 요청 생성
     @Transactional
@@ -79,7 +86,8 @@ public class SubstituteService {
                 .status(SubstituteStatus.OPEN)
                 .note(req.note())
                 .build();
-        requestRepo.save(request);
+        request = requestRepo.save(request);
+        guard.capture("COVER", request.getId(), new Target(timetable, req.substituteDate()));
 
         String msg = String.format("%s(%s %s교시) %s 보결 교사를 요청합니다.",
                 school.getName(),
@@ -105,8 +113,10 @@ public class SubstituteService {
     }
 
     // 교사: 보결 요청 수락/거절
-    @Transactional
-    public SubstituteResponseDetail respond(Long teacherUserId, Long requestId, SubstituteRespondRequest req) {
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public SubstituteResponseDetail respond(
+            Long teacherUserId, Long requestId, SubstituteRespondRequest req) {
+        guard.lockMember(teacherUserId, false);
         User requester = userRepository.findById(teacherUserId)
                 .orElseThrow(() -> new NotFoundException("요청자 유저를 찾을 수 없습니다."));
 
@@ -167,8 +177,20 @@ public class SubstituteService {
     }
 
     // 교감/교장: 교사 응답 최종 승인/거절
-    @Transactional
-    public SubstituteApprovalDetail approve(Long adminUserId, Long responseId, SubstituteApprovalRequest req) {
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public SubstituteApprovalDetail approve(
+            Long adminUserId, Long responseId, SubstituteApprovalRequest req) {
+        return approve(adminUserId, responseId, req, null);
+    }
+
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public SubstituteApprovalDetail approve(
+            Long adminUserId, Long responseId, SubstituteApprovalRequest req, UUID key) {
+        long school = guard.lockMember(adminUserId, true);
+        String ref = "legacy-cover/" + responseId + "/" + req.action();
+        var previous =
+                approvals.replay(school, adminUserId, key, ref, SubstituteApprovalDetail.class);
+        if (previous != null) return previous;
         User requester = userRepository.findById(adminUserId)
                 .orElseThrow(() -> new NotFoundException("요청자 유저를 찾을 수 없습니다."));
 
@@ -177,7 +199,8 @@ public class SubstituteService {
 
         SubstituteRequest request = response.getSubstituteRequest();
 
-        if (!request.getOwner().getUser().getId().equals(adminUserId)) {
+        if (!request.getSchool().getId().equals(school)
+                || !request.getOwner().getUser().getId().equals(adminUserId)) {
             throw new ForbiddenException("승인 권한이 없습니다.");
         }
 
@@ -192,16 +215,28 @@ public class SubstituteService {
         if (req.action() == null) {
             throw new IllegalArgumentException("action이 필요합니다. (APPROVE 또는 REJECT)");
         }
-        boolean approved = switch (req.action().trim().toUpperCase(Locale.ROOT)) {
-            case "APPROVE", "APPROVED" -> true;
-            case "REJECT", "REJECTED" -> false;
-            default -> throw new IllegalArgumentException("유효하지 않은 action입니다. APPROVE 또는 REJECT를 사용하세요.");
-        };
+        boolean approved =
+                switch (req.action().trim().toUpperCase(Locale.ROOT)) {
+                    case "APPROVE", "APPROVED" -> true;
+                    case "REJECT", "REJECTED" -> false;
+                    default ->
+                            throw new IllegalArgumentException(
+                                    "유효하지 않은 action입니다. APPROVE 또는 REJECT를 사용하세요.");
+                };
 
         if (approved && response.getWorkerAction() != SubstituteResponse.WorkerAction.ACCEPT) {
             throw new IllegalStateException("교사가 수락한 응답만 승인할 수 있습니다.");
         }
 
+        List<?> edits =
+                approved
+                        ? guard.approve(
+                                school,
+                                "COVER",
+                                request.getId(),
+                                response.getCandidate().getId(),
+                                new Target(request.getTimetable(), request.getSubstituteDate()))
+                        : List.of();
         response.setManagerApproval(approved
                 ? SubstituteResponse.ManagerApproval.APPROVED
                 : SubstituteResponse.ManagerApproval.REJECTED);
@@ -230,7 +265,9 @@ public class SubstituteService {
                 .requester(requester)
                 .build());
 
-        return SubstituteApprovalDetail.from(request, response);
+        var result = SubstituteApprovalDetail.from(request, response);
+        approvals.record(school, adminUserId, key, ref, result, edits);
+        return result;
     }
 
     // 교사: 현재 학교 보결 요청 목록 조회
@@ -248,7 +285,9 @@ public class SubstituteService {
         return switch (action.toUpperCase(Locale.ROOT)) {
             case "ACCEPT" -> SubstituteResponse.WorkerAction.ACCEPT;
             case "REJECT" -> SubstituteResponse.WorkerAction.REJECT;
-            default -> throw new IllegalArgumentException("유효하지 않은 action입니다. ACCEPT 또는 REJECT를 사용하세요.");
+            default ->
+                    throw new IllegalArgumentException(
+                            "유효하지 않은 action입니다. ACCEPT 또는 REJECT를 사용하세요.");
         };
     }
 

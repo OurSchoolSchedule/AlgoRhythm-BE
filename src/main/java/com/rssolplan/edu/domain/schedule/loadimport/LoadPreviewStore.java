@@ -58,13 +58,7 @@ public class LoadPreviewStore {
         if (stored == null) throw new NotFoundException("이 학기에서 사용할 시수표가 없거나 만료되었습니다. 다시 검증하세요.");
         try {
             var preview = json.readValue(stored, LoadWorkbookParser.Result.class);
-            Set<Long> classes = Set.copyOf(scope.classes().values());
-            for (var row : preview.demands()) {
-                if (!scope.hasTeacherAndSubject(row)
-                        || !classes.contains(Long.valueOf(row.classId())))
-                    throw new IllegalStateException(
-                            row.sourceCell() + "의 교사·과목·학급 명부가 변경되었습니다. 다시 검증하세요.");
-            }
+            scope.verify(preview.demands());
             return preview;
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("시수표를 다시 검증하세요.", e);

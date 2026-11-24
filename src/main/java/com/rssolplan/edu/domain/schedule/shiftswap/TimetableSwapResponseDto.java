@@ -7,11 +7,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * TimetableSwapRequest 엔티티를 직접 직렬화하면 SchoolUser를 통해
- * email, kakaoAccessToken 등 민감 정보가 노출될 수 있으므로
- * API 응답은 이 DTO를 통해서만 반환한다.
+ * TimetableSwapRequest 엔티티를 직접 직렬화하면 SchoolUser를 통해 email, kakaoAccessToken 등 민감 정보가 노출될 수 있으므로 API
+ * 응답은 이 DTO를 통해서만 반환한다.
  */
 @Getter
+@lombok.extern.jackson.Jacksonized
 @Builder
 public class TimetableSwapResponseDto {
 

@@ -4,6 +4,8 @@ import com.rssolplan.edu.domain.notification.Notification;
 import com.rssolplan.edu.domain.notification.NotificationRepository;
 import com.rssolplan.edu.domain.schedule.generation.TimetableRepository;
 import com.rssolplan.edu.domain.schedule.generation.entity.Timetable;
+import com.rssolplan.edu.domain.schedule.operations.*;
+import com.rssolplan.edu.domain.schedule.operations.LegacyApprovalGuard.Target;
 import com.rssolplan.edu.domain.school.School;
 import com.rssolplan.edu.domain.school.SchoolRepository;
 import com.rssolplan.edu.domain.school.SchoolUser;
@@ -12,12 +14,15 @@ import com.rssolplan.edu.domain.user.User;
 import com.rssolplan.edu.domain.user.UserRepository;
 import com.rssolplan.edu.global.exception.NotFoundException;
 import com.rssolplan.edu.global.security.AuthorizationService;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +35,8 @@ public class TimetableSwapService {
     private final SchoolUserRepository schoolUserRepo;
     private final UserRepository userRepository;
     private final AuthorizationService authService;
+    private final LegacyApprovalGuard guard;
+    private final ChangeService approvals;
 
     // 1. 교시 교환 요청 생성
     @Transactional
@@ -78,7 +85,12 @@ public class TimetableSwapService {
                 .managerApprovalStatus(TimetableSwapRequest.ManagerApprovalStatus.PENDING)
                 .build();
 
-        requestRepo.save(request);
+        request = requestRepo.save(request);
+        guard.capture(
+                "SWAP",
+                request.getId(),
+                new Target(requesterTimetable, requesterDate),
+                new Target(receiverTimetable, receiverDate));
 
         String msg = String.format("%s 교사가 %s %s교시↔%s %s교시 교환을 요청했습니다.",
                 requester.getUser().getUsername(),
@@ -104,15 +116,17 @@ public class TimetableSwapService {
     }
 
     // 2. 수신 교사: 수락/거절 1차 응답
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public TimetableSwapRequest respond(Long receiverUserId, Long requestId, String action) {
+        long schoolId = guard.lockMember(receiverUserId, false);
         User reqUser = userRepository.findById(receiverUserId)
                 .orElseThrow(() -> new NotFoundException("요청자 유저를 찾을 수 없습니다."));
 
         TimetableSwapRequest request = requestRepo.findById(requestId)
                 .orElseThrow(() -> new NotFoundException("교환 요청을 찾을 수 없습니다."));
 
-        if (!request.getReceiver().getUser().getId().equals(receiverUserId)) {
+        if (!request.getSchool().getId().equals(schoolId)
+                || !request.getReceiver().getUser().getId().equals(receiverUserId)) {
             throw new SecurityException("이 교환 요청에 응답할 권한이 없습니다.");
         }
 
@@ -160,8 +174,15 @@ public class TimetableSwapService {
     }
 
     // 3. 관리자: 최종 승인/거절
-    @Transactional
-    public TimetableSwapRequest managerApproval(Long adminUserId, Long requestId, String action) {
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public TimetableSwapResponseDto managerApproval(
+            Long adminUserId, Long requestId, String action, UUID key) {
+        long school = guard.lockMember(adminUserId, true);
+        String ref = "legacy-swap/" + requestId + "/" + action;
+        var previous =
+                approvals.replay(school, adminUserId, key, ref, TimetableSwapResponseDto.class);
+        if (previous != null) return previous;
+        List<?> edits = List.of();
         User reqUser = userRepository.findById(adminUserId)
                 .orElseThrow(() -> new NotFoundException("요청자 유저를 찾을 수 없습니다."));
 
@@ -184,6 +205,17 @@ public class TimetableSwapService {
 
         switch (act) {
             case "APPROVE" -> {
+                edits =
+                        guard.approve(
+                                school,
+                                "SWAP",
+                                requestId,
+                                0,
+                                new Target(
+                                        request.getRequesterTimetable(),
+                                        request.getRequesterDate()),
+                                new Target(
+                                        request.getReceiverTimetable(), request.getReceiverDate()));
                 request.setManagerApprovalStatus(TimetableSwapRequest.ManagerApprovalStatus.APPROVED);
 
                 notifyRequester(request, reqUser, Notification.Type.TIMETABLE_SWAP_ADMIN_APPROVED_REQUESTER,
@@ -202,7 +234,9 @@ public class TimetableSwapService {
             default -> throw new IllegalArgumentException("지원하지 않는 action입니다. (APPROVE/REJECT)");
         }
 
-        return requestRepo.save(request);
+        var result = TimetableSwapResponseDto.from(requestRepo.save(request));
+        approvals.record(school, adminUserId, key, ref, result, edits);
+        return result;
     }
 
     // 4. 조회

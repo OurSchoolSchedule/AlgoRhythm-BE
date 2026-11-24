@@ -1,0 +1,117 @@
+# 프론트 연동 규격 · 시수표 검증부터 보결 승인까지
+
+학교 담당자는 **엑셀 검증 → 후보 생성 → 한 후보 확정** 순으로 게시한다. 교사는 **날짜별 수업 조회 → 교환 신청 또는 보결 응답**을 하고 관리자가 승인한다. 아래에서 `T`는 `/api/v2/terms/{termId}`다. 모든 요청에 기존 `Authorization: Bearer <JWT>`를 사용한다. 운영 날짜는 학교 달력의 `YYYY-MM-DD`, 교시 번호는 학교 설정의 1부터 시작하는 번호다.
+
+## 1. 시수표 검증 · M1
+
+| 상황 | POST 경로 |
+| --- | --- |
+| 학기가 있음 | `T/load-imports/validate?forGeneration=true` |
+| 최초 학교 설정 | `/api/v2/school/load-imports/validate?academicYear=2026&forGeneration=true` |
+
+재직 관리자 전용. `multipart/form-data`로 필수 `file`(.xlsx), 선택 `sheet`(여러 시트면 선택 필수), 선택 `subjectAliases`(application/json 파트, 예시 `{"공수1":20}`)를 보낸다. 브라우저에서 FormData의 multipart 경계는 자동 생성된다. `forGeneration` 생략 시 기본값은 false다. 검증 결과만 미리 볼 때 사용한다.
+
+```json
+{"sheet":"시수표","dataRows":1,"totalPeriods":1,"demands":[{"teacherId":"10","subjectId":"20","classId":"30","weeklyPeriods":1,"sourceCell":"D3"}],"validatedLoadId":"375d0754-c375-42c6-b1f0-f630a9693e37"}
+```
+
+200 응답에서 교사·과목·학급 ID는 문자열이다. `validatedLoadId`는 편성 옵션을 켰을 때만 발급하며 접수 전 유효시간은 30분이다. 학교 설정 검증본은 같은 학교·학년도의 학기에서 사용할 수 있다.
+
+```json
+{"code":"INVALID_LOAD_SHEET","message":"시수표를 수정한 후 다시 업로드하세요.","fieldErrors":[{"code":"ROW_TOTAL_MISMATCH","sheet":"시수표","row":3,"column":"F","cell":"F3","message":"학급별 합은 5, 입력한 계는 9입니다."}]}
+```
+
+| HTTP | 코드와 처리 |
+| --- | --- |
+| 400 | MISSING_FILE, INVALID_PARAMETER, INVALID_YEAR, INVALID_ALIAS, ALIAS_CONFLICT. 첨부 파일·학년도·별칭을 수정한다. |
+| 413 / 415 | WORKBOOK_LIMIT·ROW_LIMIT / XLSX_REQUIRED·UNSUPPORTED_WORKBOOK. 일반 .xlsx 파일 최대 5 MiB, 데이터 최대 5,000행이다. |
+| 422 | SELECT_SHEET이면 시트명을 지정해 다시 전송한다. UNREADABLE_XLSX는 다시 저장한다. INVALID_LOAD_SHEET는 fieldErrors를 표시한다. 셀은 1행·A열부터, 최대 100건이다. |
+| 403 / 404 / 503 | 관리자 권한 또는 활성 학교 확인 / 학기 확인 / LOAD_PREVIEW_UNAVAILABLE이면 임시 저장소 복구 후 재시도한다. |
+
+셀 오류 코드에는 MISSING_HEADER, MISSING_COLUMN_HEADER, UNKNOWN_COLUMN, DUPLICATE_HEADER, CLASS_HEADER, OVERLAPPING_MERGE, MERGED_HOURS, UNKNOWN_TEACHER, AMBIGUOUS_TEACHER, UNKNOWN_SUBJECT, AMBIGUOUS_SUBJECT, UNKNOWN_CLASS, INVALID_HOURS, DUPLICATE_DEMAND, ROW_TOTAL_MISMATCH, EMPTY_DEMAND가 있다. 전체 파일 오류는 fieldErrors가 빈 배열일 수 있다.
+
+## 2. 편성 요청과 후보 조회 · M2/M3
+
+**권장 흐름**은 `POST T/generations`이다. 기존 동기 경로 `POST T/schedule-candidates`와 `POST /api/v2/school/schedule-candidates?academicYear=2026`도 같은 본문을 받는다. 동기 호출은 200으로 비교 결과를 직접 반환한다. 결과에 포함된 jobId는 후보 확정에도 사용한다.
+
+```json
+{"validatedLoadId":"375d0754-c375-42c6-b1f0-f630a9693e37","teachingSlots":[{"day":"MON","period":1},{"day":"TUE","period":1}],"preferences":[{"teacherId":"10","kind":"WANT","anyOf":[{"day":"MON","period":1}]}]}
+```
+
+`teachingSlots`와 `preferences`는 선택 입력이다. 생략 시 월~금의 학교 설정 교시를 연다. 요일은 MON~SUN이다. WANT는 교사가 수업하고 싶은 시간, AVOID는 피하고 싶은 시간이다. anyOf 중 한 교시만 충족해도 한 건이다. 실제 불가 시간은 서버가 읽는다. [선호 점수와 입력 크기 규격](m2-schedule-candidates.md)
+
+| 요청 | 성공 응답 | 화면 동작 |
+| --- | --- | --- |
+| POST T/generations | 202 `{jobId,state:"QUEUED",statusUrl,expectedPublishRev}`, Location과 Retry-After: 2 | statusUrl과 jobId를 보관한다. |
+| GET T/generations/{jobId} | 200 `{jobId,state,expectedPublishRev,result}` | QUEUED/RUNNING에서는 result=null. 약 2초 간격으로 조회한다. |
+| READY | result에 동기 API와 같은 비교 결과가 담긴다. | 폴링을 중단하고 1~4개를 순서대로 표시한다. |
+| INFEASIBLE / TIME_LIMIT_NO_SOLUTION / FAILED | 더 조회할 필요가 없는 종료 상태. 워커 중단 후 만료·실패 시 result가 null일 수 있다. | 각각 조건 충돌, 제한 내 후보 미발견, 처리 실패로 구분한다. |
+
+비교 결과 예시에서 placements는 선택 안의 주간 배치다. 서버는 M1이 검증한 시수와 교사·학급 중복을 다시 검사한다.
+
+```json
+{
+  "jobId":"7eb15cc6-193f-4519-9704-50035ae28371","expectedPublishRev":0,
+  "validatedLoadId":"375d0754-c375-42c6-b1f0-f630a9693e37","status":"READY",
+  "stopReason":"SEARCH_EXHAUSTED","detail":null,"elapsedMs":3,
+  "candidates":[{"candidateId":"f272c7729cf053f271960dbfd917341c814e459f59460f539905c9493c810941",
+    "score":{"wantsMet":1,"wantsTotal":1,"teachersWithNoWantMet":0,"avoidsMet":0,"avoidsTotal":0},
+    "placements":[{"teacherId":"10","subjectId":"20","classId":"30","slot":{"day":"MON","period":1}}]}]
+}
+```
+
+위 배열은 후보 1건을 발췌했다. 종료 사유는 SEARCH_EXHAUSTED, TOP_FOUR_AT_BOUND, CAPACITY, TIME_LIMIT 중 하나다. READY와 TIME_LIMIT가 함께 오면 제한 내 발견한 후보를 그대로 보여준다. 생성 작업은 학교별로 한 건이며 MySQL에 입력과 결과를 보관한다. 워커 임대는 12초, 갱신은 3초마다 수행하고, 재선점 시 같은 마감 시각과 새 실행 토큰을 사용한다.
+
+## 3. 한 후보 확정 · M3
+
+학기가 없는 학교는 `POST /api/v2/terms`에 `{"academicYear":2026,"semester":2,"startDate":"2026-08-17","endDate":"2026-12-31"}`를 보내 `201 {"termId":7}`을 받는다. 학교 경로에서 생성한 후보는 같은 학교·학년도의 첫 게시에 사용할 수 있다.
+
+`POST T/publications`에 선택한 후보의 원본 ID를 전달한다. 배치 배열은 요청에 포함하지 않는다.
+
+```json
+{"jobId":"7eb15cc6-193f-4519-9704-50035ae28371","candidateId":"f272c7729cf053f271960dbfd917341c814e459f59460f539905c9493c810941","effectiveFrom":"2026-11-23","expectedPublishRev":0}
+```
+
+**201** `{"versionId":83,"publishRev":1,"weeklyLessons":1}`. 같은 학기·작업·후보·적용일 재전송은 같은 버전을 반환한다. 동시에 서로 다른 후보를 확정해도 한 게시만 성공한다. 서버가 최신 학교 자료를 재검사하고 주간 원본, 학기 종료까지의 날짜별 수업, 확정 영수증을 함께 저장한다. 현재 날짜별 수업은 주간 편성 요일을 반복한다. 적용 기간에 승인된 운영 변경이 있으면 덮어쓰기를 차단한다.
+
+## 4. 날짜별 수업 · 보결 · 교환
+
+`GET T/lessons?date=2026-11-23`은 교사와 관리자가 사용할 수 있다. 승인 화면에서는 이 응답의 **날짜 수업 id와 rev**를 함께 보관한다. v1 timetableId와는 다른 식별자다.
+
+```json
+[{"id":51,"originId":12,"termId":7,"versionId":83,"originDate":"2026-11-23","date":"2026-11-23","classId":30,"subjectId":20,"planned":{"teacherId":10,"periodId":31},"actual":{"teacherId":10,"periodId":31},"rev":0}]
+```
+
+planned는 교환 후 예정 배정, actual은 보결까지 반영한 배정이다. periodId는 DB 교시 ID다. 생성 요청의 slot.period에는 화면에 보이는 교시 번호를 사용한다. 교환은 두 수업의 날짜·교시를 교환한다. 교사·학급·과목과 원래 날짜는 해당 수업에 남는다.
+
+| 액션 | 요청 본문 | 응답 |
+| --- | --- | --- |
+| POST T/lesson-changes · 관리자 보결 신청 | `{"kind":"SUBSTITUTE","firstId":51,"firstRev":0,"substituteTeacherId":19}` | 201 신청 객체 |
+| POST T/lesson-changes · 담당 교사 교환 신청 | `{"kind":"SWAP","firstId":51,"firstRev":0,"secondId":52,"secondRev":1}` | 201 신청 객체 |
+| GET T/lesson-changes | 본문 없음 | 200 신청 배열. 관리자는 학기 전체, 교사는 본인이 신청하거나 응답할 건이다. |
+| POST T/lesson-changes/{id}/response | `{"accept":true,"expectedRequestRev":0}` | 200 갱신된 신청. 지정 교사가 수락하면 ACCEPTED, 거절하면 REJECTED. |
+| POST T/lesson-changes/{id}/approval | 헤더 `Idempotency-Key: <UUID>`. 본문 `{"expectedRequestRev":1,"expectedLessonRev":0,"expectedSecondRev":1}` | 200 `{requestId,state:"APPROVED",requestRev,lessons:[...]}` |
+
+신청 객체는 `{id,termId,kind,requester,responder,firstId,firstRev,secondId,secondRev,state,rev}`다. requester/responder는 school_user ID다. 보결의 secondId·secondRev는 null이며 승인 시 expectedSecondRev도 생략한다. **같은 승인 버튼의 네트워크 재전송은 같은 UUID**를 사용한다. 화면이 409를 받으면 날짜 수업과 신청을 다시 조회하고 새 상태를 보여준다. 이미 바뀐 신청을 최신 rev로 자동 재시도하지 않는다.
+
+기존 보결·교환 승인 경로는 기존 역할 및 응답 포맷을 유지한다. 선택적으로 Idempotency-Key 헤더를 보낼 수 있다. 게시된 시간표와 일치하는 기존 요청은 같은 날짜 수업 버전을 검사한다. 이행 전 주간표에만 있는 수업은 기존 승인 상태와 원본 시간표 ID·날짜별 버전을 함께 관리한다. 게시 후 원본과 일치하는 수업을 찾을 수 없으면 STALE_LESSON을 표시한다.
+
+## 5. 오류 처리
+
+셀 검증은 `{code,message,fieldErrors}`, M3 충돌은 `{code,message,currentRev,activeJobId}`다. 기존 공통 오류는 `{success:false,error,message,data:null}`이므로 클라이언트의 식별자는 `body.code ?? body.error`를 사용한다.
+
+| HTTP | 코드 | 화면 처리 |
+| --- | --- | --- |
+| 400 | INVALID_PARAMETER / BAD_REQUEST | UUID, 필수 헤더, 날짜, 시수 검증본, 교시 및 선호 입력을 확인한다. |
+| 403 / 404 | FORBIDDEN / NOT_FOUND | 활성 학교·역할 또는 소속 학기·후보를 확인한다. Redis 검증본이 만료된 경우 엑셀을 다시 검증한다. |
+| 409 | GENERATION_ACTIVE / JOB_NOT_READY / JOB_EXPIRED | 활성 작업 ID가 알려지면 해당 학기 작업을 조회한다. 준비되지 않은 결과는 상태를 확인한다. |
+| 409 | STALE_PUBLICATION / STALE_INPUT / JOB_ALREADY_PUBLISHED / DATED_CHANGES_EXIST / TERM_EXISTS | 최신 입력 또는 게시본을 확인한다. 승인 내역이 있는 기간의 재게시에는 수동 대조가 필요하다. |
+| 409 | STALE_LESSON / STALE_REQUEST / SLOT_CONFLICT / IDEMPOTENCY_KEY_REUSED | 수업·신청을 다시 조회한다. 같은 시간 교사·학급 중복 또는 실제 불가 교시는 승인할 수 없다. 같은 키를 다른 승인에 사용하면 거부된다. |
+| 409 | CONFLICT | 기존 명부·교시 또는 처리 상태가 달라졌다. 응답 메시지를 표시한다. |
+| 503 | GENERATION_BUSY / LOAD_PREVIEW_UNAVAILABLE | 동기 워커가 바쁘면 Retry-After 이후 재시도한다. 검증본 저장소 장애는 복구 후 재시도한다. |
+
+## 배포 및 검증
+
+M1 마이그레이션 다음에 [M3 추가 SQL](../src/main/resources/db/migration/V20261124_01__generation_and_lesson_operations.sql)을 적용한 뒤 API를 배포한다. 마이그레이션은 수동 적용한다. 적용 순서와 기존 테이블 대조는 [M1 운영 안내](../sql/m1-load-import.md)를 따른다.
+
+실제 MySQL 경합 테스트는 테스트 전용 MySQL 8 DB와 기존 Spring 테스트 환경 변수에서 `M3_MYSQL_TEST=1 bash gradlew test --tests '*MilestoneThreeMySqlTest'`로 실행한다. 테스트는 합성 학교·학기를 만들고 두 DB 트랜잭션을 동시에 시작한다. 시수 미리보기 캐시는 테스트 대역을 사용하고 게시·승인·알림·이력은 MySQL에 기록한다.

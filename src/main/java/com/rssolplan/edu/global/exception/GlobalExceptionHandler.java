@@ -1,6 +1,7 @@
 package com.rssolplan.edu.global.exception;
 
 import com.rssolplan.edu.domain.auth.dto.ApiResponse;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -18,7 +19,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
     @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
     public java.util.Map<String,Object> handleUploadLimit() {
-        return java.util.Map.of("code", "WORKBOOK_LIMIT", "message", "업로드 용량 제한을 초과했습니다.", "fieldErrors", java.util.List.of());
+        return java.util.Map.of(
+                "code",
+                "WORKBOOK_LIMIT",
+                "message",
+                "업로드 용량 제한을 초과했습니다.",
+                "fieldErrors",
+                java.util.List.of());
     }
 
     // 400 Bad Request - 잘못된 시간 범위 등
@@ -68,6 +75,15 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ApiResponse<Object> handleSecurity(SecurityException ex) {
         return ApiResponse.error("FORBIDDEN", ex.getMessage());
+    }
+
+    public record ScheduleError(String code, String message, Long currentRev, String activeJobId) {}
+
+    @ExceptionHandler(com.rssolplan.edu.domain.schedule.operations.ScheduleConflict.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ScheduleError scheduleConflict(
+            com.rssolplan.edu.domain.schedule.operations.ScheduleConflict e) {
+        return new ScheduleError(e.code, e.getMessage(), e.currentRev, e.activeJobId);
     }
 
     // 409 Conflict - 이미 처리된 상태, 중복 처리 시도

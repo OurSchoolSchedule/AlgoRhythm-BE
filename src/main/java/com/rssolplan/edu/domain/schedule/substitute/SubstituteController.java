@@ -2,8 +2,11 @@ package com.rssolplan.edu.domain.schedule.substitute;
 
 import com.rssolplan.edu.domain.schedule.substitute.dto.*;
 import com.rssolplan.edu.global.security.annotation.OwnerOnly;
+
 import jakarta.validation.Valid;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -43,8 +46,9 @@ public class SubstituteController {
     public ResponseEntity<SubstituteApprovalDetail> approve(
             @AuthenticationPrincipal Long userId,
             @PathVariable Long responseId,
-            @RequestBody @Valid SubstituteApprovalRequest request) {
-        return ResponseEntity.ok(substituteService.approve(userId, responseId, request));
+            @RequestBody @Valid SubstituteApprovalRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) java.util.UUID key) {
+        return ResponseEntity.ok(substituteService.approve(userId, responseId, request, key));
     }
 
     // 교사: 현재 학교의 보결 요청 목록 조회

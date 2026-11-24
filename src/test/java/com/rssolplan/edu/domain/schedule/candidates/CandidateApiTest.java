@@ -46,6 +46,7 @@ class CandidateApiTest {
     final Map<String, String> cache = new HashMap<>();
     MockMvc api;
     SchoolUser teacher;
+    GenerationJobs jobs;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -63,10 +64,16 @@ class CandidateApiTest {
         var loads = new LoadValidationService(auth, terms, members, subjects, classes);
         var previews = new LoadPreviewStore(redis, json);
         var inputs = new CandidateInputService(loads, previews, settings, blocks);
+        var store = mock(GenerationStore.class);
+        when(store.insert(any(), any(), anyLong()))
+                .thenReturn(new GenerationStore.Ticket(UUID.randomUUID(), 0));
+        when(store.remainingMicros(any())).thenReturn(60000000L);
+        when(store.finish(any(), any(), any(), any())).thenReturn(true);
+        jobs = new GenerationJobs(store, inputs, runner);
         api =
                 MockMvcBuilders.standaloneSetup(
                                 new LoadValidationController(loads, previews),
-                                new CandidateController(inputs, runner))
+                                new CandidateController(jobs))
                         .setControllerAdvice(new GlobalExceptionHandler())
                         .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                         .build();
@@ -94,6 +101,7 @@ class CandidateApiTest {
                 .thenReturn(List.of(SchoolClass.builder().id(30L).grade(1).classNumber(1).build()));
         var period =
                 PeriodSetting.builder()
+                        .id(7L)
                         .periodNumber(1)
                         .startTime(LocalTime.of(9, 0))
                         .endTime(LocalTime.of(9, 50))
@@ -112,6 +120,7 @@ class CandidateApiTest {
 
     @AfterEach
     void close() {
+        jobs.close();
         runner.close();
         SecurityContextHolder.clearContext();
     }
@@ -259,6 +268,7 @@ class CandidateApiTest {
                         .build();
         var p2 =
                 PeriodSetting.builder()
+                        .id(7L)
                         .periodNumber(2)
                         .startTime(LocalTime.of(9, 40))
                         .endTime(LocalTime.of(10, 0))
