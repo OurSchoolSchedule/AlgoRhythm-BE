@@ -150,7 +150,8 @@ class PasskeyDatabaseTest {
         enrollFixture();
         var prodRealm = new PasskeyRealm("production");
         var prodStore = new PasskeyStore(db, prodRealm);
-        assertThat(prodRealm.origin()).isEqualTo("https://algo-rhythm-sihyes-projects.vercel.app");
+        assertThat(prodRealm.origin()).isEqualTo("https://ourschoolschedule.vercel.app");
+        assertThat(prodRealm.id()).isEqualTo("ourschoolschedule.vercel.app");
         assertThat(prodStore.lookupAll(id)).isEmpty();
         var prodJwt =
                 new JwtTokenProvider(env.getRequiredProperty("jwt.secret"), db, prodRealm, env);

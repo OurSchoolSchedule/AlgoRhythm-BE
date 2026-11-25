@@ -6,7 +6,7 @@
 
 | PASSKEY_ENVIRONMENT | 고정 프런트 origin | RP ID |
 | --- | --- | --- |
-| production (기본) | https://algo-rhythm-sihyes-projects.vercel.app | algo-rhythm-sihyes-projects.vercel.app |
+| production (기본) | https://ourschoolschedule.vercel.app | ourschoolschedule.vercel.app |
 | preview | https://algo-rhythm-git-fe-develop-sihyes-projects.vercel.app | algo-rhythm-git-fe-develop-sihyes-projects.vercel.app |
 | local | http://localhost:5173 | localhost |
 
