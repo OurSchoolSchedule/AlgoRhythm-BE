@@ -6170,25 +6170,38 @@
             "type": "string"
           },
           "userId": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           },
           "newUser": {
             "type": "boolean"
           },
           "nextStep": {
-            "type": "string",
             "enum": [
               "REGISTER",
-              "AUTHENTICATE"
+              "AUTHENTICATE",
+              null
             ]
           },
           "flowToken": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "5분 일회용 제한 세션. 업무 JWT로 사용 불가."
           },
           "schoolMembership": {
-            "$ref": "#/components/schemas/OnboardingResponse"
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OnboardingResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
