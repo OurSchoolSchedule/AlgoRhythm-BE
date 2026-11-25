@@ -1,6 +1,6 @@
 # Resend 인증 메일 설정
 
-인증 메일은 SMTP 대신 `https://api.resend.com/emails`로 HTTPS 요청을 보내 발송한다. API 경로와 인증 후 JWT 발급 방식은 유지한다.
+인증 메일은 `https://api.resend.com/emails`로 발송한다. 유효한 코드를 확인하면 패스키 등록 또는 인증에 필요한 다음 단계와 제한 토큰을 반환한다. [패스키 API 계약](be-a2-passkeys.md)
 
 ## Railway 환경변수
 
@@ -10,6 +10,8 @@ Railway 서비스의 Variables에 아래 값을 설정한 후 재배포한다. �
 | --- | --- |
 | `RESEND_API_KEY` | 이미 발급한 Resend API 키. 이메일 발송 권한이 필요하다. |
 | `RESEND_FROM_EMAIL` | Resend에서 검증한 도메인의 발신 주소. 예: `우리학교시간표 <no-reply@your-domain.kr>` |
+
+Railway에서 `SPRING_SQL_INIT_SCHEMA_LOCATIONS`로 적용 파일을 지정하는 경우, [시연 설정의 schema-locations](../demo/local.yml)에 있는 M1, M3, R1, A2, R2 스키마 경로를 순서대로 포함한다. 운영에는 데모 데이터 파일을 지정하지 않는다. R1이 누락되면 메일 발송에 성공해도 인증된 계정을 찾는 쿼리에서 실패한다. R1의 `roster_verified_account`, A2의 `passkey_account` 및 `passkey_credential`이 앱과 같은 DB에 있는지 확인한다. 이 조회는 일회용 코드를 소비한 후에 실행되므로 복구 후에는 새 코드로 검증한다.
 
 발신 주소의 도메인은 Resend에서 검증한 도메인 또는 검증한 발신 서브도메인과 일치해야 한다. 예시의 `your-domain.kr`은 실제 보유 도메인으로 바꾼다. API 키와 실제 `.env`는 저장소에 커밋하지 않는다. 기존 `MAIL_USERNAME`, `MAIL_PASSWORD`는 더 이상 사용하지 않는다.
 
