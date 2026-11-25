@@ -1,5 +1,6 @@
 package com.rssolplan.edu.global.security.email_verification;
 
+import com.rssolplan.edu.domain.auth.dto.ApiResponse;
 import com.rssolplan.edu.domain.auth.email.EmailVerificationProperties;
 import com.rssolplan.edu.global.exception.BadRequestException;
 import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificationAuthResponse;
@@ -8,13 +9,15 @@ import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificatio
 import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificationToken;
 import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificationVerifyRequest;
 import jakarta.validation.Valid;
+import java.sql.SQLException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -28,6 +31,20 @@ public class EmailVerificationController {
 
     private final EmailService emailService;
     private final EmailVerificationProperties verificationProperties;
+
+    @ExceptionHandler(DataAccessException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public ApiResponse<Void> verificationStoreUnavailable(DataAccessException exception) {
+        Throwable cause = exception.getMostSpecificCause();
+        if (cause instanceof SQLException sql) {
+            log.error("Email verification database failure: SQLState={}, vendorCode={}",
+                    sql.getSQLState(), sql.getErrorCode());
+        } else {
+            log.error("Email verification store failure: {}", cause.getClass().getSimpleName());
+        }
+        return ApiResponse.error("EMAIL_VERIFICATION_UNAVAILABLE",
+                "지금은 이메일 인증을 완료할 수 없습니다. 잠시 후 새 인증 코드를 받아 다시 시도해 주세요.");
+    }
 
     @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class})
     @ResponseStatus(HttpStatus.BAD_REQUEST)
