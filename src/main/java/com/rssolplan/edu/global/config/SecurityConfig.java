@@ -1,5 +1,8 @@
 package com.rssolplan.edu.global.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rssolplan.edu.domain.auth.dto.ApiResponse;
+import jakarta.servlet.http.HttpServletResponse;
 import com.rssolplan.edu.domain.auth.passkey.PasskeyRealm;
 import com.rssolplan.edu.domain.user.UserRepository;
 import com.rssolplan.edu.global.fordevToken.DevTokenController;
@@ -13,6 +16,10 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.Http403ForbiddenEntryPoint;
+import org.springframework.security.web.access.AccessDeniedHandlerImpl;
+import org.springframework.security.web.util.matcher.AnyRequestMatcher;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -35,7 +42,8 @@ public class SecurityConfig {
     private final UserRepository userRepository;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, Optional<DevTokenController> devTokens, School42Access school42) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, Optional<DevTokenController> devTokens,
+                                          School42Access school42, ObjectMapper json) throws Exception {
         log.info("[SecurityConfig] SecurityFilterChain 초기화");
 
         return http
@@ -44,6 +52,15 @@ public class SecurityConfig {
                         org.springframework.security.config.http.SessionCreationPolicy.STATELESS))
                 //  CORS 활성화: 아래 corsConfigurationSource() Bean 사용
                 .cors(cors -> {})
+                .exceptionHandling(errors -> {
+                    var neis = PathPatternRequestMatcher.withDefaults().matcher("/api/neis/**");
+                    errors.defaultAuthenticationEntryPointFor((req, res, ex) ->
+                            neisError(json, res, 401, "UNAUTHORIZED", "로그인이 필요합니다."), neis);
+                    errors.defaultAuthenticationEntryPointFor(new Http403ForbiddenEntryPoint(), AnyRequestMatcher.INSTANCE);
+                    errors.defaultAccessDeniedHandlerFor((req, res, ex) ->
+                            neisError(json, res, 403, "FORBIDDEN", "접근 권한이 없습니다."), neis);
+                    errors.defaultAccessDeniedHandlerFor(new AccessDeniedHandlerImpl(), AnyRequestMatcher.INSTANCE);
+                })
                 .authorizeHttpRequests(auth -> {
                     log.info("[SecurityConfig] 인증 예외 경로 등록");
 
@@ -51,6 +68,9 @@ public class SecurityConfig {
                     auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
 
                     auth.requestMatchers("/api/school42/**").access(school42::check);
+                    auth.requestMatchers(HttpMethod.GET, "/api/neis/schools/search").authenticated();
+                    auth.requestMatchers(HttpMethod.PATCH, "/api/neis/schools/*/link").hasRole("ADMIN");
+                    auth.requestMatchers("/api/neis/**").hasAnyRole("ADMIN", "TEACHER");
 
                     // 로그인, 콜백, 회원가입, 이메일 인증만 허용
                     auth.requestMatchers(
@@ -97,6 +117,13 @@ public class SecurityConfig {
                         UsernamePasswordAuthenticationFilter.class
                 )
                 .build();
+    }
+
+    private static void neisError(ObjectMapper json, HttpServletResponse response, int status,
+                                  String code, String message) throws java.io.IOException {
+        response.setStatus(status);
+        response.setContentType("application/json;charset=UTF-8");
+        json.writeValue(response.getOutputStream(), ApiResponse.error(code, message));
     }
 
     // CORS 규칙 정의 (dev: localhost:3000으로 우선 설정) 추가

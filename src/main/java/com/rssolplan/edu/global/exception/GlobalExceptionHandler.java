@@ -10,6 +10,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(com.rssolplan.edu.domain.neis.NeisClient.Unavailable.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public ApiResponse<Object> handleNeisUnavailable(RuntimeException ex) {
+        return ApiResponse.error("NEIS_UNAVAILABLE", ex.getMessage());
+    }
+
     @ExceptionHandler(com.rssolplan.edu.domain.schedule.loadimport.LoadPreviewStore.Unavailable.class)
     @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
     public ApiResponse<Object> handleLoadPreviewUnavailable(RuntimeException ex) {

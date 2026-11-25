@@ -48,14 +48,28 @@ public class School42Round {
     }
 
     void verifyIdentity() {
-        if (count("""
+        if (!hasFixtureIdentity()) throw conflict("시연 학교·학기·계정 연결을 확인하세요.");
+    }
+
+    /** A local fixture may already exist before the rehearsal controller opens a round. */
+    public boolean isRehearsalSchool(long schoolId) {
+        if (schoolId != SCHOOL) return false;
+        if (hasFixtureIdentity()) return true;
+        return count("""
+                select count(*) from information_schema.tables
+                where table_schema=database() and table_name='school42_rehearsal'
+                """) > 0 && count("select count(*) from school42_rehearsal where school_id=540001 and round_no>0") > 0;
+    }
+
+    private boolean hasFixtureIdentity() {
+        return count("""
             select count(*) from school s join timetable_set t on t.school_id=s.id
             join school_user m on m.school_id=s.id join users u on u.id=m.user_id and u.active_school_id=s.id
             where s.id=540001 and s.name='시연한들고등학교' and t.id=547001 and t.academic_year=2026
               and t.semester=2 and m.employment_status='HIRED' and
               ((m.id=542000 and u.id=541000 and u.email='admin42@example.invalid' and m.position='ADMIN')
                or (m.id=542004 and u.id=541004 and u.email='teacher42-04@example.invalid' and m.position='TEACHER'))
-            """) != 2) throw conflict("시연 학교·학기·계정 연결을 확인하세요.");
+            """) == 2;
     }
 
     void requireRound(long expected) {
