@@ -13,7 +13,7 @@ public class PasskeyRealm {
         origin =
                 URI.create(
                         switch (environment) {
-                            case "production" -> "https://algo-rhythm-sihyes-projects.vercel.app";
+                            case "production" -> "https://ourschoolschedule.vercel.app";
                             case "preview" ->
                                     "https://algo-rhythm-git-fe-develop-sihyes-projects.vercel.app";
                             case "local" -> "http://localhost:5173";
