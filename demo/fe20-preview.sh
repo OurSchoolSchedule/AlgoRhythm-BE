@@ -28,6 +28,16 @@ fi
 redis-server --bind 127.0.0.1 --port 6379 --save '' --appendonly no --dir /tmp &
 redis_pid=$!
 trap 'kill "$redis_pid" 2>/dev/null || true' EXIT
+# Passkey flows consume one-time state with GETDEL. Check it before exposing the API.
+for attempt in 1 2 3 4 5; do
+  if redis-cli PING >/dev/null 2>&1; then break; fi
+  sleep 1
+done
+redis-cli SET fe20:startup:atomic-read ready EX 10 >/dev/null
+if [ "$(redis-cli --raw GETDEL fe20:startup:atomic-read)" != ready ]; then
+  echo 'FE20 preview Redis must support GETDEL' >&2
+  exit 1
+fi
 # The public service never accepts development tokens. Redis stays on loopback.
 timeout --kill-after=15s 60m java -XX:MaxRAMPercentage=65 -XX:ActiveProcessorCount=1 -jar app.jar \
   --spring.config.additional-location=file:./demo/local.yml \

@@ -3,7 +3,7 @@ WORKDIR /app
 COPY . .
 RUN gradle --no-daemon bootJar
 
-FROM eclipse-temurin:17-jre-jammy
+FROM eclipse-temurin:17-jre-noble
 RUN apt-get update && apt-get install -y --no-install-recommends redis-server default-mysql-client && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
