@@ -15,6 +15,7 @@ spring:
         - classpath:db/migration/V20261124_01__generation_and_lesson_operations.sql
         - classpath:db/migration/V20261125_11__school_teacher_roster.sql
         - classpath:db/migration/V20261125_21__passkey_auth.sql
+        - classpath:db/migration/V20261125_22__roster_import_preview.sql
       data-locations: file:./demo/seed.sql
 springdoc:
   swagger-ui:

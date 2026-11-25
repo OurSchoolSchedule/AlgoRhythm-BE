@@ -19,6 +19,7 @@ if ($Mode -eq 'test') {
     $env:BE_A2_DB_TEST='1'
     $env:M3_MYSQL_TEST='1'
     $env:R1_MYSQL_TEST='1'
+    $env:R2_MYSQL_TEST='1'
     $env:M2_FULL_BENCHMARK='1'
     & .\gradlew.bat test --rerun-tasks
 } else {
