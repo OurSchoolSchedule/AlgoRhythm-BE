@@ -39,7 +39,8 @@ public class NotificationService {
         User requester = userRepository.findById(requesterId)
                 .orElseThrow(() -> new IllegalArgumentException("요청자 유저를 찾을 수 없습니다."));
 
-        List<SchoolUser> schoolUsers = schoolUserRepository.findBySchool_Id(schoolId);
+        List<SchoolUser> schoolUsers = schoolUserRepository.findBySchool_IdAndEmploymentStatus(
+                schoolId, SchoolUser.EmploymentStatus.HIRED);
         String periodText = formatPeriod(startDate, endDate);
 
         for (SchoolUser su : schoolUsers) {
@@ -72,10 +73,11 @@ public class NotificationService {
         User requester = userRepository.findById(requesterId)
                 .orElseThrow(() -> new IllegalArgumentException("요청자 유저를 찾을 수 없습니다."));
 
-        List<SchoolUser> teachers = schoolUserRepository.findBySchool_IdAndPosition(
-                schoolId, SchoolUser.Position.TEACHER);
+        List<SchoolUser> teachers = schoolUserRepository.findBySchool_IdAndEmploymentStatus(
+                schoolId, SchoolUser.EmploymentStatus.HIRED);
 
         for (SchoolUser su : teachers) {
+            if (su.getPosition() != SchoolUser.Position.TEACHER) continue;
             Notification notification = Notification.builder()
                     .userId(su.getUser().getId())
                     .requester(requester)
@@ -92,9 +94,9 @@ public class NotificationService {
     @Transactional
     public List<NotificationResponseDto> getNotifications(Long userId) {
         // 조회 시점 기준 해당 사용자의 모든 미읽음 알림을 일괄 읽음 처리
-        notificationRepository.markAllAsReadByUserId(userId);
+        notificationRepository.markVisibleAsRead(userId);
 
-        List<Notification> notifications = notificationRepository.findByUserIdWithSchool(userId);
+        List<Notification> notifications = notificationRepository.findVisibleForUser(userId);
         List<NotificationResponseDto> dtos = new ArrayList<>();
 
         for (Notification n : notifications) {

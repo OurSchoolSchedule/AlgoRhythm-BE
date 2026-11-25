@@ -6,7 +6,7 @@ import com.rssolplan.edu.domain.auth.UserRefreshTokenRepository;
 import com.rssolplan.edu.domain.auth.email.EmailDeliveryException;
 import com.rssolplan.edu.domain.auth.email.EmailVerificationProperties;
 import com.rssolplan.edu.domain.auth.email.ResendEmailSender;
-import com.rssolplan.edu.domain.user.UserRepository;
+import com.rssolplan.edu.domain.roster.VerifiedRosterSignup;
 import com.rssolplan.edu.global.config.JwtTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,7 +34,7 @@ class EmailServiceTest {
     @Mock private StringRedisTemplate redis;
     @Mock private ValueOperations<String, String> values;
     @Mock private EmailVerificationHistoryRepository historyRepository;
-    @Mock private UserRepository users;
+    @Mock private VerifiedRosterSignup signup;
     @Mock private UserRefreshTokenRepository refreshRepository;
     @Mock private JwtTokenProvider jwt;
 
@@ -52,7 +52,7 @@ class EmailServiceTest {
         SpringTemplateEngine templateEngine = new SpringTemplateEngine();
         templateEngine.setTemplateResolver(resolver);
         service = new EmailService(sender, properties, redis, templateEngine,
-                historyRepository, users, refreshRepository, jwt);
+                historyRepository, signup, refreshRepository, jwt);
     }
 
     @Test
@@ -121,12 +121,11 @@ class EmailServiceTest {
 
     @Test
     void verifyingACorrectCodeStillConsumesItAndRecordsVerification() {
-        when(redis.opsForValue()).thenReturn(values);
-        when(values.get("EMAIL_AUTH:teacher@ewha.ac.kr")).thenReturn("123456");
+        when(redis.execute(any(RedisScript.class), eq(List.of("EMAIL_AUTH:teacher@ewha.ac.kr")), eq("123456"))).thenReturn(1L);
 
         assertTrue(service.verifyCode("teacher@ewha.ac.kr", "123456"));
 
-        verify(redis).delete("EMAIL_AUTH:teacher@ewha.ac.kr");
+        verify(redis).execute(any(RedisScript.class), eq(List.of("EMAIL_AUTH:teacher@ewha.ac.kr")), eq("123456"));
         ArgumentCaptor<EmailVerificationHistory> history = ArgumentCaptor.forClass(EmailVerificationHistory.class);
         verify(historyRepository).save(history.capture());
         assertEquals(EmailVerificationHistory.VerificationStatus.VERIFIED, history.getValue().getStatus());

@@ -12,7 +12,8 @@ import com.rssolplan.edu.domain.voicecommand.dto.IntentType;
 import com.rssolplan.edu.domain.voicecommand.dto.ParsedIntent;
 import com.rssolplan.edu.global.exception.IntentParseException;
 import com.rssolplan.edu.global.exception.NotFoundException;
-import com.rssolplan.edu.global.security.AuthorizationService;
+import com.rssolplan.edu.domain.schedule.operations.ScheduleAccess;
+import com.rssolplan.edu.global.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,32 +30,37 @@ public class CommandPreviewService {
     private final SubstituteRequestRepository substituteRequestRepository;
     private final SubstituteResponseRepository substituteResponseRepository;
     private final SchoolUserRepository schoolUserRepository;
-    private final AuthorizationService authService;
+    private final ScheduleAccess access;
 
     @Transactional(readOnly = true)
     public Map<String, Object> buildPreview(Long userId, ParsedIntent intent) {
-        return switch (intent.resolvedType()) {
-            case SUBSTITUTE_CREATE    -> previewSubstituteCreate(userId, intent);
-            case SUBSTITUTE_RESPOND   -> previewSubstituteRespond(intent);
-            case SUBSTITUTE_APPROVE   -> previewSubstituteApprove(intent);
+        IntentType type = intent.resolvedType();
+        boolean requiresAdmin = type == IntentType.SUBSTITUTE_CREATE || type == IntentType.SUBSTITUTE_APPROVE;
+        SchoolUser member = access.member(userId, requiresAdmin);
+        Long schoolId = member.getSchool().getId();
+        return switch (type) {
+            case SUBSTITUTE_CREATE    -> previewSubstituteCreate(schoolId, intent);
+            case SUBSTITUTE_RESPOND   -> previewSubstituteRespond(member, intent);
+            case SUBSTITUTE_APPROVE   -> previewSubstituteApprove(schoolId, intent);
             case AVAILABILITY_ADD,
                  AVAILABILITY_REPLACE -> previewAvailability(intent);
             case UNKNOWN              -> throw new IntentParseException("요청을 이해하지 못했습니다.");
         };
     }
 
-    private Map<String, Object> previewSubstituteCreate(Long userId, ParsedIntent intent) {
+    private Map<String, Object> previewSubstituteCreate(Long schoolId, ParsedIntent intent) {
         if (intent.timetableId() == null) {
             throw new IntentParseException("시간표 ID를 인식하지 못했습니다. 다시 말씀해 주세요.");
         }
 
         Timetable timetable = timetableRepository.findById(intent.timetableId())
+                .filter(t -> schoolId.equals(t.getSchool().getId()))
                 .orElseThrow(() -> new NotFoundException("해당 시간표를 찾을 수 없습니다."));
 
-        Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
         List<SchoolUser> candidates = schoolUserRepository
                 .findBySchool_IdAndPosition(schoolId, SchoolUser.Position.TEACHER)
                 .stream()
+                .filter(t -> t.getEmploymentStatus() == SchoolUser.EmploymentStatus.HIRED)
                 .filter(t -> !t.getId().equals(timetable.getTeacher().getId()))
                 .toList();
 
@@ -70,13 +76,17 @@ public class CommandPreviewService {
         return preview;
     }
 
-    private Map<String, Object> previewSubstituteRespond(ParsedIntent intent) {
+    private Map<String, Object> previewSubstituteRespond(SchoolUser member, ParsedIntent intent) {
         if (intent.requestId() == null) {
             throw new IntentParseException("보결 요청 ID를 인식하지 못했습니다.");
         }
         SubstituteRequest req = substituteRequestRepository.findById(intent.requestId())
+                .filter(r -> r.getSchool().getId().equals(member.getSchool().getId()))
                 .orElseThrow(() -> new NotFoundException("보결 요청을 찾을 수 없습니다."));
 
+        if (!req.includesCandidate(member.getId())) {
+            throw new ForbiddenException("해당 보결 요청에 응답할 권한이 없습니다.");
+        }
         return Map.of(
                 "requestId", req.getId(),
                 "timetableInfo", buildTimetableInfo(req.getTimetable()),
@@ -86,11 +96,12 @@ public class CommandPreviewService {
         );
     }
 
-    private Map<String, Object> previewSubstituteApprove(ParsedIntent intent) {
+    private Map<String, Object> previewSubstituteApprove(Long schoolId, ParsedIntent intent) {
         if (intent.responseId() == null) {
             throw new IntentParseException("교사 응답 ID를 인식하지 못했습니다.");
         }
         SubstituteResponse resp = substituteResponseRepository.findById(intent.responseId())
+                .filter(r -> schoolId.equals(r.getSubstituteRequest().getSchool().getId()))
                 .orElseThrow(() -> new NotFoundException("교사 응답 데이터를 찾을 수 없습니다."));
 
         SubstituteRequest req = resp.getSubstituteRequest();

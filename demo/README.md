@@ -1,6 +1,6 @@
 # 로컬 시연 및 백엔드 인계
 
-기준은 `develop`의 `58d55e3`(M3 병합)이다. Docker Desktop과 JDK 17을 준비하고 저장소 루트에서 PowerShell을 사용한다. 시연 전용 MySQL은 33306, Redis는 36379, 앱은 8080 포트를 사용한다.
+시연 자료는 M3 병합 커밋 `58d55e3`을 바탕으로 작성했으며 BE-R1 브랜치에는 교사 명부 마이그레이션과 통합 시험이 추가됐다. Docker Desktop과 JDK 17을 준비하고 저장소 루트에서 PowerShell을 사용한다. 시연 전용 MySQL은 33306, Redis는 36379, 앱은 8080 포트를 사용한다.
 
 ## 1. 기존 DB와 분리해서 시작
 
@@ -19,9 +19,9 @@ docker compose -f demo/compose.yml up -d --wait
 | 대상 | 초기화와 재실행 |
 | --- | --- |
 | 기존 개발 DB | 그대로 둔다. 평소 쓰는 DB를 비울 필요가 없다. |
-| algorhythm_demo | Docker가 별도 DB를 준비한다. 앱 시작 시 Hibernate 기본 테이블 → M1 SQL → M3 SQL → 합성 명부 순으로 적용한다. 같은 데이터 볼륨에서 재시작해도 게시·승인 결과가 보존된다. |
+| algorhythm_demo | Docker가 별도 DB를 준비한다. 앱 시작 시 Hibernate 기본 테이블 → M1 SQL → M3 SQL → R1 SQL → 합성 명부 순으로 적용한다. 같은 데이터 볼륨에서 재시작해도 게시·승인 결과가 보존된다. |
 | algorhythm_test | 같은 로컬 MySQL의 별도 DB다. 경합 테스트는 실행마다 자체 학교와 학기를 만든다. |
-| 기존 develop 설정 | Hibernate는 기본 엔티티를 생성하지만 버전 SQL 자동 실행기는 없다. M1을 먼저, M3를 다음에 현재 DB에 적용한다. 예전 sql/createDB.sql은 school_schedule을 직접 선택하고 user에 샘플을 넣는다. 현재 앱은 users를 사용한다. |
+| 기존 develop 설정 | Hibernate는 기본 엔티티를 생성하지만 버전 SQL 자동 실행기는 없다. M1 → M3 → R1 순으로 현재 DB에 적용한다. 예전 sql/createDB.sql은 school_schedule을 직접 선택하고 user에 샘플을 넣는다. 현재 앱은 users를 사용한다. |
 
 SQL 오류가 이미 발생했다면 첫 번째 오류의 코드, 테이블명, 아래 조회 결과를 확인한다. 뒤에 이어지는 FK 오류는 첫 누락에서 파생될 수 있다.
 
@@ -95,6 +95,7 @@ Invoke-Item .\build\reports\tests\test\index.html
 | --- | --- |
 | M1 엑셀 | 정상 시수·명부 일치, 병합·합계·누락 등은 행·열 오류 |
 | M2 엔진 | 교사·학급 중복 0건, 검증된 주당 시수와 일치, 유효 후보 최대 4개, 시간 상한 시험 통과 |
+| R1 학교 명부 | `R1_MYSQL_TEST=1`로 이메일 가입, 승인 대기·재직 권한, 학기별 과목·담임 및 동시 요청을 DB와 HTTP로 검증. [연동 문서](../docs/be-r1-roster-api.md) |
 | M3 실제 MySQL | 동시 게시·동일 수업 보결 및 교환 경합 시 하나만 반영, 재전송 시 중복 반영 없음 |
 | HTTP 시연 | 실제 Redis 검증본으로 422 → 200 → 202 → READY → 201 → 승인 200/409 |
 

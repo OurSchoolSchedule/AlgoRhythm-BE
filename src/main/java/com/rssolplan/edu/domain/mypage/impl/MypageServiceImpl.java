@@ -1,6 +1,8 @@
 package com.rssolplan.edu.domain.mypage.impl;
 
 import com.rssolplan.edu.domain.mypage.MypageService;
+import com.rssolplan.edu.domain.onboarding.dto.OnboardingResponse;
+import com.rssolplan.edu.domain.roster.RosterMembershipService;
 import com.rssolplan.edu.domain.mypage.dto.*;
 import com.rssolplan.edu.global.exception.ForbiddenException;
 import com.rssolplan.edu.domain.school.School;
@@ -13,7 +15,6 @@ import com.rssolplan.edu.domain.user.User;
 import com.rssolplan.edu.domain.user.UserRepository;
 import com.rssolplan.edu.global.fordevToken.SchoolCodeGenerator;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,18 +26,16 @@ import java.util.List;
 @Transactional
 public class MypageServiceImpl implements MypageService {
 
-    private static final String REDIS_ROLE_KEY_PREFIX = "auth:role:";
-
     private final UserRepository users;
     private final SchoolRepository schools;
     private final SchoolUserRepository schoolUsers;
-    private final StringRedisTemplate redisTemplate;
+    private final RosterMembershipService memberships;
 
     // ===== 헬퍼 =====
 
     private SchoolUser ensureMapping(Long userId, Long schoolId) {
         return schoolUsers.findByUser_IdAndSchool_Id(userId, schoolId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 학교에 소속되지 않은 사용자입니다."));
+                .orElseThrow(() -> new ForbiddenException("해당 학교에 소속되지 않은 사용자입니다."));
     }
 
     private SchoolUser resolveActiveMappingOrDefault(Long userId) {
@@ -46,11 +45,14 @@ public class MypageServiceImpl implements MypageService {
         if (u.getActiveSchoolId() == null) {
             throw new ForbiddenException("활성 학교가 설정되어 있지 않습니다. 활성 학교를 먼저 설정하세요.");
         }
-        return ensureMapping(userId, u.getActiveSchoolId());
+        return ensureHired(userId, u.getActiveSchoolId());
     }
 
-    private void evictRoleCache(Long userId) {
-        redisTemplate.delete(REDIS_ROLE_KEY_PREFIX + userId);
+    private SchoolUser ensureHired(Long userId, Long schoolId) {
+        SchoolUser member = ensureMapping(userId, schoolId);
+        if (member.getEmploymentStatus() != EmploymentStatus.HIRED)
+            throw new ForbiddenException("재직 중인 학교만 선택할 수 있습니다.");
+        return member;
     }
 
     private ActiveSchoolResponse toActiveSchoolResponse(SchoolUser su) {
@@ -91,11 +93,10 @@ public class MypageServiceImpl implements MypageService {
     @Override
     public ActiveSchoolResponse updateActiveSchool(Long userId, Long schoolId) {
         User u = users.findById(userId).orElseThrow();
-        ensureMapping(userId, schoolId);
+        SchoolUser member = ensureHired(userId, schoolId);
         u.setActiveSchoolId(schoolId);
         users.save(u);
-        evictRoleCache(userId);
-        return toActiveSchoolResponse(ensureMapping(userId, schoolId));
+        return toActiveSchoolResponse(member);
     }
 
     // ===== 교감/교장(Admin) =====
@@ -174,7 +175,9 @@ public class MypageServiceImpl implements MypageService {
 
     @Override
     public SchoolSimpleResponse addAdminSchool(Long adminId, AdminCreateSchoolRequest req) {
-        User admin = users.findById(adminId).orElseThrow();
+        SchoolUser current = resolveActiveMappingOrDefault(adminId);
+        if (current.getPosition() != Position.ADMIN) throw new ForbiddenException("관리자 권한이 필요합니다.");
+        User admin = current.getUser();
 
         School school = School.builder()
                 .schoolCode(SchoolCodeGenerator.generate())
@@ -192,12 +195,6 @@ public class MypageServiceImpl implements MypageService {
                 .build();
         schoolUsers.save(link);
 
-        if (admin.getActiveSchoolId() == null) {
-            admin.setActiveSchoolId(school.getId());
-            users.save(admin);
-            evictRoleCache(admin.getId());
-        }
-
         return toSchoolSimple(link);
     }
 
@@ -212,12 +209,12 @@ public class MypageServiceImpl implements MypageService {
         User u = users.findById(adminId).orElseThrow();
         if (schoolId.equals(u.getActiveSchoolId())) {
             Long nextActive = schoolUsers.findByUser_Id(adminId).stream()
+                    .filter(s -> s.getEmploymentStatus() == EmploymentStatus.HIRED)
                     .findFirst()
                     .map(s -> s.getSchool().getId())
                     .orElse(null);
             u.setActiveSchoolId(nextActive);
             users.save(u);
-            evictRoleCache(adminId);
         }
     }
 
@@ -263,38 +260,25 @@ public class MypageServiceImpl implements MypageService {
     @Override
     @Transactional(readOnly = true)
     public List<SchoolSimpleResponse> listTeacherSchools(Long teacherId) {
-        return schoolUsers.findByUser_IdAndPosition(teacherId, Position.TEACHER)
-                .stream()
-                .sorted(Comparator.comparing(su -> su.getSchool().getId()))
-                .map(this::toSchoolSimple)
-                .toList();
+        var members = schoolUsers.findByUser_IdAndPosition(teacherId, Position.TEACHER)
+                .stream().map(this::toSchoolSimple);
+        var pending = memberships.pendingSchools(teacherId).stream().map(this::toSchoolSimple);
+        return java.util.stream.Stream.concat(members, pending)
+                .sorted(Comparator.comparing(SchoolSimpleResponse::getSchoolId)).toList();
     }
 
     @Override
     public SchoolSimpleResponse joinTeacherSchool(Long teacherId, TeacherJoinSchoolRequest req) {
-        User teacher = users.findById(teacherId).orElseThrow();
-        School school = schools.findBySchoolCode(req.getSchoolCode())
-                .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 학교 코드입니다."));
+        return toSchoolSimple(memberships.requestSchool(teacherId, req.getSchoolCode(),
+                req.getDisplayName(), req.getHireDate()));
+    }
 
-        if (schoolUsers.existsByUser_IdAndSchool_Id(teacherId, school.getId())) {
-            throw new IllegalArgumentException("이미 등록된 학교입니다.");
-        }
-
-        SchoolUser link = SchoolUser.builder()
-                .user(teacher).school(school)
-                .position(Position.TEACHER)
-                .employmentStatus(EmploymentStatus.HIRED)
-                .hireDate(req.getHireDate())
-                .build();
-        schoolUsers.save(link);
-
-        if (teacher.getActiveSchoolId() == null) {
-            teacher.setActiveSchoolId(school.getId());
-            users.save(teacher);
-            evictRoleCache(teacher.getId());
-        }
-
-        return toSchoolSimple(link);
+    private SchoolSimpleResponse toSchoolSimple(OnboardingResponse result) {
+        return SchoolSimpleResponse.builder()
+                .schoolId(result.getSchoolId()).schoolCode(result.getSchoolCode()).name(result.getSchoolName())
+                .address(result.getAddress()).phoneNumber(result.getPhoneNumber())
+                .position(result.getPosition()).employmentStatus(result.getEmploymentStatus())
+                .hireDate(result.getHireDate()).build();
     }
 
     @Override
@@ -303,17 +287,17 @@ public class MypageServiceImpl implements MypageService {
         if (su.getPosition() != Position.TEACHER) {
             throw new IllegalArgumentException("교사 권한이 필요한 요청입니다.");
         }
-        schoolUsers.delete(su);
+        su.setEmploymentStatus(EmploymentStatus.RESIGNED);
 
         User u = users.findById(teacherId).orElseThrow();
         if (schoolId.equals(u.getActiveSchoolId())) {
             Long nextActive = schoolUsers.findByUser_Id(teacherId).stream()
+                    .filter(s -> s.getEmploymentStatus() == EmploymentStatus.HIRED)
                     .findFirst()
                     .map(s -> s.getSchool().getId())
                     .orElse(null);
             u.setActiveSchoolId(nextActive);
             users.save(u);
-            evictRoleCache(teacherId);
         }
     }
 }

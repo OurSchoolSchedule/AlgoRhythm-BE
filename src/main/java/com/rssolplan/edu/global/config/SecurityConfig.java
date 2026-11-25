@@ -1,10 +1,8 @@
 package com.rssolplan.edu.global.config;
 
-import com.rssolplan.edu.domain.school.SchoolUserRepository;
 import com.rssolplan.edu.domain.user.UserRepository;
 import com.rssolplan.edu.global.fordevToken.DevTokenController;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -32,9 +30,7 @@ import static org.springframework.security.web.access.IpAddressAuthorizationMana
 public class SecurityConfig {
 
     private final JwtTokenProvider jwt;
-    private final SchoolUserRepository schoolUserRepository;
     private final UserRepository userRepository;
-    private final StringRedisTemplate redisTemplate;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, Optional<DevTokenController> devTokens) throws Exception {
@@ -80,11 +76,13 @@ public class SecurityConfig {
                     // TEACHER 전용 API
                     auth.requestMatchers("/api/auth/onboarding/teacher/**").hasRole("TEACHER");
 
+                    auth.requestMatchers("/api/voice-commands/**").hasAnyRole("ADMIN", "TEACHER");
+
                     // 나머지는 인증만 필요
                     auth.anyRequest().authenticated();
                 })
                 .addFilterBefore(
-                        new JwtAuthFilter(jwt, schoolUserRepository, userRepository, redisTemplate),
+                        new JwtAuthFilter(jwt, userRepository),
                         UsernamePasswordAuthenticationFilter.class
                 )
                 .build();

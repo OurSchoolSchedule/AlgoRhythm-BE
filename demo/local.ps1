@@ -17,6 +17,7 @@ $env:RESEND_FROM_EMAIL='demo@example.invalid'
 if ($Mode -eq 'test') {
     $env:BE_A1_AUTH_TEST='1'
     $env:M3_MYSQL_TEST='1'
+    $env:R1_MYSQL_TEST='1'
     $env:M2_FULL_BENCHMARK='1'
     & .\gradlew.bat test --rerun-tasks
 } else {
