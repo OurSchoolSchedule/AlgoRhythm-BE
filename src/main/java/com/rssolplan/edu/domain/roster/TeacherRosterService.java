@@ -28,7 +28,7 @@ public class TeacherRosterService {
     public record AssignmentInput(List<Long> subjectIds, Long homeroomClassId) {}
     public record SubjectItem(long subjectId, String subjectName) {}
     public record Homeroom(long classId, int academicYear, int grade, int classNumber) {}
-    public record Term(long termId, List<SubjectItem> subjects, Homeroom homeroomClass) {}
+    public record Term(long termId, List<SubjectItem> subjects, Homeroom homeroomClass, boolean assignmentRecorded) {}
     public record Entry(long rosterId, long schoolId, String authEmail, String displayName,
                         String status, Long schoolUserId, String employmentStatus, Term term) {}
 
@@ -219,7 +219,7 @@ public class TeacherRosterService {
         params.addAll(arguments);
         String sql = """
                 SELECT r.id, r.auth_email, r.display_name, r.school_user_id, r.pending_user_id, m.employment_status,
-                       s.id AS subject_id, s.name AS subject_name, c.id AS class_id,
+                       t.term_id AS assignment_term_id, s.id AS subject_id, s.name AS subject_name, c.id AS class_id,
                        c.academic_year, c.grade, c.class_number
                 FROM school_teacher_roster r
                 LEFT JOIN school_user m ON m.id=r.school_user_id AND m.school_id=r.school_id
@@ -251,7 +251,8 @@ public class TeacherRosterService {
         Long classId = rs.getObject("class_id", Long.class);
         Homeroom homeroom = classId == null ? null : new Homeroom(classId,
                 rs.getInt("academic_year"), rs.getInt("grade"), rs.getInt("class_number"));
-        Term term = termId == null ? null : new Term(termId, new ArrayList<>(), homeroom);
+        Term term = termId == null ? null : new Term(termId, new ArrayList<>(), homeroom,
+                rs.getObject("assignment_term_id") != null);
         Long member = rs.getObject("school_user_id", Long.class);
         String status = member != null ? "LINKED" : (rs.getObject("pending_user_id") != null ? "PENDING" : "UNLINKED");
         return new Entry(rs.getLong("id"), schoolId, rs.getString("auth_email"),

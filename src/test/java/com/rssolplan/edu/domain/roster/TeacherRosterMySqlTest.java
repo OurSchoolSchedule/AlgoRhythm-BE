@@ -159,6 +159,51 @@ class TeacherRosterMySqlTest {
     }
 
     @Test
+    void bothDirectoriesDistinguishLegacyMissingTermAndExplicitAssignments() throws Exception {
+        long teacher = a + 6;
+        db.update("insert into users(id,username,active_school_id) values(?,'기존 교사',?)", teacher, a);
+        db.update("insert into school_user(id,user_id,school_id,position,employment_status) values(?,?,?,'TEACHER','HIRED')",
+                teacher, teacher, a);
+        db.update("update school_class set homeroom_teacher_id=? where id=?", teacher, a);
+        JsonNode legacy = directoryTeacher(teacher, a);
+        assertThat(legacy.required("rosterLinked").booleanValue()).isFalse();
+        assertThat(legacy.at("/homeroomClasses/0/classId").longValue()).isEqualTo(a);
+
+        long id = create(a, email, "명부 교사");
+        db.update("update school_teacher_roster set school_user_id=? where id=?", teacher, id);
+        JsonNode absent = directoryTeacher(teacher, a);
+        assertThat(absent.required("rosterLinked").booleanValue()).isTrue();
+        assertThat(absent.required("rosterAssignmentTermId").isNull()).isTrue();
+        assertThat(http(get(base(a) + "/me").param("termId", "" + a), admin(teacher), null, 200)
+                .at("/term/assignmentRecorded").booleanValue()).isFalse();
+        http(put(base(a) + "/" + id + "/terms/" + a), admin(a), Map.of("subjectIds", List.of()), 200);
+        JsonNode empty = directoryTeacher(teacher, a);
+        assertThat(empty.required("rosterAssignmentTermId").longValue()).isEqualTo(a);
+        assertThat(empty.required("rosterHomeroomClass").isNull()).isTrue();
+        http(put(base(a) + "/" + id + "/terms/" + (a + 1)), admin(a),
+                Map.of("subjectIds", List.of(), "homeroomClassId", a), 200);
+        JsonNode assigned = directoryTeacher(teacher, a + 1);
+        assertThat(assigned.required("rosterAssignmentTermId").longValue()).isEqualTo(a + 1);
+        assertThat(assigned.at("/rosterHomeroomClass/classId").longValue()).isEqualTo(a);
+        assertThat(directoryTeacher(teacher, null).required("rosterAssignmentTermId").isNull()).isTrue();
+        http(get("/api/school/teachers").param("termId", "" + b), admin(teacher), null, 404);
+    }
+
+    private JsonNode directoryTeacher(long teacher, Long termId) throws Exception {
+        JsonNode reference = null;
+        for (String path : List.of("/api/school/teachers", "/api/school/members")) {
+            var request = get(path);
+            if (termId != null) request.param("termId", termId.toString());
+            var rows = http(request, admin(path.endsWith("/members") ? a : teacher), null, 200);
+            var row = java.util.stream.StreamSupport.stream(rows.spliterator(), false)
+                    .filter(r -> r.required("schoolUserId").longValue() == teacher).findFirst().orElseThrow();
+            if (reference != null) assertThat(row).isEqualTo(reference);
+            reference = row;
+        }
+        return reference;
+    }
+
+    @Test
     void namesakesAndTermSpecificSubjectsExistBeforeTheFirstLesson() throws Exception {
         long first = create(a, email, "김교사");
         long second = create(a, "peer" + email, "김교사");

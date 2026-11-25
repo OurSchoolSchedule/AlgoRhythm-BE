@@ -79,7 +79,8 @@ final class RosterImportPlan {
             Action action = Action.ADD;
             if (before != null) {
                 var previous = new Target(before.displayName(), before.term().subjects(), before.term().homeroomClass());
-                action = previous.equals(after) ? Action.UNCHANGED : Action.UPDATE;
+                action = before.term().assignmentRecorded() && previous.equals(after)
+                        ? Action.UNCHANGED : Action.UPDATE;
             }
             changes.add(new Change(teacher.email, teacher.rows, action, before, after));
         }
