@@ -14,8 +14,8 @@ public class EmailVerificationAuthResponse {
 
     private boolean success;
     private String message;
-    private String accessToken;
-    private String refreshToken;
+    private String nextStep;
+    private String flowToken;
     private Long userId;
     private boolean isNewUser;
     private OnboardingResponse schoolMembership;

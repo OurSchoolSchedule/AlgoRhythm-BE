@@ -37,7 +37,8 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 
 /** Isolated fixtures; run against a disposable MySQL database and Redis. Only outbound mail is stubbed. */
-@SpringBootTest
+@SpringBootTest(properties = "app.auth.dev-login-enabled=true")
+@org.springframework.test.context.ActiveProfiles("local")
 @AutoConfigureMockMvc
 @EnabledIfEnvironmentVariable(named = "R1_MYSQL_TEST", matches = "1")
 class TeacherRosterMySqlTest {
@@ -80,7 +81,8 @@ class TeacherRosterMySqlTest {
 
     void migrate() {
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V20261122_01__school_load_and_schedule_versions.sql"),
-                new ClassPathResource(R1)).execute(source);
+                new ClassPathResource(R1),
+                new ClassPathResource("db/migration/V20261125_21__passkey_auth.sql")).execute(source);
     }
 
     String code(long school) { return "R1-" + school; }
@@ -95,6 +97,14 @@ class TeacherRosterMySqlTest {
         assertThat(response.getStatus()).withFailMessage("Expected %d, got %d: %s", expected, response.getStatus(), result)
                 .isEqualTo(expected);
         return result.isBlank() ? json.nullNode() : json.readTree(result);
+    }
+
+    // Roster authorization cases start with an explicit local fixture session. The browser test
+    // covers the real OTP -> WebAuthn -> protected roster route, including the intervening denial.
+    String localSessionFor(JsonNode verified) {
+        assertThat(verified.hasNonNull("accessToken")).isFalse();
+        assertThat(verified.required("flowToken").asText()).isNotBlank();
+        return jwt.generateAccess(verified.required("userId").asLong());
     }
 
     long create(long school, String address, String name) throws Exception {
@@ -190,7 +200,7 @@ class TeacherRosterMySqlTest {
         long unrelated = create(b, different, "다른 교사");
         var session = verify(email, a);
         long user = session.required("userId").longValue();
-        String token = session.required("accessToken").textValue();
+        String token = localSessionFor(session);
         assertThat(session.at("/schoolMembership/employmentStatus").textValue()).isEqualTo("HIRED");
         assertThat(members(user, a)).isOne();
         assertThat(members(user, b)).isZero();
@@ -215,7 +225,7 @@ class TeacherRosterMySqlTest {
     @Test
     void pendingRequestsAndApprovalRemainSingleAndSchoolScopedUnderConcurrentReplay() throws Exception {
         var session = verify(email, null);
-        String token = session.required("accessToken").textValue();
+        String token = localSessionFor(session);
         long user = session.required("userId").longValue();
         var responses = race(() -> http(post(ONBOARD), token, onboarding(a), 202));
         assertThat(responses).allSatisfy(r -> {
@@ -228,7 +238,7 @@ class TeacherRosterMySqlTest {
         assertThat(pending.required("displayName").textValue()).isEqualTo("신청 교사");
         assertThat(pending.required("status").textValue()).isEqualTo("PENDING");
         var reopened = verify(email, null);
-        var schools = http(get(ADD_SCHOOL), reopened.required("accessToken").textValue(), null, 200);
+        var schools = http(get(ADD_SCHOOL), localSessionFor(reopened), null, 200);
         assertThat(schools.size()).isOne();
         assertThat(schools.get(0).required("schoolId").longValue()).isEqualTo(a);
         assertThat(schools.get(0).required("employmentStatus").textValue()).isEqualTo("PENDING");
@@ -254,7 +264,7 @@ class TeacherRosterMySqlTest {
     void concurrentClaimsOnAdministratorRosterReuseOneEmployment() throws Exception {
         long id = create(a, email, "이교사");
         var session = verify(email, null);
-        String token = session.required("accessToken").textValue();
+        String token = localSessionFor(session);
         var outcomes = race(() -> http(post(ONBOARD), token, onboarding(a), 200));
         long member = outcomes.get(0).required("schoolUserId").longValue();
         assertThat(outcomes.get(1).required("schoolUserId").longValue()).isEqualTo(member);
@@ -295,7 +305,7 @@ class TeacherRosterMySqlTest {
     void alreadyLinkedRowAndCurrentEmploymentAreCheckedOnEveryRequest() throws Exception {
         long id = create(a, email, "교사");
         var first = verify(email, a);
-        String token = first.required("accessToken").textValue();
+        String token = localSessionFor(first);
         long user = first.required("userId").longValue();
         long member = first.at("/schoolMembership/schoolUserId").longValue();
         http(get("/api/school/teachers"), token, null, 200);
@@ -354,7 +364,7 @@ class TeacherRosterMySqlTest {
         assertThat(db.queryForObject("select count(*) from roster_verified_account where auth_email=?", Long.class, email))
                 .isZero();
         var session = verify(email, null);
-        String token = session.required("accessToken").textValue();
+        String token = localSessionFor(session);
         http(post(ONBOARD), token, Map.of("schoolCode", "missing-" + a, "role", "TEACHER"), 400);
         assertThat(members(session.required("userId").longValue(), a)).isZero();
 
@@ -377,7 +387,7 @@ class TeacherRosterMySqlTest {
                 "schoolCode", code(a), "displayName", "신규 교사"), 200);
         assertThat(direct.at("/schoolMembership/employmentStatus").textValue()).isEqualTo("PENDING");
         assertThat(members(direct.required("userId").longValue(), a)).isZero();
-        assertThat(http(get(base(a) + "/me"), direct.required("accessToken").textValue(), null, 200)
+        assertThat(http(get(base(a) + "/me"), localSessionFor(direct), null, 200)
                 .required("displayName").textValue()).isEqualTo("신규 교사");
     }
 
@@ -401,7 +411,7 @@ class TeacherRosterMySqlTest {
                     user, user, a);
             var session = verify(address, null);
             assertThat(session.at("/schoolMembership/schoolUserId").longValue()).isEqualTo(user);
-            String displayName = http(get(base(a) + "/me"), session.required("accessToken").textValue(), null, 200)
+            String displayName = http(get(base(a) + "/me"), localSessionFor(session), null, 200)
                     .required("displayName").textValue();
             assertThat(displayName).isEqualTo(address.substring(0, address.indexOf('@')));
             assertThat(db.queryForObject("select username from users where id=?", String.class, user)).isEqualTo(names.get(i));
@@ -434,7 +444,7 @@ class TeacherRosterMySqlTest {
             assertThat(member.get("employment_status")).isEqualTo(school == a ? "HIRED" : "ON_LEAVE");
             assertThat(member.get("hire_date").toString()).isEqualTo("2022-03-01");
         }
-        String token = loggedIn.required("accessToken").textValue();
+        String token = localSessionFor(loggedIn);
         var replay = http(post(ONBOARD), token, onboarding(b), 200);
         assertThat(replay.required("employmentStatus").textValue()).isEqualTo("ON_LEAVE");
         http(patch("/api/mypage/active-school/" + b), token, null, 403);
