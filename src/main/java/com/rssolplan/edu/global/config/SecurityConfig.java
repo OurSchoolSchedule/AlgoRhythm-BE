@@ -1,6 +1,7 @@
 package com.rssolplan.edu.global.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import com.rssolplan.edu.domain.auth.dto.ApiResponse;
 import jakarta.servlet.http.HttpServletResponse;
 import com.rssolplan.edu.domain.auth.passkey.PasskeyRealm;
@@ -38,12 +39,12 @@ import static org.springframework.security.web.access.IpAddressAuthorizationMana
 @EnableMethodSecurity // @PreAuthorize 사용 가능
 public class SecurityConfig {
 
+    private static final ObjectWriter ERROR_JSON = new ObjectMapper().writerFor(ApiResponse.class);
     private final JwtTokenProvider jwt;
     private final UserRepository userRepository;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, Optional<DevTokenController> devTokens,
-                                          School42Access school42, ObjectMapper json) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, Optional<DevTokenController> devTokens, School42Access school42) throws Exception {
         log.info("[SecurityConfig] SecurityFilterChain 초기화");
 
         return http
@@ -55,10 +56,10 @@ public class SecurityConfig {
                 .exceptionHandling(errors -> {
                     var neis = PathPatternRequestMatcher.withDefaults().matcher("/api/neis/**");
                     errors.defaultAuthenticationEntryPointFor((req, res, ex) ->
-                            neisError(json, res, 401, "UNAUTHORIZED", "로그인이 필요합니다."), neis);
+                            neisError(res, 401, "UNAUTHORIZED", "로그인이 필요합니다."), neis);
                     errors.defaultAuthenticationEntryPointFor(new Http403ForbiddenEntryPoint(), AnyRequestMatcher.INSTANCE);
                     errors.defaultAccessDeniedHandlerFor((req, res, ex) ->
-                            neisError(json, res, 403, "FORBIDDEN", "접근 권한이 없습니다."), neis);
+                            neisError(res, 403, "FORBIDDEN", "접근 권한이 없습니다."), neis);
                     errors.defaultAccessDeniedHandlerFor(new AccessDeniedHandlerImpl(), AnyRequestMatcher.INSTANCE);
                 })
                 .authorizeHttpRequests(auth -> {
@@ -119,11 +120,11 @@ public class SecurityConfig {
                 .build();
     }
 
-    private static void neisError(ObjectMapper json, HttpServletResponse response, int status,
-                                  String code, String message) throws java.io.IOException {
+    private static void neisError(HttpServletResponse response, int status, String code, String message)
+            throws java.io.IOException {
         response.setStatus(status);
         response.setContentType("application/json;charset=UTF-8");
-        json.writeValue(response.getOutputStream(), ApiResponse.error(code, message));
+        ERROR_JSON.writeValue(response.getOutputStream(), ApiResponse.error(code, message));
     }
 
     // CORS 규칙 정의 (dev: localhost:3000으로 우선 설정) 추가
