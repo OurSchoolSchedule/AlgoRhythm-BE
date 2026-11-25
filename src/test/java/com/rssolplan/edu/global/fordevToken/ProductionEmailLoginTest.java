@@ -2,7 +2,6 @@ package com.rssolplan.edu.global.fordevToken;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.rssolplan.edu.domain.auth.email.ResendEmailSender;
-import com.rssolplan.edu.global.config.JwtTokenProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.mockito.ArgumentCaptor;
@@ -24,10 +23,10 @@ import static org.mockito.Mockito.*;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"server.address=127.0.0.1", "app.auth.dev-login-enabled=true"})
 @ActiveProfiles("prod")
+@com.rssolplan.edu.domain.auth.passkey.PasskeyTestSchema
 @EnabledIfEnvironmentVariable(named = "BE_A1_AUTH_TEST", matches = "1")
 class ProductionEmailLoginTest {
     @Autowired TestRestTemplate http;
-    @Autowired JwtTokenProvider jwt;
     @MockitoBean ResendEmailSender mail;
 
     @Test
@@ -50,24 +49,24 @@ class ProductionEmailLoginTest {
         assertThat(verified.getStatusCode()).isEqualTo(HttpStatus.OK);
         var body = verified.getBody();
         assertThat(body.path("success").asBoolean()).isTrue();
-        var access = body.path("accessToken").asText();
-        assertThat(jwt.validate(access)).isTrue();
-        assertThat(jwt.getUserId(access)).isEqualTo(body.path("userId").asLong());
-        assertThat(jwt.validate(body.path("refreshToken").asText())).isTrue();
+        assertThat(body.path("nextStep").asText()).isEqualTo("REGISTER");
+        assertThat(body.hasNonNull("accessToken")).isFalse();
+        assertThat(body.hasNonNull("refreshToken")).isFalse();
+        String grant = body.path("flowToken").asText();
+        assertThat(grant).isNotBlank();
 
         var replay = http.postForEntity(api + "/verify", verification, JsonNode.class);
         assertThat(replay.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(replay.getBody().path("success").asBoolean()).isFalse();
-        assertThat(replay.getBody().path("accessToken").isNull()).isTrue();
+        assertThat(replay.getBody().hasNonNull("accessToken")).isFalse();
 
         String devPath = "/api/auth/dev-token";
         assertThat(http.postForEntity(devPath, recipient, String.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         var headers = new HttpHeaders();
-        headers.setBearerAuth(access);
+        headers.setBearerAuth(grant);
         var schools = http.exchange("/api/mypage/teacher/schools", HttpMethod.GET, new HttpEntity<>(headers),
                 JsonNode.class);
-        assertThat(schools.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(schools.getBody().isArray()).isTrue();
+        assertThat(schools.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         var signedIn = new HttpEntity<>(recipient, headers);
         assertThat(http.postForEntity(devPath, signedIn, String.class).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }

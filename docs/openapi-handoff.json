@@ -2889,7 +2889,7 @@
         },
         "security": [],
         "summary": "이메일 인증 코드 확인",
-        "description": "권한 공개. "
+        "description": "코드 확인 후 패스키 등록 또는 인증으로 진행한다. 등록된 계정에는 복구용 이메일 증명을 제공한다. 어떤 경우에도 이 응답은 업무 토큰을 발급하지 않는다."
       }
     },
     "/api/auth/email-verification/send": {
@@ -3850,11 +3850,21 @@
           },
           "default": {
             "description": "기타 오류. 상태와 본문을 함께 확인한다."
+          },
+          "403": {
+            "description": "PASSKEY_REQUIRED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
           }
         },
         "security": [],
         "summary": "카카오 로그인 콜백",
-        "description": "권한 공개. 성공하면 Location으로 프런트에 리디렉션한다. 외부 카카오 설정이 필요하다."
+        "description": "고정 프런트 origin의 /auth/kakao/callback으로 복귀한다. 등록 계정은 패스키가 필요하다."
       }
     },
     "/api/mypage/teacher/schools/{schoolId}": {
@@ -3942,6 +3952,606 @@
         },
         "summary": "내 불가 교시 삭제",
         "description": "권한 로그인. "
+      }
+    },
+    "/api/auth/passkeys/registration/options": {
+      "post": {
+        "tags": [
+          "패스키"
+        ],
+        "summary": "최초 등록 시작",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyOptions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "요청 또는 인증기 증명 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "업무 권한 또는 패스키 인증 필요"
+          },
+          "409": {
+            "description": "만료·재사용·상태 충돌 또는 마지막 패스키",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyEmailFlow"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/passkeys/registration/finish": {
+      "post": {
+        "tags": [
+          "패스키"
+        ],
+        "summary": "등록 완료 · 기기 추가 시 업무 토큰 필수",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeySession"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "요청 또는 인증기 증명 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "업무 권한 또는 패스키 인증 필요"
+          },
+          "409": {
+            "description": "만료·재사용·상태 충돌 또는 마지막 패스키",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyFinish"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/passkeys/authentication/options": {
+      "post": {
+        "tags": [
+          "패스키"
+        ],
+        "summary": "패스키 로그인 시작",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyOptions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "요청 또는 인증기 증명 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "업무 권한 또는 패스키 인증 필요"
+          },
+          "409": {
+            "description": "만료·재사용·상태 충돌 또는 마지막 패스키",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/passkeys/authentication/finish": {
+      "post": {
+        "tags": [
+          "패스키"
+        ],
+        "summary": "패스키 인증 완료 · 재인증 시 업무 토큰 필수",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/PasskeySession"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PasskeyApproval"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "요청 또는 인증기 증명 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "업무 권한 또는 패스키 인증 필요"
+          },
+          "409": {
+            "description": "만료·재사용·상태 충돌 또는 마지막 패스키",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyFinish"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/passkeys/credentials": {
+      "get": {
+        "tags": [
+          "패스키"
+        ],
+        "summary": "내 패스키 조회",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PasskeyDevice"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "요청 또는 인증기 증명 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "업무 권한 또는 패스키 인증 필요"
+          },
+          "409": {
+            "description": "만료·재사용·상태 충돌 또는 마지막 패스키",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/passkeys/reauthentication/options": {
+      "post": {
+        "tags": [
+          "패스키"
+        ],
+        "summary": "기기 관리 재인증 시작",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyOptions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "요청 또는 인증기 증명 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "업무 권한 또는 패스키 인증 필요"
+          },
+          "409": {
+            "description": "만료·재사용·상태 충돌 또는 마지막 패스키",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operation": {
+                    "type": "string",
+                    "enum": [
+                      "ADD",
+                      "DELETE",
+                      "ROTATE"
+                    ]
+                  },
+                  "credentialId": {
+                    "type": "string",
+                    "description": "DELETE인 경우 대상 ID 필수"
+                  }
+                },
+                "required": [
+                  "operation"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/passkeys/credentials/options": {
+      "post": {
+        "tags": [
+          "패스키"
+        ],
+        "summary": "패스키 추가 시작",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyOptions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "요청 또는 인증기 증명 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "업무 권한 또는 패스키 인증 필요"
+          },
+          "409": {
+            "description": "만료·재사용·상태 충돌 또는 마지막 패스키",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyApproval"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/passkeys/credentials/{id}": {
+      "delete": {
+        "tags": [
+          "패스키"
+        ],
+        "summary": "패스키 철회",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "성공"
+          },
+          "400": {
+            "description": "요청 또는 인증기 증명 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "업무 권한 또는 패스키 인증 필요"
+          },
+          "409": {
+            "description": "만료·재사용·상태 충돌 또는 마지막 패스키",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyApproval"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/passkeys/recovery/options": {
+      "post": {
+        "tags": [
+          "패스키"
+        ],
+        "summary": "분실 복구 시작",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyOptions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "요청 또는 인증기 증명 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "업무 권한 또는 패스키 인증 필요"
+          },
+          "409": {
+            "description": "만료·재사용·상태 충돌 또는 마지막 패스키",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "flowToken": {
+                    "type": "string"
+                  },
+                  "recoveryCode": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "flowToken",
+                  "recoveryCode"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/passkeys/recovery-code": {
+      "post": {
+        "tags": [
+          "패스키"
+        ],
+        "summary": "복구 코드 교체",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recoveryCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "recoveryCode"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "요청 또는 인증기 증명 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "업무 권한 또는 패스키 인증 필요"
+          },
+          "409": {
+            "description": "만료·재사용·상태 충돌 또는 마지막 패스키",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyApproval"
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -5535,6 +6145,14 @@
             "type": "string",
             "minLength": 1,
             "pattern": "^\\d{6}$"
+          },
+          "schoolCode": {
+            "type": "string",
+            "description": "선택한 학교 코드 (선택)"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "학교에 표시할 이름 (선택)"
           }
         },
         "required": [
@@ -5551,18 +6169,26 @@
           "message": {
             "type": "string"
           },
-          "accessToken": {
-            "type": "string"
-          },
-          "refreshToken": {
-            "type": "string"
-          },
           "userId": {
             "type": "integer",
             "format": "int64"
           },
           "newUser": {
             "type": "boolean"
+          },
+          "nextStep": {
+            "type": "string",
+            "enum": [
+              "REGISTER",
+              "AUTHENTICATE"
+            ]
+          },
+          "flowToken": {
+            "type": "string",
+            "description": "5분 일회용 제한 세션. 업무 JWT로 사용 불가."
+          },
+          "schoolMembership": {
+            "$ref": "#/components/schemas/OnboardingResponse"
           }
         }
       },
@@ -6054,6 +6680,117 @@
             }
           }
         }
+      },
+      "PasskeyError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ]
+      },
+      "PasskeyOptions": {
+        "type": "object",
+        "properties": {
+          "ceremonyId": {
+            "type": "string"
+          },
+          "publicKey": {
+            "type": "object",
+            "description": "WebAuthn 표준 생성 또는 인증 options. 바이너리는 base64url."
+          }
+        },
+        "required": [
+          "ceremonyId",
+          "publicKey"
+        ]
+      },
+      "PasskeyFinish": {
+        "type": "object",
+        "properties": {
+          "ceremonyId": {
+            "type": "string"
+          },
+          "credential": {
+            "type": "object",
+            "description": "PublicKeyCredential.toJSON()"
+          }
+        },
+        "required": [
+          "ceremonyId",
+          "credential"
+        ]
+      },
+      "PasskeySession": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "accessToken": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string"
+          },
+          "recoveryCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "userId",
+          "accessToken",
+          "refreshToken"
+        ]
+      },
+      "PasskeyApproval": {
+        "type": "object",
+        "properties": {
+          "approvalToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "approvalToken"
+        ]
+      },
+      "PasskeyEmailFlow": {
+        "type": "object",
+        "properties": {
+          "flowToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "flowToken"
+        ]
+      },
+      "PasskeyDevice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "서버의 생성 시각 (LocalDateTime)"
+          }
+        },
+        "required": [
+          "id",
+          "createdAt"
+        ]
       }
     },
     "securitySchemes": {

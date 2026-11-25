@@ -2,15 +2,14 @@ package com.rssolplan.edu.global.security.email_verification;
 
 import com.rssolplan.edu.domain.auth.EmailVerificationHistory;
 import com.rssolplan.edu.domain.auth.EmailVerificationHistoryRepository;
-import com.rssolplan.edu.domain.auth.UserRefreshToken;
-import com.rssolplan.edu.domain.auth.UserRefreshTokenRepository;
+import com.rssolplan.edu.domain.auth.passkey.PasskeyService;
+import com.rssolplan.edu.domain.auth.passkey.PasskeyStore;
 import com.rssolplan.edu.domain.auth.email.EmailDeliveryException;
 import com.rssolplan.edu.domain.auth.email.EmailVerificationProperties;
 import com.rssolplan.edu.domain.auth.email.ResendEmailSender;
 import com.rssolplan.edu.domain.user.User;
 import com.rssolplan.edu.domain.roster.VerifiedRosterSignup;
 import com.rssolplan.edu.domain.roster.TeacherRosterService;
-import com.rssolplan.edu.global.config.JwtTokenProvider;
 import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificationToken;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,8 +37,8 @@ public class EmailService {
     private final SpringTemplateEngine templateEngine; // Thymeleaf 활용
     private final EmailVerificationHistoryRepository historyRepository; // DB 기록
     private final VerifiedRosterSignup rosterSignup;
-    private final UserRefreshTokenRepository refreshRepo;
-    private final JwtTokenProvider jwt;
+    private final PasskeyService passkeys;
+    private final PasskeyStore passkeyStore;
 
     private static final String AUTH_PREFIX = "EMAIL_AUTH:";
     private static final SecureRandom CODE_RANDOM = new SecureRandom();
@@ -147,22 +146,20 @@ public class EmailService {
     @Transactional
     public EmailVerificationToken issueTokensForVerifiedEmail(String email, Long authenticatedUserId,
                                                                String schoolCode, String displayName) {
+        // A repeat email proof for an enrolled account may start recovery; it cannot change school membership.
+        Long existing = passkeyStore.verifiedUserId(email);
+        if (authenticatedUserId == null && existing != null && passkeys.requiresPasskey(existing)) {
+            var step = passkeys.afterVerifiedEmail(existing);
+            return EmailVerificationToken.builder().userId(existing).isNewUser(false)
+                    .nextStep(step.nextStep()).flowToken(step.flowToken()).build();
+        }
         var signup = rosterSignup.complete(email, authenticatedUserId, schoolCode, displayName);
         User user = signup.user();
 
-        String accessToken = jwt.generateAccess(user.getId());
-        String refreshToken = jwt.generateRefresh(user.getId());
-
-        refreshRepo.deleteForVerifiedLogin(user.getId());
-        refreshRepo.save(UserRefreshToken.builder()
-                .user(user)
-                .refreshToken(refreshToken)
-                .expiresAt(LocalDateTime.now().plusDays(14))
-                .build());
-
+        var step = passkeys.afterVerifiedEmail(user.getId());
         return EmailVerificationToken.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
+                .nextStep(step.nextStep())
+                .flowToken(step.flowToken())
                 .userId(user.getId())
                 .isNewUser(signup.newUser())
                 .schoolMembership(signup.schoolMembership())

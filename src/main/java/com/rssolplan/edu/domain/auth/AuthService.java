@@ -1,5 +1,7 @@
 package com.rssolplan.edu.domain.auth;
 
+import com.rssolplan.edu.domain.auth.passkey.PasskeyProblem;
+import com.rssolplan.edu.domain.auth.passkey.PasskeyStore;
 import com.rssolplan.edu.domain.auth.dto.LoginResponse;
 import com.rssolplan.edu.domain.auth.dto.RefreshTokenResponse;
 import com.rssolplan.edu.domain.auth.provider.KakaoProvider;
@@ -27,6 +29,7 @@ public class AuthService {
     private final UserRefreshTokenRepository refreshRepo;
     private final JwtTokenProvider jwt;
     private final KakaoProvider kakao;
+    private final PasskeyStore passkeyStore;
 
     private final RestTemplate restTemplate = new RestTemplate();
     private static final String KAKAO_LOGOUT_URL = "https://kapi.kakao.com/v1/user/logout";
@@ -41,15 +44,13 @@ public class AuthService {
 
         // 2) accessToken → profile
         SocialProfile profile = kakao.fetchProfile(accessToken);
-        String kakaoId = profile.getProviderId();
-        log.info("Kakao profile fetched: id={}, email={}", kakaoId, profile.getEmail());
-
         //  프로필 조회 실패 또는 ID가 없는 경우 예외처리
         if (profile == null || profile.getProviderId() == null) {
-            log.error("Failed to fetch Kakao profile or ID is null. accessToken: {}", accessToken);
+            log.error("Failed to fetch Kakao profile or ID");
             throw new UnauthorizedException("카카오 프로필 정보를 가져오는데 실패했습니다.");
         }
 
+        String kakaoId = profile.getProviderId();
         String kakaoProfileUrl = profile.getProfileImageUrl();
         String finalProfileImageUrl;
 
@@ -92,8 +93,9 @@ public class AuthService {
         }
 
         // 4) JWT 발급 & Refresh 저장
-        String at = jwt.generateAccess(user.getId());
-        String rt = jwt.generateRefresh(user.getId());
+        Long linkedUser = checkPasskeyEnrollment(user, profile.getEmail());
+        String at = jwt.issueKakao(user.getId(), "access", linkedUser);
+        String rt = jwt.issueKakao(user.getId(), "refresh", linkedUser);
 
         refreshRepo.deleteByUser(user);
         refreshRepo.save(UserRefreshToken.builder()
@@ -110,6 +112,15 @@ public class AuthService {
         );
     }
 
+    private Long checkPasskeyEnrollment(User user, String providerEmail) {
+        if (jwt.enrolled(user.getId())) throw PasskeyProblem.required();
+        if (providerEmail == null) return null;
+        Long linked = passkeyStore.verifiedUserId(providerEmail);
+        if (linked == null || linked.equals(user.getId())) return null;
+        if (jwt.enrolled(linked)) throw PasskeyProblem.required();
+        return linked;
+    }
+
     // Refresh Token → Access Token 재발급
     @Transactional(readOnly = true)
     public RefreshTokenResponse refresh(String refreshToken) {
@@ -119,7 +130,7 @@ public class AuthService {
         if (token.getRevokedAt() != null || token.getExpiresAt().isBefore(LocalDateTime.now())) {
             throw new IllegalArgumentException("Expired or revoked refresh token");
         }
-        String newAccess = jwt.generateAccess(token.getUser().getId());
+        String newAccess = jwt.renewAccess(refreshToken, token.getUser().getId());
         return new RefreshTokenResponse(newAccess);
     }
 
@@ -154,7 +165,7 @@ public class AuthService {
 
     @Transactional
     public LoginResponse handleKakaoAppLogin(String kakaoAccessToken) {
-        log.info("handleKakaoAppLogin 시작. token={}", kakaoAccessToken.substring(0, 5) + "...");
+        log.info("handleKakaoAppLogin 시작");
 
         // 1) 전달받은 accessToken으로 카카오 프로필 조회 (기존 kakao.fetchProfile 재사용)
         SocialProfile profile = kakao.fetchProfile(kakaoAccessToken);
@@ -195,8 +206,9 @@ public class AuthService {
         }
 
         // 4) JWT 발급 및 Refresh Token 저장 (기존 로직과 동일)
-        String at = jwt.generateAccess(user.getId());
-        String rt = jwt.generateRefresh(user.getId());
+        Long linkedUser = checkPasskeyEnrollment(user, profile.getEmail());
+        String at = jwt.issueKakao(user.getId(), "access", linkedUser);
+        String rt = jwt.issueKakao(user.getId(), "refresh", linkedUser);
 
         saveRefreshToken(user, rt);
 

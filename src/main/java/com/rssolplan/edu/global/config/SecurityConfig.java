@@ -1,5 +1,6 @@
 package com.rssolplan.edu.global.config;
 
+import com.rssolplan.edu.domain.auth.passkey.PasskeyRealm;
 import com.rssolplan.edu.domain.user.UserRepository;
 import com.rssolplan.edu.global.fordevToken.DevTokenController;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,8 @@ public class SecurityConfig {
 
         return http
                 .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(
+                        org.springframework.security.config.http.SessionCreationPolicy.STATELESS))
                 //  CORS 활성화: 아래 corsConfigurationSource() Bean 사용
                 .cors(cors -> {})
                 .authorizeHttpRequests(auth -> {
@@ -61,6 +64,11 @@ public class SecurityConfig {
                             "/swagger-resources/**",
                             "/webjars/**"
                     ).permitAll();
+
+                    auth.requestMatchers(HttpMethod.POST, "/api/auth/refresh-token",
+                            "/api/auth/passkeys/registration/options", "/api/auth/passkeys/registration/finish",
+                            "/api/auth/passkeys/authentication/options", "/api/auth/passkeys/authentication/finish",
+                            "/api/auth/passkeys/recovery/options").permitAll();
 
                     var devLogin = auth.requestMatchers(HttpMethod.POST, DevTokenController.PATH);
                     if (devTokens.isPresent()) {
@@ -90,7 +98,7 @@ public class SecurityConfig {
 
     // CORS 규칙 정의 (dev: localhost:3000으로 우선 설정) 추가
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(PasskeyRealm realm) {
         CorsConfiguration cfg = new CorsConfiguration();
 
         // 허용할 프론트 개발 도메인
@@ -123,6 +131,10 @@ public class SecurityConfig {
         cfg.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        CorsConfiguration passkeys = new CorsConfiguration(cfg);
+        passkeys.setAllowedOriginPatterns(List.of());
+        passkeys.setAllowedOrigins(List.of(realm.origin()));
+        source.registerCorsConfiguration("/api/auth/passkeys/**", passkeys);
         // 전체 경로 적용
         source.registerCorsConfiguration("/**", cfg);
         return source;

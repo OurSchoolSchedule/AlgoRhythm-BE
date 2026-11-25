@@ -12,8 +12,8 @@ import lombok.NoArgsConstructor;
 @Builder
 public class EmailVerificationToken {
 
-    private String accessToken;
-    private String refreshToken;
+    private String nextStep;
+    private String flowToken;
     private Long userId;
     private boolean isNewUser;
     private OnboardingResponse schoolMembership;
