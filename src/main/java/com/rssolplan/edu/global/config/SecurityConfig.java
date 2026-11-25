@@ -27,6 +27,7 @@ import static org.springframework.security.web.access.IpAddressAuthorizationMana
 @Slf4j
 @Configuration
 @RequiredArgsConstructor
+@org.springframework.context.annotation.Import(School42Access.class)
 @EnableMethodSecurity // @PreAuthorize 사용 가능
 public class SecurityConfig {
 
@@ -34,7 +35,7 @@ public class SecurityConfig {
     private final UserRepository userRepository;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, Optional<DevTokenController> devTokens) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, Optional<DevTokenController> devTokens, School42Access school42) throws Exception {
         log.info("[SecurityConfig] SecurityFilterChain 초기화");
 
         return http
@@ -48,6 +49,8 @@ public class SecurityConfig {
 
                     // preflight(options)의 요청은 전역으로 허용해둠
                     auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
+
+                    auth.requestMatchers("/api/school42/**").access(school42::check);
 
                     // 로그인, 콜백, 회원가입, 이메일 인증만 허용
                     auth.requestMatchers(

@@ -89,3 +89,7 @@ management:
   endpoint:
     health:
       show-details: always  # 상세 정보 표시, 필요에 따라 'never' 또는 'when-authorized'
+
+school42:
+  admin-hash: ${SCHOOL42_ADMIN_HASH:}
+  teacher-hash: ${SCHOOL42_TEACHER_HASH:}
