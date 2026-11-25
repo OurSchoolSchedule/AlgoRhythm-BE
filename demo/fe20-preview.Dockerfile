@@ -4,7 +4,7 @@ COPY . .
 RUN gradle --no-daemon bootJar
 
 FROM eclipse-temurin:17-jre-jammy
-RUN apt-get update && apt-get install -y --no-install-recommends redis-server && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends redis-server default-mysql-client && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
 COPY demo/seed.sql demo/local.yml ./demo/
