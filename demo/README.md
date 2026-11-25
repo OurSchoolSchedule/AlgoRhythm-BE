@@ -6,11 +6,13 @@
 
 ```powershell
 git fetch origin
-git switch docs/local-demo-handoff
+git switch develop
 $env:DEMO_DB_PASSWORD = Read-Host '로컬 데모 DB에 사용할 암호'
 docker compose -f demo/compose.yml up -d --wait
-.\demo\local.ps1 serve
+.\demo\local.ps1 serve -DevLogin
 ```
+
+로컬 시연에서 개발 로그인이 필요할 때만 `-DevLogin`을 지정한다. 일반 실행은 `.\demo\local.ps1 serve`이며 개발 로그인은 꺼져 있다. 로컬 실행기는 루프백에 바인딩한다. 서버는 단독 `local` 프로필과 명시적인 활성화 설정이 함께 있을 때만 개발 로그인 경로를 등록한다. 활성 상태에서도 서버의 IPv4·IPv6 루프백에서 들어온 POST만 허용한다. 비활성 상태의 POST는 로그인 여부와 관계없이 403이다. 이메일 인증의 요청·응답은 동일하다.
 
 첫 실행 때 지정한 로컬 암호를 다음 실행에도 사용한다. 새 PowerShell 창에서는 같은 값을 다시 설정한다. 앱이 Started 상태가 되면 [Swagger UI](http://localhost:8080/swagger-ui/index.html)를 연다. **Servers에서 http://localhost:8080을 선택한다.** 기본 Swagger 설정은 운영 호스트를 먼저 표시한다. 서버를 재시작하면 시연 토큰을 다시 발급한다.
 
@@ -87,7 +89,7 @@ SHOW CREATE TABLE school_user;
 Invoke-Item .\build\reports\tests\test\index.html
 ```
 
-스크립트는 테스트 전용 DB에 연결하고 `M3_MYSQL_TEST=1`, `M2_FULL_BENCHMARK=1`을 설정해 `gradlew.bat test --rerun-tasks`를 실행한다. 두 플래그를 생략하면 경합과 60초 성능 시험이 건너뛰어질 수 있다.
+스크립트는 테스트 전용 DB에 연결하고 `M3_MYSQL_TEST=1`, `M2_FULL_BENCHMARK=1`을 설정해 `gradlew.bat test --rerun-tasks`를 실행한다. `BE_A1_AUTH_TEST=1`도 설정해 운영형 프로필에서 이메일 발송·검증을 실제 HTTP, DB, Redis로 검사한다. 외부 메일 전송만 테스트 대역을 사용한다. M2·M3 플래그를 생략하면 경합과 60초 성능 시험이 건너뛰어질 수 있다.
 
 | 검증 | 통과 기준 |
 | --- | --- |

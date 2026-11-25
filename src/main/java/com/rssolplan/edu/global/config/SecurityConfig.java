@@ -2,6 +2,7 @@ package com.rssolplan.edu.global.config;
 
 import com.rssolplan.edu.domain.school.SchoolUserRepository;
 import com.rssolplan.edu.domain.user.UserRepository;
+import com.rssolplan.edu.global.fordevToken.DevTokenController;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,10 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
+import java.util.Optional;
+
+import static org.springframework.security.authorization.AuthorizationManagers.anyOf;
+import static org.springframework.security.web.access.IpAddressAuthorizationManager.hasIpAddress;
 
 @Slf4j
 @Configuration
@@ -32,7 +37,7 @@ public class SecurityConfig {
     private final StringRedisTemplate redisTemplate;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, Optional<DevTokenController> devTokens) throws Exception {
         log.info("[SecurityConfig] SecurityFilterChain 초기화");
 
         return http
@@ -58,9 +63,15 @@ public class SecurityConfig {
                             "/swagger-ui/**",
                             "/v3/api-docs/**",
                             "/swagger-resources/**",
-                            "/webjars/**",
-                            "/api/auth/dev-token" //로컬개발용으로추가
+                            "/webjars/**"
                     ).permitAll();
+
+                    var devLogin = auth.requestMatchers(HttpMethod.POST, DevTokenController.PATH);
+                    if (devTokens.isPresent()) {
+                        devLogin.access(anyOf(hasIpAddress("127.0.0.0/8"), hasIpAddress("::1")));
+                    } else {
+                        devLogin.denyAll();
+                    }
 
                     // ADMIN(교감/교장) 전용 API
                     auth.requestMatchers("/api/auth/onboarding/admin/**").hasRole("ADMIN");
