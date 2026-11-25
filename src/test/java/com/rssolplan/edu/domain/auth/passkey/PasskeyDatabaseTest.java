@@ -149,6 +149,10 @@ class PasskeyDatabaseTest {
             throws Exception {
         enrollFixture();
         var prodRealm = new PasskeyRealm("production");
+        var qaRealm = new PasskeyRealm("fe20-preview");
+        assertThat(qaRealm.id()).isEqualTo("algorhythm-git-qa-fe20-school42-release-sihyes-projects.vercel.app");
+        assertThat(qaRealm.origin()).isEqualTo("https://" + qaRealm.id());
+        assertThat(new PasskeyStore(db, qaRealm).lookupAll(id)).isEmpty();
         var prodStore = new PasskeyStore(db, prodRealm);
         assertThat(prodRealm.origin()).isEqualTo("https://ourschoolschedule.vercel.app");
         assertThat(prodRealm.id()).isEqualTo("ourschoolschedule.vercel.app");

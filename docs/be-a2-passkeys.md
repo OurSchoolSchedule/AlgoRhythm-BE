@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | production (기본) | https://ourschoolschedule.vercel.app | ourschoolschedule.vercel.app |
 | preview | https://algo-rhythm-git-fe-develop-sihyes-projects.vercel.app | algo-rhythm-git-fe-develop-sihyes-projects.vercel.app |
+| fe20-preview | https://algorhythm-git-qa-fe20-school42-release-sihyes-projects.vercel.app | algorhythm-git-qa-fe20-school42-release-sihyes-projects.vercel.app |
 | local | http://localhost:5173 | localhost |
 
 프런트는 표의 정확한 주소에서 상대 경로 `/api`를 사용한다. 커밋별 Preview 주소는 허용 목록에 없다. Preview의 rewrite는 `PASSKEY_ENVIRONMENT=preview`인 별도 백엔드를 가리켜야 한다. 운영과 Preview에 별도의 MySQL·Redis·JWT 서명 키를 사용한다. 동일 테스트 인프라에서도 RP ID로 DB·Redis가 분리되고 JWT 발급자가 일치해야 한다. 요청의 Host·Origin으로 RP 설정을 바꾸지 않는다. 최상위 문서에서 WebAuthn을 호출한다.

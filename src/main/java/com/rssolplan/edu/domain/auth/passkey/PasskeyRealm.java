@@ -16,6 +16,8 @@ public class PasskeyRealm {
                             case "production" -> "https://ourschoolschedule.vercel.app";
                             case "preview" ->
                                     "https://algo-rhythm-git-fe-develop-sihyes-projects.vercel.app";
+                            case "fe20-preview" ->
+                                    "https://algorhythm-git-qa-fe20-school42-release-sihyes-projects.vercel.app";
                             case "local" -> "http://localhost:5173";
                             default ->
                                     throw new IllegalArgumentException(
