@@ -18,12 +18,12 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /** Reads one worksheet without instantiating a workbook or evaluating formulas. */
-final class LoadSheet extends DefaultHandler {
+public final class LoadSheet extends DefaultHandler {
     static final int FILE_LIMIT = 5 * 1024 * 1024;
     static final int MAX_ROWS = 5030, MAX_COLS = 256, MAX_CELLS = 100_000;
     private static final int MAX_EXPANDED = 50 * 1024 * 1024;
 
-    record Value(String text, boolean invalid) {}
+    public record Value(String text, boolean invalid) {}
 
     static final Value EMPTY = new Value("", false);
     final String name;
@@ -35,6 +35,7 @@ final class LoadSheet extends DefaultHandler {
     private CellAddress address;
     private String type;
     private boolean capture, formula, cached, dateStyle;
+    private boolean constantsOnly;
     private int cells;
 
     private LoadSheet(String name, SharedStrings shared, StylesTable styles) {
@@ -44,6 +45,15 @@ final class LoadSheet extends DefaultHandler {
     }
 
     static LoadSheet read(byte[] bytes, String wanted) {
+        return read(bytes, wanted, false);
+    }
+
+    /** Flat input tables use the same bounded SAX reader, but require literal, unmerged cells. */
+    public static SortedMap<Integer, Map<Integer, Value>> readTable(byte[] bytes, String sheet) {
+        return read(bytes, sheet, true).rows;
+    }
+
+    private static LoadSheet read(byte[] bytes, String wanted, boolean constantsOnly) {
         if (bytes.length > FILE_LIMIT) throw limit();
         if (bytes.length < 4 || bytes[0] != 'P' || bytes[1] != 'K')
             throw LoadProblem.file(
@@ -84,6 +94,7 @@ final class LoadSheet extends DefaultHandler {
                                 selectedName,
                                 reader.getSharedStringsTable(),
                                 reader.getStylesTable());
+                data.constantsOnly = constantsOnly;
                 try (InputStream in = selected.getInputStream()) {
                     XMLReader xml = XMLHelper.newXMLReader();
                     xml.setContentHandler(data);
@@ -167,6 +178,8 @@ final class LoadSheet extends DefaultHandler {
 
     private void addMerge(CellRangeAddress range) {
         int r0 = range.getFirstRow(), c0 = range.getFirstColumn();
+        if (constantsOnly) throw LoadProblem.invalid(List.of(LoadProblem.Issue.at(
+                "MERGED_CELL", name, r0, c0, "병합을 해제하고 각 행에 값을 입력하세요.")));
         if (range.getLastRow() >= MAX_ROWS
                 || range.getLastColumn() >= MAX_COLS
                 || (long) merged.size() + range.getNumberOfCells() > MAX_CELLS) throw limit();
@@ -197,7 +210,7 @@ final class LoadSheet extends DefaultHandler {
                         || "b".equals(type)
                         || "d".equals(type)
                         || (dateStyle && !text.isBlank())
-                        || (formula && (!cached || text.isBlank()));
+                        || (formula && (constantsOnly || !cached || text.isBlank()));
         if ("s".equals(type) && !text.isBlank())
             text = shared.getItemAt(Integer.parseInt(text)).getString();
         if (!text.isBlank() || invalid) {

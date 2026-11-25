@@ -5,10 +5,10 @@ import org.springframework.http.HttpStatus;
 
 import java.util.List;
 
-class LoadProblem extends RuntimeException {
-    record Issue(
+public class LoadProblem extends RuntimeException {
+    public record Issue(
             String code, String sheet, Integer row, String column, String cell, String message) {
-        static Issue at(String code, String sheet, int row, int col, String message) {
+        public static Issue at(String code, String sheet, int row, int col, String message) {
             String column = CellReference.convertNumToColString(col);
             return new Issue(code, sheet, row + 1, column, column + (row + 1), message);
         }
@@ -17,6 +17,10 @@ class LoadProblem extends RuntimeException {
     final HttpStatus status;
     final String code;
     final List<Issue> fieldErrors;
+
+    public HttpStatus status() { return status; }
+    public String code() { return code; }
+    public List<Issue> issues() { return fieldErrors; }
 
     LoadProblem(HttpStatus status, String code, String message, List<Issue> issues) {
         super(message);
