@@ -109,6 +109,8 @@ public class SchoolController {
         private final String username;
         private final String displayName;
         private final List<TeacherRosterService.SubjectItem> rosterSubjects;
+        private final boolean rosterLinked;
+        private final Long rosterAssignmentTermId;
         private final TeacherRosterService.Homeroom rosterHomeroomClass;
         private final String position;
         private final String employmentStatus;
@@ -125,6 +127,9 @@ public class SchoolController {
             this.username = su.getUser().getUsername();
             this.displayName = entry == null ? username : entry.displayName();
             var rosterTerm = entry == null ? null : entry.term();
+            this.rosterLinked = entry != null;
+            this.rosterAssignmentTermId = rosterTerm != null && rosterTerm.assignmentRecorded()
+                    ? rosterTerm.termId() : null;
             this.rosterSubjects = rosterTerm == null ? List.of() : rosterTerm.subjects();
             this.rosterHomeroomClass = rosterTerm == null ? null : rosterTerm.homeroomClass();
             this.position = su.getPosition().name();

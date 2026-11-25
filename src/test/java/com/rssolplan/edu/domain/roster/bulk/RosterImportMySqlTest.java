@@ -118,6 +118,18 @@ class RosterImportMySqlTest {
     int teachers() { return count("select count(*) from school_teacher_roster where school_id=?", school); }
 
     @Test
+    void importingAnExplicitlyEmptyAssignmentCreatesAMissingTermOnlyOnce() throws Exception {
+        roster.register(admin, school, new TeacherRosterService.IdentityInput(a, "기존 교사"));
+        byte[] file = workbook(row(a, "기존 교사", 0, 0));
+        var first = preview(file, 200);
+        assertThat(first.at("/counts/update").asInt()).isEqualTo(1);
+        assertThat(first.at("/changes/0/before/term/assignmentRecorded").booleanValue()).isFalse();
+        confirm(first, 200);
+        assertThat(roster.list(admin, school, term).get(0).term().assignmentRecorded()).isTrue();
+        assertThat(preview(file, 200).at("/counts/unchanged").asInt()).isEqualTo(1);
+    }
+
+    @Test
     void templateContainsOnlySelectedSchoolAndYearAndRejectsTimeLoadWorkbook() throws Exception {
         var response = http.exchange(base(school, term) + "/template", HttpMethod.GET, new HttpEntity<>(headers(admin)), byte[].class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
