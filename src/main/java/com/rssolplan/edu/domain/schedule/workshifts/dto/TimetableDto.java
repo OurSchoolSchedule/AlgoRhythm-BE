@@ -2,13 +2,16 @@ package com.rssolplan.edu.domain.schedule.workshifts.dto;
 
 import com.rssolplan.edu.domain.schedule.DayOfWeek;
 import com.rssolplan.edu.domain.schedule.generation.entity.Timetable;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 import java.time.LocalTime;
 
 @Getter
+@AllArgsConstructor
 public class TimetableDto {
-    private final Long id;
+    private final Long id; // Legacy timetable ID accepted by v1 write endpoints.
+    private final Long weeklyLessonId;
     private final Long schoolId;
     private final int academicYear;
     private final int semester;
@@ -27,6 +30,7 @@ public class TimetableDto {
 
     public TimetableDto(Timetable t) {
         this.id = t.getId();
+        this.weeklyLessonId = null;
         this.schoolId = t.getSchool().getId();
         this.academicYear = t.getAcademicYear();
         this.semester = t.getSemester();

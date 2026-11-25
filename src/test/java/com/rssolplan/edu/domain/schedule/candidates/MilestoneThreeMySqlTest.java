@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.rssolplan.edu.domain.schedule.DayOfWeek;
+import com.rssolplan.edu.domain.schedule.workshifts.TimetableService;
+import com.rssolplan.edu.domain.schedule.workshifts.dto.TimetableDto;
 import com.rssolplan.edu.domain.schedule.loadimport.*;
 import com.rssolplan.edu.domain.schedule.operations.*;
 import com.rssolplan.edu.domain.schedule.operations.DatedLessons.Lesson;
@@ -43,6 +45,7 @@ class MilestoneThreeMySqlTest {
     @Autowired GenerationStore store;
     @Autowired PublicationService publication;
     @Autowired DatedLessons lessons;
+    @Autowired TimetableService timetables;
     @Autowired ChangeService changes;
     @Autowired CandidateInputService inputs;
     @MockitoBean LoadPreviewStore previews;
@@ -125,6 +128,75 @@ class MilestoneThreeMySqlTest {
     private List<Lesson> publish() {
         publication.publish(admin, term, choose(generate()));
         return lessons.date(admin, term, monday);
+    }
+
+    @Test
+    void weeklyReadPreservesLegacyUntilEffectiveAndResolvesEachDayOfARevisedWeek() {
+        long teacher = school + 2;
+        for (String day : List.of("MON", "WED", "FRI")) {
+            db.update("""
+                    insert into timetable(school_id,academic_year,semester,school_class_id,
+                        period_setting_id,day_of_week,subject_id,teacher_id) values(?,2026,2,?,?,?,?,?)
+                    """, school, school, school, day, school, teacher);
+        }
+        assertThat(timetables.week(teacher, true, 2026, 2, null, monday))
+                .hasSize(3).allMatch(r -> r.getId() != null && r.getWeeklyLessonId() == null);
+
+        // First publication takes effect on Wednesday. Tuesday's new slot is still hidden.
+        long first = version(1, monday.plusDays(2));
+        weeklySlot(first, 2, teacher);
+        weeklySlot(first, 3, teacher);
+        weeklySlot(first, 5, teacher);
+        long second = version(2, monday.plusDays(4));
+        weeklySlot(second, 5, school + 3);
+
+        var rows = timetables.week(admin, false, 2026, 2, term, monday.plusDays(5));
+        assertThat(rows).extracting(TimetableDto::getDayOfWeek)
+                .containsExactly(DayOfWeek.MON, DayOfWeek.WED, DayOfWeek.FRI);
+        assertThat(rows.get(0).getId()).isNotNull();
+        assertThat(rows.subList(1, 3)).allMatch(r -> r.getId() == null && r.getWeeklyLessonId() != null);
+        assertThat(rows.get(2).getTeacherId()).isEqualTo(school + 3);
+        assertThat(timetables.week(teacher, true, 2026, 2, term, monday))
+                .extracting(TimetableDto::getDayOfWeek).containsExactly(DayOfWeek.MON, DayOfWeek.WED);
+        assertThat(timetables.week(school + 4, true, 2026, 2, term, monday)).isEmpty();
+        assertThat(timetables.week(admin, false, null, null, null, monday.minusWeeks(1))).isEmpty();
+
+        // A newer revision can be backdated. Its empty Friday supersedes both older revisions.
+        long third = version(3, monday.plusDays(3));
+        weeklySlot(third, 4, teacher);
+        assertThat(timetables.week(admin, false, 2026, 2, null, monday))
+                .extracting(TimetableDto::getDayOfWeek)
+                .containsExactly(DayOfWeek.MON, DayOfWeek.WED, DayOfWeek.THU);
+        assertThat(timetables.week(admin, false, 2026, 2, term, monday.plusWeeks(1))).isEmpty();
+    }
+
+    @Test
+    void explicitWeeklyTermMustMatchBothTheActiveSchoolAndTheRequestedSemester() {
+        assertThatThrownBy(() -> timetables.week(admin, false, 2026, 1, term, monday))
+                .isInstanceOf(NotFoundException.class);
+        long anotherSchool = school + 100;
+        db.update("insert into school(id,name) values(?,'other school')", anotherSchool);
+        db.update("""
+                insert into timetable_set(school_id,academic_year,semester,start_date,end_date)
+                values(?,2026,2,?,?)
+                """, anotherSchool, monday, monday.plusMonths(1));
+        long foreignTerm = db.queryForObject("select id from timetable_set where school_id=?", Long.class, anotherSchool);
+        assertThatThrownBy(() -> timetables.week(admin, false, 2026, 2, foreignTerm, monday))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    private long version(int revision, LocalDate from) {
+        db.update("insert into schedule_version(term_id,version_no,effective_from) values(?,?,?)",
+                term, revision, from);
+        return db.queryForObject("select id from schedule_version where term_id=? and version_no=?",
+                Long.class, term, revision);
+    }
+
+    private void weeklySlot(long version, int day, long teacher) {
+        db.update("""
+                insert into weekly_lesson(version_id,lesson_key,class_id,subject_id,teacher_id,weekday,period_id)
+                values(?,?,?,?,?,?,?)
+                """, version, "day-" + day, school, school, teacher, day, school);
     }
 
     @Test

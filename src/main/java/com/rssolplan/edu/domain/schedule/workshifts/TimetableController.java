@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -19,29 +20,39 @@ public class TimetableController {
     private final TimetableService timetableService;
 
     @GetMapping("")
-    public ResponseEntity<List<TimetableDto>> getTimetables(@AuthenticationPrincipal Long userId) {
-        return ResponseEntity.ok(timetableService.getTimetables(userId));
+    public ResponseEntity<List<TimetableDto>> getTimetables(
+            @AuthenticationPrincipal Long userId,
+            @RequestParam(required = false) LocalDate weekOf,
+            @RequestParam(required = false) Long termId) {
+        return ResponseEntity.ok(timetableService.week(userId, false, null, null, termId, weekOf));
     }
 
     @GetMapping("/year/{year}/semester/{semester}")
     public ResponseEntity<List<TimetableDto>> getTimetablesByYearSemester(
             @AuthenticationPrincipal Long userId,
             @PathVariable int year,
-            @PathVariable int semester) {
-        return ResponseEntity.ok(timetableService.getTimetablesByYearSemester(userId, year, semester));
+            @PathVariable int semester,
+            @RequestParam(required = false) LocalDate weekOf,
+            @RequestParam(required = false) Long termId) {
+        return ResponseEntity.ok(timetableService.week(userId, false, year, semester, termId, weekOf));
     }
 
     @GetMapping("/me")
-    public ResponseEntity<List<TimetableDto>> getMyTimetable(@AuthenticationPrincipal Long userId) {
-        return ResponseEntity.ok(timetableService.getMyTimetable(userId));
+    public ResponseEntity<List<TimetableDto>> getMyTimetable(
+            @AuthenticationPrincipal Long userId,
+            @RequestParam(required = false) LocalDate weekOf,
+            @RequestParam(required = false) Long termId) {
+        return ResponseEntity.ok(timetableService.week(userId, true, null, null, termId, weekOf));
     }
 
     @GetMapping("/me/year/{year}/semester/{semester}")
     public ResponseEntity<List<TimetableDto>> getMyTimetableByYearSemester(
             @AuthenticationPrincipal Long userId,
             @PathVariable int year,
-            @PathVariable int semester) {
-        return ResponseEntity.ok(timetableService.getMyTimetableByYearSemester(userId, year, semester));
+            @PathVariable int semester,
+            @RequestParam(required = false) LocalDate weekOf,
+            @RequestParam(required = false) Long termId) {
+        return ResponseEntity.ok(timetableService.week(userId, true, year, semester, termId, weekOf));
     }
 
     @OwnerOnly

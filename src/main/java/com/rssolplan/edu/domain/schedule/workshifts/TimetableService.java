@@ -1,13 +1,13 @@
 package com.rssolplan.edu.domain.schedule.workshifts;
 
 import com.rssolplan.edu.domain.schedule.generation.TimetableRepository;
+import com.rssolplan.edu.domain.schedule.operations.ScheduleAccess;
 import com.rssolplan.edu.domain.schedule.generation.entity.Timetable;
 import com.rssolplan.edu.domain.schedule.workshifts.dto.TimetableCreateDto;
 import com.rssolplan.edu.domain.schedule.workshifts.dto.TimetableDto;
 import com.rssolplan.edu.domain.school.SchoolClass;
 import com.rssolplan.edu.domain.school.SchoolClassRepository;
 import com.rssolplan.edu.domain.school.SchoolRepository;
-import com.rssolplan.edu.domain.school.SchoolUser;
 import com.rssolplan.edu.domain.school.SchoolUserRepository;
 import com.rssolplan.edu.domain.school.Subject;
 import com.rssolplan.edu.domain.school.SubjectRepository;
@@ -20,13 +20,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class TimetableService {
 
+    private final PublishedWeekReader publishedWeek;
+    private final ScheduleAccess scheduleAccess;
     private final TimetableRepository timetableRepository;
     private final SchoolRepository schoolRepository;
     private final SchoolUserRepository schoolUserRepository;
@@ -36,33 +38,11 @@ public class TimetableService {
     private final AuthorizationService authService;
 
     @Transactional(readOnly = true)
-    public List<TimetableDto> getTimetables(Long userId) {
-        Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
-        return timetableRepository.findBySchool_Id(schoolId)
-                .stream().map(TimetableDto::new).collect(Collectors.toList());
-    }
-
-    @Transactional(readOnly = true)
-    public List<TimetableDto> getTimetablesByYearSemester(Long userId, int academicYear, int semester) {
-        Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
-        return timetableRepository.findBySchool_IdAndAcademicYearAndSemester(schoolId, academicYear, semester)
-                .stream().map(TimetableDto::new).collect(Collectors.toList());
-    }
-
-    @Transactional(readOnly = true)
-    public List<TimetableDto> getMyTimetable(Long userId) {
-        Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
-        SchoolUser me = authService.getSchoolUserOrThrow(userId, schoolId);
-        return timetableRepository.findByTeacher_Id(me.getId())
-                .stream().map(TimetableDto::new).collect(Collectors.toList());
-    }
-
-    @Transactional(readOnly = true)
-    public List<TimetableDto> getMyTimetableByYearSemester(Long userId, int academicYear, int semester) {
-        Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
-        SchoolUser me = authService.getSchoolUserOrThrow(userId, schoolId);
-        return timetableRepository.findByTeacher_IdAndAcademicYearAndSemester(me.getId(), academicYear, semester)
-                .stream().map(TimetableDto::new).collect(Collectors.toList());
+    public List<TimetableDto> week(Long userId, boolean mine, Integer year, Integer semester,
+                                   Long termId, LocalDate weekOf) {
+        var member = scheduleAccess.member(userId, false);
+        return publishedWeek.read(member.getSchool().getId(), mine ? member.getId() : null,
+                year, semester, termId, weekOf);
     }
 
     @Transactional
