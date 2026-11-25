@@ -2,12 +2,12 @@ package com.rssolplan.edu.global.security.email_verification;
 
 import com.rssolplan.edu.domain.auth.EmailVerificationHistory;
 import com.rssolplan.edu.domain.auth.EmailVerificationHistoryRepository;
-import com.rssolplan.edu.domain.auth.UserRefreshTokenRepository;
+import com.rssolplan.edu.domain.auth.passkey.PasskeyService;
+import com.rssolplan.edu.domain.auth.passkey.PasskeyStore;
 import com.rssolplan.edu.domain.auth.email.EmailDeliveryException;
 import com.rssolplan.edu.domain.auth.email.EmailVerificationProperties;
 import com.rssolplan.edu.domain.auth.email.ResendEmailSender;
 import com.rssolplan.edu.domain.roster.VerifiedRosterSignup;
-import com.rssolplan.edu.global.config.JwtTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,8 +35,8 @@ class EmailServiceTest {
     @Mock private ValueOperations<String, String> values;
     @Mock private EmailVerificationHistoryRepository historyRepository;
     @Mock private VerifiedRosterSignup signup;
-    @Mock private UserRefreshTokenRepository refreshRepository;
-    @Mock private JwtTokenProvider jwt;
+    @Mock private PasskeyService passkeys;
+    @Mock private PasskeyStore passkeyStore;
 
     private EmailService service;
 
@@ -52,7 +52,7 @@ class EmailServiceTest {
         SpringTemplateEngine templateEngine = new SpringTemplateEngine();
         templateEngine.setTemplateResolver(resolver);
         service = new EmailService(sender, properties, redis, templateEngine,
-                historyRepository, signup, refreshRepository, jwt);
+                historyRepository, signup, passkeys, passkeyStore);
     }
 
     @Test

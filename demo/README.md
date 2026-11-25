@@ -19,9 +19,9 @@ docker compose -f demo/compose.yml up -d --wait
 | 대상 | 초기화와 재실행 |
 | --- | --- |
 | 기존 개발 DB | 그대로 둔다. 평소 쓰는 DB를 비울 필요가 없다. |
-| algorhythm_demo | Docker가 별도 DB를 준비한다. 앱 시작 시 Hibernate 기본 테이블 → M1 SQL → M3 SQL → R1 SQL → R2 SQL → 합성 명부 순으로 적용한다. 같은 데이터 볼륨에서 재시작해도 게시·승인 결과가 보존된다. |
+| algorhythm_demo | Docker가 별도 DB를 준비한다. 앱 시작 시 Hibernate 기본 테이블 → M1 SQL → M3 SQL → R1 SQL → A2 패스키 SQL → R2 SQL → 합성 명부 순으로 적용한다. 같은 데이터 볼륨에서 재시작해도 게시·승인 결과가 보존된다. |
 | algorhythm_test | 같은 로컬 MySQL의 별도 DB다. 경합 테스트는 실행마다 자체 학교와 학기를 만든다. |
-| 기존 develop 설정 | Hibernate는 기본 엔티티를 생성하지만 버전 SQL 자동 실행기는 없다. M1 → M3 → R1 → R2 순으로 현재 DB에 적용한다. 예전 sql/createDB.sql은 school_schedule을 직접 선택하고 user에 샘플을 넣는다. 현재 앱은 users를 사용한다. |
+| 기존 develop 설정 | Hibernate는 기본 엔티티를 생성하지만 버전 SQL 자동 실행기는 없다. M1 → M3 → R1 → A2 → R2 순으로 현재 DB에 적용한다. 예전 sql/createDB.sql은 school_schedule을 직접 선택하고 user에 샘플을 넣는다. 현재 앱은 users를 사용한다. |
 
 SQL 오류가 이미 발생했다면 첫 번째 오류의 코드, 테이블명, 아래 조회 결과를 확인한다. 뒤에 이어지는 FK 오류는 첫 누락에서 파생될 수 있다.
 

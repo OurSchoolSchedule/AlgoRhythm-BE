@@ -7,10 +7,13 @@ import org.springframework.core.type.AnnotatedTypeMetadata;
 
 import java.util.List;
 
-class LocalDevLoginEnabled implements Condition {
+public class LocalDevLoginEnabled implements Condition {
     @Override
     public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
-        Environment env = context.getEnvironment();
+        return enabled(context.getEnvironment());
+    }
+
+    public static boolean enabled(Environment env) {
         return List.of(env.getActiveProfiles()).equals(List.of("local"))
                 && "true".equalsIgnoreCase(env.getProperty("app.auth.dev-login-enabled"));
     }

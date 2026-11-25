@@ -1,5 +1,6 @@
 package com.rssolplan.edu.global.fordevToken;
 
+import com.rssolplan.edu.domain.auth.passkey.PasskeyRealm;
 import com.rssolplan.edu.domain.school.SchoolUserRepository;
 import com.rssolplan.edu.domain.user.User;
 import com.rssolplan.edu.domain.user.UserRepository;
@@ -31,6 +32,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class DevLoginSecurityTest {
     private final WebApplicationContextRunner runner = new WebApplicationContextRunner()
             .withUserConfiguration(WebSecurity.class)
+            .withBean(PasskeyRealm.class,
+                    () -> new PasskeyRealm("local"))
             .withBean(UserRepository.class, () -> mock(UserRepository.class))
             .withBean(SchoolUserRepository.class, () -> mock(SchoolUserRepository.class))
             .withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))

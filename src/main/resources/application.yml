@@ -2,6 +2,8 @@ server:
   port: ${PORT:8080}
 
 app:
+  passkeys:
+    environment: ${PASSKEY_ENVIRONMENT:production}
   auth:
     dev-login-enabled: ${DEV_LOGIN_ENABLED:false}
 

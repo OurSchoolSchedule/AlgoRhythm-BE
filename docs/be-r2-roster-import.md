@@ -85,7 +85,7 @@ FE18의 작업 순서는 학교·학기 선택 → 양식 다운로드 → 작�
 
 ## DB 적용과 검증
 
-기존 기본 테이블, M1·M3·BE-R1 뒤에 [V20261125_21__roster_import_preview.sql](../src/main/resources/db/migration/V20261125_21__roster_import_preview.sql)을 적용한다. 신규 테이블은 미리보기·확정 영수증만 저장한다. BE-R1의 명부 키와 학기별 저장 함수를 재사용한다. BE-A2의 인증·세션 경로와 독립적인 마이그레이션 식별자다.
+기존 기본 테이블, M1·M3·BE-R1과 BE-A2 패스키 SQL을 적용한 뒤 [V20261125_22__roster_import_preview.sql](../src/main/resources/db/migration/V20261125_22__roster_import_preview.sql)을 적용한다. 신규 테이블은 미리보기·확정 영수증만 저장한다. BE-R1의 명부 키와 학기별 저장 함수를 재사용한다.
 
 School42 예시는 원본 ZIP의 `teacher_roster.csv`에서 42명과 담임을, `school_seed.sql`에서 인증 이메일·35개 과목 코드·21개 학급 코드를 가져왔다. `example_week.csv`에서 교사별 과목 집합을 추출해 합성 명부의 초깃값으로 사용했다. 마지막 교사의 표시 이름을 첫 교사와 같게 바꾸고 마지막 교사의 담당 과목을 비워 예외 사례를 만들었다. 총 143행이며 결과는 교사 42명, 과목 연결 142건, 복수 과목 41명, 미배정 1명, 담임 21명, 같은 이름 2명이다.
 

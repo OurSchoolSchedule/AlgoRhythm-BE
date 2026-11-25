@@ -1,5 +1,6 @@
 package com.rssolplan.edu.domain.auth;
 
+import com.rssolplan.edu.domain.auth.passkey.PasskeyRealm;
 import com.rssolplan.edu.domain.auth.dto.LoginResponse;
 import com.rssolplan.edu.domain.auth.dto.RefreshTokenResponse;
 import jakarta.servlet.http.HttpServletResponse;
@@ -16,6 +17,7 @@ import java.io.IOException;
 public class AuthController {
 
     private final AuthService authService;
+    private final PasskeyRealm realm;
 
     // 카카오 OAuth2 Redirect 콜백 - 프론트에서 받은 code를 백엔드가 처리
     @GetMapping("/kakao/callback")
@@ -25,14 +27,12 @@ public class AuthController {
             HttpServletResponse response
     ) throws IOException {
 
-        LoginResponse loginResponse = authService.handleKakaoCallback(code);
-
-        // 프론트 리다이렉트 URL 없으면 기본 Vercel 배포 주소 사용
-        if (redirectUri == null || redirectUri.isBlank()) {
-            redirectUri = "https://rssolplan.com/auth/kakao/callback";
+        String callback = realm.origin() + "/auth/kakao/callback";
+        if (redirectUri != null && !redirectUri.isBlank() && !callback.equals(redirectUri)) {
+            throw new IllegalArgumentException("허용되지 않은 복귀 주소입니다.");
         }
-
-        String targetUrl = redirectUri
+        LoginResponse loginResponse = authService.handleKakaoCallback(code);
+        String targetUrl = callback
                 + "?accessToken=" + loginResponse.getAccessToken()
                 + "&refreshToken=" + loginResponse.getRefreshToken()
                 + "&userId=" + loginResponse.getUserId();

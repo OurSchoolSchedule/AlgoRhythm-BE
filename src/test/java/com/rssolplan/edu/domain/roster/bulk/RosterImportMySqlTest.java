@@ -14,6 +14,7 @@ import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.util.LinkedMultiValueMap;
 
@@ -26,12 +27,15 @@ import java.util.concurrent.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doThrow;
 
+@ActiveProfiles("local")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
+        "app.auth.dev-login-enabled=true", "app.passkeys.environment=local",
         "spring.jpa.defer-datasource-initialization=true", "spring.sql.init.mode=always",
         "spring.sql.init.schema-locations=classpath:db/migration/V20261122_01__school_load_and_schedule_versions.sql," +
                 "classpath:db/migration/V20261124_01__generation_and_lesson_operations.sql," +
                 "classpath:db/migration/V20261125_11__school_teacher_roster.sql," +
-                "classpath:db/migration/V20261125_21__roster_import_preview.sql"})
+                "classpath:db/migration/V20261125_21__passkey_auth.sql," +
+                "classpath:db/migration/V20261125_22__roster_import_preview.sql"})
 @EnabledIfEnvironmentVariable(named = "R2_MYSQL_TEST", matches = "1")
 class RosterImportMySqlTest {
     @Autowired TestRestTemplate http;
