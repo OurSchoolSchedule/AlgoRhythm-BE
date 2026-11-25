@@ -1951,7 +1951,27 @@
           }
         },
         "summary": "학교 주간 시간표 조회",
-        "description": "권한 로그인. "
+        "description": "활성 학교 재직자. 조회 주의 각 요일에 유효한 최신 게시 리비전을 읽는다. 적용 전에는 기존 주간표를 사용한다.",
+        "parameters": [
+          {
+            "name": "weekOf",
+            "in": "query",
+            "description": "조회 주에 속한 날짜. 생략하면 서울 기준 이번 주.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "termId",
+            "in": "query",
+            "description": "활성 학교와 경로의 학년도·학기에 속한 학기 ID. 불일치 시 404.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -3442,6 +3462,24 @@
               "type": "integer",
               "format": "int32"
             }
+          },
+          {
+            "name": "weekOf",
+            "in": "query",
+            "description": "조회 주에 속한 날짜. 생략하면 서울 기준 이번 주.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "termId",
+            "in": "query",
+            "description": "활성 학교와 경로의 학년도·학기에 속한 학기 ID. 불일치 시 404.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -3463,7 +3501,7 @@
           }
         },
         "summary": "학년도·학기별 학교 시간표 조회",
-        "description": "권한 로그인. "
+        "description": "활성 학교 재직자. 조회 주의 각 요일에 유효한 최신 게시 리비전을 읽는다. 적용 전에는 기존 주간표를 사용한다."
       }
     },
     "/api/timetable/me": {
@@ -3491,7 +3529,27 @@
           }
         },
         "summary": "내 주간 시간표 조회",
-        "description": "권한 로그인. "
+        "description": "활성 학교 재직자. 조회 주의 각 요일에 유효한 최신 게시 리비전을 읽는다. 적용 전에는 기존 주간표를 사용한다.",
+        "parameters": [
+          {
+            "name": "weekOf",
+            "in": "query",
+            "description": "조회 주에 속한 날짜. 생략하면 서울 기준 이번 주.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "termId",
+            "in": "query",
+            "description": "활성 학교와 경로의 학년도·학기에 속한 학기 ID. 불일치 시 404.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ]
       }
     },
     "/api/timetable/me/year/{year}/semester/{semester}": {
@@ -3518,6 +3576,24 @@
               "type": "integer",
               "format": "int32"
             }
+          },
+          {
+            "name": "weekOf",
+            "in": "query",
+            "description": "조회 주에 속한 날짜. 생략하면 서울 기준 이번 주.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "termId",
+            "in": "query",
+            "description": "활성 학교와 경로의 학년도·학기에 속한 학기 ID. 불일치 시 404.",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -3539,7 +3615,7 @@
           }
         },
         "summary": "학년도·학기별 내 시간표 조회",
-        "description": "권한 로그인. "
+        "description": "활성 학교 재직자. 조회 주의 각 요일에 유효한 최신 게시 리비전을 읽는다. 적용 전에는 기존 주간표를 사용한다."
       }
     },
     "/api/timetable-swap/requests/me": {
@@ -5607,8 +5683,12 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "integer",
-            "format": "int64"
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "기존 시간표 쓰기 ID. 게시 수업이면 null."
           },
           "schoolId": {
             "type": "integer",
@@ -5673,6 +5753,14 @@
           },
           "teacherName": {
             "type": "string"
+          },
+          "weeklyLessonId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "게시된 주간 수업 ID. 기존 수업이면 null. 날짜별 변경에는 dated lesson ID를 사용한다."
           }
         }
       },
