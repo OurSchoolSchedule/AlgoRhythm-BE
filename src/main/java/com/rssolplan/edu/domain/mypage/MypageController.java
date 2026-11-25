@@ -100,7 +100,8 @@ public class MypageController {
     public ResponseEntity<SchoolSimpleResponse> joinTeacherSchool(
             @AuthenticationPrincipal Long teacherId,
             @RequestBody TeacherJoinSchoolRequest request) {
-        return ResponseEntity.status(201).body(service.joinTeacherSchool(teacherId, request));
+        SchoolSimpleResponse result = service.joinTeacherSchool(teacherId, request);
+        return ResponseEntity.status("PENDING".equals(result.getEmploymentStatus()) ? 202 : 201).body(result);
     }
 
     @DeleteMapping("/teacher/schools/{schoolId}")

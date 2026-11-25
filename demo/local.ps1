@@ -16,6 +16,7 @@ $env:RESEND_API_KEY='offline-demo'
 $env:RESEND_FROM_EMAIL='demo@example.invalid'
 if ($Mode -eq 'test') {
     $env:M3_MYSQL_TEST='1'
+    $env:R1_MYSQL_TEST='1'
     $env:M2_FULL_BENCHMARK='1'
     & .\gradlew.bat test --rerun-tasks
 } else {

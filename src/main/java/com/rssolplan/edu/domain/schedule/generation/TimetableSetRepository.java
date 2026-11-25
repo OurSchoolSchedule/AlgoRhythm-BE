@@ -10,5 +10,7 @@ public interface TimetableSetRepository extends JpaRepository<TimetableSet, Long
 
     List<TimetableSet> findBySchool_Id(Long schoolId);
 
+    Optional<TimetableSet> findByIdAndSchool_Id(Long id, Long schoolId);
+
     Optional<TimetableSet> findBySchool_IdAndAcademicYearAndSemester(Long schoolId, int academicYear, int semester);
 }

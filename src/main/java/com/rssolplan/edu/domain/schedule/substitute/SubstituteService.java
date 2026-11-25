@@ -25,7 +25,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -70,6 +69,7 @@ public class SubstituteService {
 
         List<SchoolUser> candidates = schoolUserRepo.findBySchool_IdAndPosition(
                         schoolId, SchoolUser.Position.TEACHER).stream()
+                .filter(t -> t.getEmploymentStatus() == SchoolUser.EmploymentStatus.HIRED)
                 .filter(t -> !t.getId().equals(timetable.getTeacher().getId()))
                 .toList();
 
@@ -130,12 +130,7 @@ public class SubstituteService {
             throw new ForbiddenException("해당 학교의 보결 요청이 아닙니다.");
         }
 
-        String receiverCsv = request.getReceiverUserIds();
-        boolean isInvited = receiverCsv != null &&
-                Arrays.stream(receiverCsv.split(","))
-                        .map(String::trim)
-                        .anyMatch(id -> id.equals(String.valueOf(candidate.getId())));
-        if (!isInvited) {
+        if (!request.includesCandidate(candidate.getId())) {
             throw new ForbiddenException("해당 보결 요청에 응답할 권한이 없습니다.");
         }
 

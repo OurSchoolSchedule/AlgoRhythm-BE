@@ -8,7 +8,8 @@ import com.rssolplan.edu.domain.auth.email.EmailDeliveryException;
 import com.rssolplan.edu.domain.auth.email.EmailVerificationProperties;
 import com.rssolplan.edu.domain.auth.email.ResendEmailSender;
 import com.rssolplan.edu.domain.user.User;
-import com.rssolplan.edu.domain.user.UserRepository;
+import com.rssolplan.edu.domain.roster.VerifiedRosterSignup;
+import com.rssolplan.edu.domain.roster.TeacherRosterService;
 import com.rssolplan.edu.global.config.JwtTokenProvider;
 import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificationToken;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +37,7 @@ public class EmailService {
     private final StringRedisTemplate redisTemplate; // Redis 활용
     private final SpringTemplateEngine templateEngine; // Thymeleaf 활용
     private final EmailVerificationHistoryRepository historyRepository; // DB 기록
-    private final UserRepository users;
+    private final VerifiedRosterSignup rosterSignup;
     private final UserRefreshTokenRepository refreshRepo;
     private final JwtTokenProvider jwt;
 
@@ -47,6 +48,7 @@ public class EmailService {
                     + "return redis.call('del', KEYS[1]) else return 0 end", Long.class);
 
     public void sendVerificationEmail(String email) {
+        email = TeacherRosterService.normalizeEmail(email);
         // 1. 도메인 체크 (설정 가능한 도메인)
         if (!isValidEmailDomain(email)) {
             throw new IllegalArgumentException("허용된 이메일 도메인만 인증이 가능합니다.");
@@ -99,11 +101,9 @@ public class EmailService {
     }
 
     public boolean verifyCode(String email, String code) {
-        String savedCode = redisTemplate.opsForValue().get(AUTH_PREFIX + email);
-
-        if (savedCode != null && savedCode.equals(code)) {
-            redisTemplate.delete(AUTH_PREFIX + email); // 인증 성공 후 즉시 삭제
-
+        email = TeacherRosterService.normalizeEmail(email);
+        Long consumed = redisTemplate.execute(DELETE_MATCHING_CODE, List.of(AUTH_PREFIX + email), code);
+        if (Long.valueOf(1L).equals(consumed)) {
             // DB에 인증 성공 기록 저장
             EmailVerificationHistory successHistory = EmailVerificationHistory.builder()
                     .email(email)
@@ -145,26 +145,15 @@ public class EmailService {
     }
 
     @Transactional
-    public EmailVerificationToken issueTokensForVerifiedEmail(String email) {
-        User user = users.findByEmail(email).orElse(null);
-        boolean isNewUser = false;
-
-        if (user == null) {
-            user = users.save(User.builder()
-                    .provider("email")
-                    .providerId(email)
-                    .username(extractUsernameFromEmail(email))
-                    .email(email)
-                    .profileImageUrl("")
-                    .build());
-            isNewUser = true;
-            log.info("[EmailService] 신규 이메일 유저 생성: {} (ID: {})", email, user.getId());
-        }
+    public EmailVerificationToken issueTokensForVerifiedEmail(String email, Long authenticatedUserId,
+                                                               String schoolCode, String displayName) {
+        var signup = rosterSignup.complete(email, authenticatedUserId, schoolCode, displayName);
+        User user = signup.user();
 
         String accessToken = jwt.generateAccess(user.getId());
         String refreshToken = jwt.generateRefresh(user.getId());
 
-        refreshRepo.deleteByUser(user);
+        refreshRepo.deleteForVerifiedLogin(user.getId());
         refreshRepo.save(UserRefreshToken.builder()
                 .user(user)
                 .refreshToken(refreshToken)
@@ -175,16 +164,9 @@ public class EmailService {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .userId(user.getId())
-                .isNewUser(isNewUser)
+                .isNewUser(signup.newUser())
+                .schoolMembership(signup.schoolMembership())
                 .build();
     }
 
-
-    private String extractUsernameFromEmail(String email) {
-        int atIndex = email.indexOf('@');
-        if (atIndex <= 0) {
-            return "사용자";
-        }
-        return email.substring(0, atIndex);
-    }
 }

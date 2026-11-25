@@ -8,6 +8,7 @@ import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 
 @Getter
 @Setter
@@ -39,6 +40,12 @@ public class SubstituteRequest {
 
     /** Comma-separated SchoolUser IDs to notify */
     private String receiverUserIds;
+
+    public boolean includesCandidate(long schoolUserId) {
+        return receiverUserIds != null && Arrays.stream(receiverUserIds.split(","))
+                .map(String::trim)
+                .anyMatch(Long.toString(schoolUserId)::equals);
+    }
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

@@ -9,18 +9,21 @@ import java.util.List;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
-    @Query("""
-        select n
-        from Notification n
-        left join fetch n.school
-        where n.userId = :userId
-        order by n.createdAt desc
-    """)
-    List<Notification> findByUserIdWithSchool(Long userId);
+    // School notifications follow current employment. Personal notifications have no school.
+    String VISIBLE_TO_USER = """
+        n.userId = :userId and (n.school is null or exists (
+            select m.id from SchoolUser m where m.user.id = :userId and m.school = n.school
+            and m.employmentStatus = HIRED
+        ))
+        """;
+
+    @Query("select n from Notification n left join fetch n.school where " + VISIBLE_TO_USER
+            + " order by n.createdAt desc")
+    List<Notification> findVisibleForUser(@Param("userId") Long userId);
 
     List<Notification> findByUserIdOrderByCreatedAtDesc(Long userId);
 
     @Modifying
-    @Query("UPDATE Notification n SET n.isRead = true WHERE n.userId = :userId AND n.isRead = false")
-    void markAllAsReadByUserId(@Param("userId") Long userId);
+    @Query("update Notification n set n.isRead = true where n.isRead = false and " + VISIBLE_TO_USER)
+    void markVisibleAsRead(@Param("userId") Long userId);
 }
