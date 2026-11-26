@@ -204,6 +204,40 @@ class TeacherRosterMySqlTest {
     }
 
     @Test
+    void teachingDirectoryKeepsRosterIdentitiesAndUsesTheRepublishedLoad() throws Exception {
+        long first = create(a, email, "김교사");
+        long second = create(a, "peer" + email, "김교사");
+        db.update("UPDATE school_teacher_roster SET school_user_id=? WHERE id=?", a, first);
+        http(put(base(a) + "/" + first + "/terms/" + a), admin(a),
+                Map.of("subjectIds", List.of(a + 1), "homeroomClassId", a), 200);
+        String path = "/api/v2/terms/" + a + "/teaching-directory";
+        var initial = http(get(path), admin(a), null, 200);
+        assertThat(initial.get("loadId").isNull()).isTrue();
+        assertThat(initial.at("/teachers/0/grades").size()).isZero();
+        assertThat(initial.at("/teachers/1/rosterId").longValue()).isEqualTo(second);
+        db.update("INSERT INTO school_class(id,school_id,academic_year,grade,class_number) VALUES(?,?,2026,3,1)",
+                a + 2, a);
+        for (int version : List.of(1, 2)) {
+            long load = a + version;
+            db.update("INSERT INTO load_import(id,term_id,version_no,created_by,normalized_sha,sheet_name)"
+                    + " VALUES(?,?,?,?,?, 'test')", load, a, version, a, String.valueOf(version).repeat(64));
+            db.update("INSERT INTO load_demand(load_id,teacher_id,subject_id,class_id,weekly_periods,source_cell)"
+                    + " VALUES(?,?,?,?,1,'A2')", load, a, a, version == 1 ? a + 2 : a);
+        }
+        // Publication 3 reuses import 1. Import 2 and the homeroom both point to grade 1.
+        db.update("INSERT INTO schedule_version(term_id,load_id,version_no,effective_from) VALUES"
+                + "(?,?,1,'2026-03-01'),(?,?,2,'2026-03-02'),(?,?,3,'2026-03-03')",
+                a, a + 1, a, a + 2, a, a + 1);
+        var result = http(get(path), admin(a), null, 200);
+        assertThat(result.get("loadId").longValue()).isEqualTo(a + 1);
+        assertThat(result.at("/teachers/0/grades").toString()).isEqualTo("[3]");
+        assertThat(result.at("/teachers/0/subjectIds").toString()).isEqualTo("[" + a + "," + (a + 1) + "]");
+        assertThat(result.at("/teachers/1/grades").size()).isZero();
+        assertThat(result.at("/teachers/1/subjectIds").size()).isZero();
+        http(get(path), admin(b), null, 404);
+    }
+
+    @Test
     void namesakesAndTermSpecificSubjectsExistBeforeTheFirstLesson() throws Exception {
         long first = create(a, email, "김교사");
         long second = create(a, "peer" + email, "김교사");
