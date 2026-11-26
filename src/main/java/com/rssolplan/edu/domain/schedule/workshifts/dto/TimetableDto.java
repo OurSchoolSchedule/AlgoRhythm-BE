@@ -45,6 +45,6 @@ public class TimetableDto {
         this.subjectId = t.getSubject().getId();
         this.subjectName = t.getSubject().getName();
         this.teacherId = t.getTeacher().getId();
-        this.teacherName = t.getTeacher().getUser().getUsername();
+        this.teacherName = t.getTeacher().getSchoolDisplayName();
     }
 }

@@ -138,7 +138,7 @@ public class SchoolClassController {
             this.grade = c.getGrade();
             this.classNumber = c.getClassNumber();
             this.homeroomTeacherSchoolUserId = c.getHomeroomTeacher() != null ? c.getHomeroomTeacher().getId() : null;
-            this.homeroomTeacherName = c.getHomeroomTeacher() != null ? c.getHomeroomTeacher().getUser().getUsername() : null;
+            this.homeroomTeacherName = c.getHomeroomTeacher() != null ? c.getHomeroomTeacher().getSchoolDisplayName() : null;
         }
     }
 }

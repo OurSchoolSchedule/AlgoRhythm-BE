@@ -29,7 +29,7 @@ public class TeacherRosterService {
     public record SubjectItem(long subjectId, String subjectName) {}
     public record Homeroom(long classId, int academicYear, int grade, int classNumber) {}
     public record Term(long termId, List<SubjectItem> subjects, Homeroom homeroomClass, boolean assignmentRecorded) {}
-    public record Entry(long rosterId, long schoolId, String authEmail, String displayName,
+    public record Entry(long rosterId, long schoolId, String authEmail, String displayName, String baseName,
                         String status, Long schoolUserId, String employmentStatus, Term term) {}
 
     private final JdbcTemplate jdbc;
@@ -70,7 +70,7 @@ public class TeacherRosterService {
     }
 
     private void lockSchoolForAdmin(Long userId, Long schoolId) {
-        // Every writer (including OTP joins/approvals) takes this existing row lock before
+        // Every writer (including confirmed joins and approvals) takes this existing row lock before
         // looking up the roster. This also serializes two requests for an as-yet absent email.
         jdbc.queryForList("SELECT id FROM school WHERE id=? FOR UPDATE", Long.class, schoolId);
         requireAdmin(userId, schoolId);
@@ -113,9 +113,23 @@ public class TeacherRosterService {
                 throw new IllegalStateException("학교 명부에 같은 이메일이 있습니다.");
             }
         }
-        jdbc.update("UPDATE school_teacher_roster SET auth_email=?, display_name=? WHERE school_id=? AND id=?",
-                email, name, schoolId, rosterId);
+        if (!old.displayName().equals(name) && (!old.status().equals("UNLINKED") || old.baseName() != null)) {
+            checkAssignedName(schoolId, name, rosterId);
+        }
+        jdbc.update("""
+                UPDATE school_teacher_roster SET auth_email=?,
+                base_name=IF(base_name IS NOT NULL AND BINARY display_name<>BINARY ?, ?, base_name),
+                display_name=? WHERE school_id=? AND id=?
+                """, email, name, name, name, schoolId, rosterId);
         return one(schoolId, rosterId, null);
+    }
+
+    private void checkAssignedName(long school, String name, long own) {
+        if (!jdbc.queryForList("""
+                SELECT id FROM school_teacher_roster WHERE school_id=? AND BINARY display_name=BINARY ?
+                AND (base_name IS NOT NULL OR school_user_id IS NOT NULL OR pending_user_id IS NOT NULL) AND id<>?
+                """, Long.class, school, name, own).isEmpty())
+            throw new IllegalStateException("해당 학교에서 이미 확인한 표시 이름입니다.");
     }
 
     public List<Entry> list(Long userId, Long schoolId, Long termId) {
@@ -218,7 +232,7 @@ public class TeacherRosterService {
         params.add(schoolId);
         params.addAll(arguments);
         String sql = """
-                SELECT r.id, r.auth_email, r.display_name, r.school_user_id, r.pending_user_id, m.employment_status,
+                SELECT r.id, r.auth_email, r.display_name, r.base_name, r.school_user_id, r.pending_user_id, m.employment_status,
                        t.term_id AS assignment_term_id, s.id AS subject_id, s.name AS subject_name, c.id AS class_id,
                        c.academic_year, c.grade, c.class_number
                 FROM school_teacher_roster r
@@ -256,6 +270,6 @@ public class TeacherRosterService {
         Long member = rs.getObject("school_user_id", Long.class);
         String status = member != null ? "LINKED" : (rs.getObject("pending_user_id") != null ? "PENDING" : "UNLINKED");
         return new Entry(rs.getLong("id"), schoolId, rs.getString("auth_email"),
-                rs.getString("display_name"), status, member, rs.getString("employment_status"), term);
+                rs.getString("display_name"), rs.getString("base_name"), status, member, rs.getString("employment_status"), term);
     }
 }

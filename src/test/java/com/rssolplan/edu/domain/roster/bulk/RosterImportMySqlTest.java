@@ -35,7 +35,8 @@ import static org.mockito.Mockito.doThrow;
                 "classpath:db/migration/V20261124_01__generation_and_lesson_operations.sql," +
                 "classpath:db/migration/V20261125_11__school_teacher_roster.sql," +
                 "classpath:db/migration/V20261125_21__passkey_auth.sql," +
-                "classpath:db/migration/V20261125_22__roster_import_preview.sql"})
+                "classpath:db/migration/V20261125_22__roster_import_preview.sql," +
+                "classpath:db/migration/V20261126_31__school_roster_names.sql"})
 @EnabledIfEnvironmentVariable(named = "R2_MYSQL_TEST", matches = "1")
 class RosterImportMySqlTest {
     @Autowired TestRestTemplate http;

@@ -59,7 +59,9 @@ class MilestoneThreeMySqlTest {
                         new ClassPathResource(
                                 "db/migration/V20261122_01__school_load_and_schedule_versions.sql"),
                         new ClassPathResource(
-                                "db/migration/V20261124_01__generation_and_lesson_operations.sql"))
+                                "db/migration/V20261124_01__generation_and_lesson_operations.sql"),
+                        new ClassPathResource("db/migration/V20261125_11__school_teacher_roster.sql"),
+                        new ClassPathResource("db/migration/V20261126_31__school_roster_names.sql"))
                 .execute(source);
         db.update("insert into school(id,name) values(?,'fixture')", school);
         for (int i = 0; i < 7; i++) {

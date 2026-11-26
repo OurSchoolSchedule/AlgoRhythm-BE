@@ -8,5 +8,6 @@ import java.time.LocalDate;
 public class TeacherJoinSchoolRequest {
     private String schoolCode;
     private LocalDate hireDate;
+    private String nameConfirmation;
     private String displayName;
 }

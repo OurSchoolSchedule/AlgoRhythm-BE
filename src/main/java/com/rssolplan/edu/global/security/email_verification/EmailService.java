@@ -157,7 +157,7 @@ public class EmailService {
             return EmailVerificationToken.builder().userId(existing).isNewUser(false)
                     .nextStep(step.nextStep()).flowToken(step.flowToken()).build();
         }
-        var signup = rosterSignup.complete(email, authenticatedUserId, schoolCode, displayName);
+        var signup = rosterSignup.complete(email, authenticatedUserId);
         User user = signup.user();
 
         var step = passkeys.afterVerifiedEmail(user.getId());

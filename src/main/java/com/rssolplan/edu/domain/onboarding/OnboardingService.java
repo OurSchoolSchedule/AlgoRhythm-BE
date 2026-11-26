@@ -33,7 +33,7 @@ public class OnboardingService {
         String role = req.getRole().toUpperCase(java.util.Locale.ROOT);
 
         if ("TEACHER".equals(role)) {
-            return memberships.requestSchool(userId, req.getSchoolCode(), req.getDisplayName(), req.getHireDate());
+            return memberships.requestSchool(userId, req.getSchoolCode(), req.getDisplayName(), req.getHireDate(), req.getNameConfirmation());
         }
         if (!"ADMIN".equals(role) || (req.getSchoolCode() != null && !req.getSchoolCode().isBlank())) {
             throw new IllegalArgumentException("기존 학교는 학교 코드로 교사 가입을 요청하세요.");
@@ -59,6 +59,10 @@ public class OnboardingService {
         user.setActiveSchoolId(school.getId());
         users.save(user);
 
+        if (req.getDisplayName() != null) {
+            users.flush();
+            memberships.requestSchool(userId, school.getSchoolCode(), req.getDisplayName(), req.getHireDate(), null);
+        }
         userProfileService.updateDefaultImageForRole(user, role);
 
         return new OnboardingResponse(

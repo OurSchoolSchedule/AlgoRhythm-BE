@@ -38,6 +38,13 @@ public class SchoolUser {
     @Column(name = "hire_date")
     private LocalDate hireDate;
 
+    @org.hibernate.annotations.Formula("(select r.display_name from school_teacher_roster r where r.school_user_id = id and r.base_name is not null)")
+    private String rosterDisplayName;
+
+    public String getSchoolDisplayName() {
+        return rosterDisplayName != null ? rosterDisplayName : user.getUsername();
+    }
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

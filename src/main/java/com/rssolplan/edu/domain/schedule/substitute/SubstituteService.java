@@ -152,7 +152,7 @@ public class SubstituteService {
         responseRepo.save(response);
 
         String msg = String.format("%s 교사가 보결 요청에 %s했습니다.",
-                candidate.getUser().getUsername(),
+                candidate.getSchoolDisplayName(),
                 workerAction == SubstituteResponse.WorkerAction.ACCEPT ? "수락" : "거절");
 
         notificationRepo.save(Notification.builder()

@@ -60,7 +60,7 @@ async function main() {
     const firstDevice = await device();
     const first = await otp(email, schoolCode);
     const rosterPath = '/api/schools/' + schoolId + '/roster/me';
-    assert.equal(first.schoolMembership.employmentStatus,'HIRED');
+    assert.equal(first.schoolMembership,null);
     await request(rosterPath,{method:'GET',token:first.flowToken,status:403});
     assert.equal(first.nextStep,'REGISTER');
     assert.ok(!first.accessToken && !first.refreshToken);
@@ -83,6 +83,7 @@ async function main() {
     const key1 = firstResponse.credential.id;
     const token = session.accessToken;
     await usable(token);
+    await request('/api/auth/onboarding',{token,body:{role:'TEACHER',schoolCode,displayName:'명부 교사'}});
     assert.equal((await request(rosterPath,{method:'GET',token})).displayName,'명부 교사');
     await usable(session.refreshToken,403);
     const refreshed = await request('/api/auth/refresh-token',{token:session.refreshToken});
