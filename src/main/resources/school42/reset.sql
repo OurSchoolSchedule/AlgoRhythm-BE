@@ -7,8 +7,4 @@ DELETE FROM weekly_lesson WHERE version_id IN (SELECT id FROM schedule_version W
 
 DELETE FROM schedule_version WHERE term_id = 547001;
 
-DELETE FROM load_demand WHERE load_id IN (SELECT id FROM load_import WHERE term_id = 547001);
-
-DELETE FROM load_import WHERE term_id = 547001;
-
 DELETE FROM generation_job WHERE school_id = 540001 AND term_id = 547001;

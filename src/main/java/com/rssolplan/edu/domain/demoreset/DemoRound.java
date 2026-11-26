@@ -14,7 +14,7 @@ class DemoResetState {
   private long revision;
 }
 
-/** Rotating within the SQL transaction makes outstanding Redis entries inaccessible on commit. */
+/** Retain the deployed namespace for existing authentication flows. */
 @Component
 @RequiredArgsConstructor
 public class DemoRound {
@@ -42,9 +42,5 @@ public class DemoRound {
   void lock() {
     db.update(
         "insert into demo_reset_round(id,revision) values (1,0) on duplicate key update id=1");
-  }
-
-  void advance() {
-    db.update("update demo_reset_round set revision=revision+1 where id=1");
   }
 }
