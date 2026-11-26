@@ -33,7 +33,8 @@ class CandidateInputService {
             Map<String, Set<Slot>> blocked,
             Map<Integer, Bell> bells) {
         TimetableProblem problem() {
-            return new TimetableProblem(load.demands(), slots, blocked, request.preferences());
+            return new TimetableProblem(
+                    load.demands(), slots, blocked, request.preferences(), request.objective());
         }
     }
 

@@ -15,6 +15,7 @@ final class TimetableProblem {
 
     record Wish(int teacher, Kind kind, Set<Integer> anyOf) {}
 
+    final Objective objective;
     final List<Slot> slots;
     final List<Row> rows;
     final List<Wish> wishes;
@@ -29,6 +30,16 @@ final class TimetableProblem {
             List<Slot> slots,
             Map<String, Set<Slot>> forbidden,
             List<Preference> preferences) {
+        this(demands, slots, forbidden, preferences, Objective.BALANCED);
+    }
+
+    TimetableProblem(
+            List<Demand> demands,
+            List<Slot> slots,
+            Map<String, Set<Slot>> forbidden,
+            List<Preference> preferences,
+            Objective objective) {
+        this.objective = objective;
         if (demands.isEmpty() || demands.size() > 8192)
             throw new BadRequestException("편성은 시수 배당 1~8,192건을 지원합니다.");
         this.slots = List.copyOf(slots);

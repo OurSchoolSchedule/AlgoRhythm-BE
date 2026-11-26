@@ -222,6 +222,7 @@ class MilestoneThreeMySqlTest {
 
     @Test
     void pollingAndPublicationReplayAndStaleCompetingSelection() throws Exception {
+        request = new Request(request.validatedLoadId(), request.teachingSlots(), null, Objective.MIN_TEACHER_GAPS);
         var ticket = jobs.submit(admin, term, request);
         GenerationStore.Poll poll = null;
         for (int i = 0; i < 120; i++) {
@@ -231,6 +232,9 @@ class MilestoneThreeMySqlTest {
             Thread.sleep(80);
         }
         assertThat(poll.state()).isEqualTo("READY");
+        assertThat(poll.objective()).isEqualTo(Objective.MIN_TEACHER_GAPS);
+        assertThat(poll.teachingSlots()).isEqualTo(request.teachingSlots());
+        assertThat(poll.result().candidates()).allSatisfy(c -> assertThat(c.score().teacherGapPeriods()).isZero());
         var first = choose(poll.result());
         var competing = choose(generate());
         var outcomes =

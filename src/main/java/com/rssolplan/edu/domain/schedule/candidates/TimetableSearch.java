@@ -51,14 +51,14 @@ final class TimetableSearch {
             budget.check();
             var initial = new EdgeColorSeed(input, budget, random).construct();
             if (initial != null) ranking.offer(input, initial, budget);
-            if (ranking.fourAtBound()) return Stop.TOP_FOUR_AT_BOUND;
+            if (ranking.fourAtBound(input.objective)) return Stop.TOP_FOUR_AT_BOUND;
         }
         int depth = 0;
         while (depth >= 0) {
             budget.check();
             if (depth == rowAt.length) {
                 ranking.offer(input, layout, budget);
-                if (ranking.fourAtBound()) return Stop.TOP_FOUR_AT_BOUND;
+                if (ranking.fourAtBound(input.objective)) return Stop.TOP_FOUR_AT_BOUND;
             } else {
                 int i = rowAt[depth];
                 if (choices[depth] == null) choices[depth] = available(depth, i);
@@ -126,8 +126,10 @@ final class TimetableSearch {
                         0,
                         submitters.cardinality() - possiblySatisfied.cardinality(),
                         possibleAvoids,
+                        0,
                         0);
-        return CandidateRanking.QUALITY.compare(upper, ranking.best.get(3).score()) > 0;
+        return CandidateRanking.quality(input.objective).compare(upper, ranking.best.get(3).score())
+                > 0;
     }
 
     private int select(BitSet available, int teacher) {

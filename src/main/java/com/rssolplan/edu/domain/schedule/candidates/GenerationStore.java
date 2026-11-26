@@ -31,7 +31,13 @@ class GenerationStore {
             CandidateInputService.Snapshot snapshot,
             Response result) {}
 
-    record Poll(UUID jobId, String state, long expectedPublishRev, Response result) {}
+    record Poll(
+            UUID jobId,
+            String state,
+            long expectedPublishRev,
+            Response result,
+            List<Slot> teachingSlots,
+            Objective objective) {}
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public Ticket insert(
@@ -171,8 +177,11 @@ where id=? and deadline>utc_timestamp(6) and (state='QUEUED' or (state='RUNNING'
         long school = access.schoolOfTerm(user, term, true);
         return db
                 .query(
-                        "select state,base_rev,result from generation_job where id=? and term_id=?"
-                            + " and school_id=?",
+                        """
+                        select state,base_rev,result,json_extract(snapshot,'$.slots'),
+                               json_unquote(json_extract(snapshot,'$.request.objective'))
+                        from generation_job where id=? and term_id=? and school_id=?
+                        """,
                         (r, n) ->
                                 new Poll(
                                         id,
@@ -180,7 +189,11 @@ where id=? and deadline>utc_timestamp(6) and (state='QUEUED' or (state='RUNNING'
                                         r.getLong(2),
                                         r.getString(3) == null
                                                 ? null
-                                                : json.read(r.getString(3), Response.class)),
+                                                : json.read(r.getString(3), Response.class),
+                                        List.of(json.read(r.getString(4), Slot[].class)),
+                                        r.getString(5) == null
+                                                ? Objective.BALANCED
+                                                : Objective.valueOf(r.getString(5))),
                         id.toString(),
                         term,
                         school)
