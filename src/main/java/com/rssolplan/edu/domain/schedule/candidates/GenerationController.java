@@ -21,6 +21,11 @@ class GenerationController {
 
     record Accepted(UUID jobId, String state, String statusUrl, long expectedPublishRev) {}
 
+    @GetMapping
+    List<PublicationService.TermSummary> terms(@AuthenticationPrincipal Long user) {
+        return publications.terms(user);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     Map<String, Long> term(

@@ -35,6 +35,27 @@ class PublicationService {
 
     record Published(long versionId, long publishRev, int weeklyLessons) {}
 
+    record TermSummary(
+            long termId, int academicYear, int semester, LocalDate startDate, LocalDate endDate) {}
+
+    @Transactional(readOnly = true)
+    public List<TermSummary> terms(long user) {
+        long school = access.member(user, false).getSchool().getId();
+        return db.query(
+                """
+                select id, academic_year, semester, start_date, end_date from timetable_set
+                where school_id=? order by start_date desc, id desc
+                """,
+                (row, index) ->
+                        new TermSummary(
+                                row.getLong("id"),
+                                row.getInt("academic_year"),
+                                row.getInt("semester"),
+                                row.getObject("start_date", LocalDate.class),
+                                row.getObject("end_date", LocalDate.class)),
+                school);
+    }
+
     record NewTerm(
             @Min(1900) @Max(9999) int academicYear,
             @Min(1) @Max(2) int semester,
