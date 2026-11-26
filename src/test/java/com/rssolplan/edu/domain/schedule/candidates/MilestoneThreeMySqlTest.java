@@ -131,6 +131,25 @@ class MilestoneThreeMySqlTest {
     }
 
     @Test
+    void termListIncludesOnlyTheActiveSchoolsTermsInDescendingStartOrder() {
+        var earlier = new PublicationService.NewTerm(2026, 1, monday.minusMonths(8), monday.minusMonths(4));
+        long first = publication.term(admin, earlier);
+        long emptySchool = school + 100;
+        db.update("insert into school(id,name) values(?,'empty school')", emptySchool);
+        db.update("insert into school_user(school_id,user_id,position,employment_status) values(?,?,'TEACHER','HIRED')",
+                emptySchool, school + 2);
+
+        var expected = List.of(
+                new PublicationService.TermSummary(term, 2026, 2, monday, monday.plusDays(8)),
+                new PublicationService.TermSummary(first, 2026, 1, earlier.startDate(), earlier.endDate()));
+        assertThat(publication.terms(admin)).isEqualTo(expected);
+        assertThat(publication.terms(school + 2)).isEqualTo(expected);
+        db.update("update users set active_school_id=? where id=?", emptySchool, school + 2);
+        assertThat(publication.terms(school + 2)).isEmpty();
+        assertThat(publication.terms(admin)).isEqualTo(expected);
+    }
+
+    @Test
     void weeklyReadPreservesLegacyUntilEffectiveAndResolvesEachDayOfARevisedWeek() {
         long teacher = school + 2;
         for (String day : List.of("MON", "WED", "FRI")) {
