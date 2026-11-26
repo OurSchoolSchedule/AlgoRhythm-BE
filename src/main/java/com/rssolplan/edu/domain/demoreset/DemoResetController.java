@@ -1,5 +1,6 @@
 package com.rssolplan.edu.domain.demoreset;
 
+import com.rssolplan.edu.domain.schedule.candidates.School42Round.TimetableScope;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +14,7 @@ public class DemoResetController {
   private final DemoResetService service;
 
   public record Input(
-      @NotNull DemoResetService.Scope scope,
+      @Valid @NotNull TimetableScope scope,
       @NotBlank @Size(max = 16) String password,
       @NotBlank @Size(max = 128) String approvalToken) {
     @Override
@@ -32,13 +33,12 @@ public class DemoResetController {
   }
 
   @GetMapping
-  public DemoResetService.Scope preview(@AuthenticationPrincipal Long user) {
+  public TimetableScope preview(@AuthenticationPrincipal Long user) {
     return service.preview(user);
   }
 
   @PostMapping
-  public DemoResetService.Scope reset(
-      @AuthenticationPrincipal Long user, @Valid @RequestBody Input input) {
+  public TimetableScope reset(@AuthenticationPrincipal Long user, @Valid @RequestBody Input input) {
     return service.reset(user, input.scope(), input.password(), input.approvalToken());
   }
 }

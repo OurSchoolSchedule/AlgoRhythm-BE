@@ -1,6 +1,8 @@
 package com.rssolplan.edu.domain.schedule.candidates;
 
 import com.rssolplan.edu.domain.schedule.operations.ScheduleConflict;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.support.EncodedResource;
@@ -74,11 +76,45 @@ public class School42Round {
             throw conflict("이 회차에서 시수표를 다시 검증하세요.");
     }
 
-    @Transactional(isolation = Isolation.READ_COMMITTED)
-    public long reset(long expected) {
+    public record TimetableScope(@Positive long schoolId, @Positive long termId, @Positive long round,
+                                 @PositiveOrZero long jobs, @PositiveOrZero long versions) {}
+
+    private TimetableScope scope(long revision) {
+        return new TimetableScope(SCHOOL, TERM, revision,
+                count("select count(*) from generation_job where school_id=540001 and term_id=547001"),
+                count("select count(*) from schedule_version where term_id=547001"));
+    }
+
+    @Transactional(readOnly = true)
+    public TimetableScope timetableScope() {
+        verifyIdentity();
+        if (count("select count(*) from information_schema.tables where table_schema=database() and table_name='school42_rehearsal'") == 0 ||
+                count("select count(*) from school42_rehearsal where school_id=540001 and round_no>0") == 0)
+            throw conflict("School42 실습실에 관리자로 입장해 시연 회차를 먼저 준비하세요.");
+        return scope(round(false));
+    }
+
+    private void lockReset(long expected) {
         requireRound(expected);
         db.queryForObject("select id from school where id=? for update", Long.class, SCHOOL);
-        if (count("select count(*) from generation_job where school_id=540001 and state in ('QUEUED','RUNNING')") != 0)
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public TimetableScope resetTimetables(TimetableScope expected) {
+        lockReset(expected.round());
+        if (!scope(expected.round()).equals(expected))
+            throw conflict("초기화할 시간표가 바뀌었습니다. 현재 범위를 다시 확인하세요.");
+        return scope(clearTimetables(expected.round()));
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public long reset(long expected) {
+        lockReset(expected);
+        return clearTimetables(expected);
+    }
+
+    private long clearTimetables(long expected) {
+        if (count("select count(*) from generation_job where school_id=540001 and term_id=547001 and state in ('QUEUED','RUNNING')") != 0)
             throw conflict("편성이 끝난 뒤 초기화하세요.");
         if (count("select count(*) from lesson_change where term_id=547001") != 0 ||
                 count("""
@@ -91,7 +127,7 @@ public class School42Round {
                     and (j.school_id<>540001 or j.term_id is null or j.term_id<>547001)
                     """) != 0) throw conflict("별도의 승인·변경 기록이 연결되어 초기화를 중단했습니다.");
         script("reset");
-        db.update("update school42_rehearsal set validated_load=null, round_no=round_no+1 where school_id=?", SCHOOL);
+        db.update("update school42_rehearsal set round_no=round_no+1 where school_id=?", SCHOOL);
         return expected + 1;
     }
 
