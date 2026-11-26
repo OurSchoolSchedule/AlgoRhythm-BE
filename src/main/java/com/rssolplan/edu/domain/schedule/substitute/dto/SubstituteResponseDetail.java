@@ -18,7 +18,7 @@ public record SubstituteResponseDetail(
                 resp.getSubstituteRequest().getId(),
                 resp.getId(),
                 resp.getCandidate().getId(),
-                resp.getCandidate().getUser().getUsername(),
+                resp.getCandidate().getSchoolDisplayName(),
                 resp.getWorkerAction().name(),
                 resp.getManagerApproval().name(),
                 resp.getCreatedAt()

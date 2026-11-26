@@ -28,7 +28,7 @@ public interface SchoolUserRepository extends JpaRepository<SchoolUser, Long> {
     List<SchoolUser> findBySchool_IdAndPosition(Long schoolId, Position position);
 
     @Query("""
-        SELECT su.id, u.username
+        SELECT su.id, coalesce(su.rosterDisplayName, u.username)
         FROM SchoolUser su
         JOIN su.user u
         WHERE su.school.id = :schoolId

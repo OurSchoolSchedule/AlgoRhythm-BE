@@ -329,7 +329,7 @@ public class ScheduleGenerationService {
                 schoolId, SchoolUser.Position.TEACHER);
         return teachers.stream()
                 .filter(t -> teacherAvailabilityRepository.findBySchoolUser_Id(t.getId()).isEmpty())
-                .map(t -> new UnsubmittedTeacherDto(t.getUser().getId(), t.getUser().getUsername()))
+                .map(t -> new UnsubmittedTeacherDto(t.getUser().getId(), t.getSchoolDisplayName()))
                 .collect(Collectors.toList());
     }
 

@@ -21,7 +21,7 @@ public class VerifiedRosterSignup {
     public record Result(User user, boolean newUser, OnboardingResponse schoolMembership) {}
 
     @Transactional
-    public Result complete(String email, Long authenticatedUserId, String schoolCode, String displayName) {
+    public Result complete(String email, Long authenticatedUserId) {
         String address = TeacherRosterService.normalizeEmail(email);
         Long boundId = db.queryForList("SELECT user_id FROM roster_verified_account WHERE auth_email=?",
                 Long.class, address).stream().findFirst().orElse(null);
@@ -37,11 +37,10 @@ public class VerifiedRosterSignup {
         }
         boolean newUser = user == null;
         if (newUser) {
-            user = users.save(User.builder().provider("email").providerId(address).email(address)
-                    .username(address.substring(0, address.indexOf('@'))).profileImageUrl("").build());
+            user = users.save(User.builder().provider("email").providerId(address).email(address).username("")
+                    .profileImageUrl("").build());
         }
-        OnboardingResponse membership = memberships.afterVerification(user.getId(), address, schoolCode,
-                displayName, user.getActiveSchoolId());
+        OnboardingResponse membership = memberships.existingMembership(user.getId(), user.getActiveSchoolId());
         db.update("""
                 INSERT INTO roster_verified_account(user_id,auth_email) VALUES (?,?)
                 ON DUPLICATE KEY UPDATE user_id=roster_verified_account.user_id

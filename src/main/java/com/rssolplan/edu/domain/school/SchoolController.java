@@ -124,7 +124,7 @@ public class SchoolController {
                                       TeacherRosterService.Entry entry) {
             this.schoolUserId = su.getId();
             this.userId = su.getUser().getId();
-            this.username = su.getUser().getUsername();
+            this.username = su.getSchoolDisplayName();
             this.displayName = entry == null ? username : entry.displayName();
             var rosterTerm = entry == null ? null : entry.term();
             this.rosterLinked = entry != null;

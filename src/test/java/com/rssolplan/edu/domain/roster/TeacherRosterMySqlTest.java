@@ -82,6 +82,7 @@ class TeacherRosterMySqlTest {
     void migrate() {
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V20261122_01__school_load_and_schedule_versions.sql"),
                 new ClassPathResource(R1),
+                new ClassPathResource("db/migration/V20261126_31__school_roster_names.sql"),
                 new ClassPathResource("db/migration/V20261125_21__passkey_auth.sql")).execute(source);
     }
 
@@ -246,7 +247,8 @@ class TeacherRosterMySqlTest {
         var session = verify(email, a);
         long user = session.required("userId").longValue();
         String token = localSessionFor(session);
-        assertThat(session.at("/schoolMembership/employmentStatus").textValue()).isEqualTo("HIRED");
+        assertThat(session.get("schoolMembership").isNull()).isTrue();
+        http(post(ONBOARD), token, Map.of("role","TEACHER","schoolCode",code(a),"displayName","이수학"), 200);
         assertThat(members(user, a)).isOne();
         assertThat(members(user, b)).isZero();
         var me = http(get(base(a) + "/me"), token, null, 200);
@@ -255,7 +257,7 @@ class TeacherRosterMySqlTest {
         assertThat(http(get(base(b) + "/" + second), admin(b), null, 200).required("status").textValue())
                 .isEqualTo("UNLINKED");
         http(put("/api/mypage/teacher/profile"), token, Map.of("username", "계정 이름", "email", different), 200);
-        http(post(ADD_SCHOOL), token, Map.of("schoolCode", code(b)), 201);
+        http(post(ADD_SCHOOL), token, Map.of("schoolCode", code(b), "displayName", "이과학"), 201);
         assertThat(members(user, a)).isOne();
         assertThat(members(user, b)).isOne();
         http(patch("/api/mypage/active-school/" + b), token, null, 200);
@@ -306,6 +308,32 @@ class TeacherRosterMySqlTest {
     }
 
     @Test
+    void aStaleProposalLeavesBothRowsUnchangedUntilTheTeacherAcceptsTheNewNames() throws Exception {
+        long firstId = create(a, email, "선등록 1");
+        long secondId = create(a, "peer" + email, "선등록 2");
+        String first = localSessionFor(verify(email, null));
+        String second = localSessionFor(verify("peer" + email, null));
+        var input = Map.of("schoolCode", code(a), "displayName", "김민지", "role", "TEACHER");
+        var old = http(post(ONBOARD + "/name-preview"), second, input, 200);
+        var firstMember = http(post(ONBOARD), first, input, 200).required("schoolUserId");
+        var commit = new HashMap<>(input);
+        commit.put("nameConfirmation", old.required("confirmation").asText());
+        var conflict = http(post(ONBOARD), second, commit, 409);
+        assertThat(conflict.required("code").asText()).isEqualTo("NAME_CONFIRMATION_REQUIRED");
+        var changed = conflict.required("proposal");
+        assertThat(changed.required("renamedTo").asText()).isEqualTo("김민지A");
+        assertThat(changed.required("displayName").asText()).isEqualTo("김민지B");
+        assertThat(http(get(base(a) + "/" + firstId), admin(a), null, 200).required("displayName").asText()).isEqualTo("김민지");
+        assertThat(http(get(base(a) + "/" + secondId), admin(a), null, 200).required("status").asText()).isEqualTo("UNLINKED");
+        commit.put("nameConfirmation", changed.required("confirmation").asText());
+        var accepted = http(post(ONBOARD), second, commit, 200);
+        assertThat(http(post(ONBOARD), second, commit, 200).required("schoolUserId")).isEqualTo(accepted.required("schoolUserId"));
+        var renamed = http(get(base(a) + "/me"), first, null, 200);
+        assertThat(renamed.required("displayName").asText()).isEqualTo("김민지A");
+        assertThat(renamed.required("schoolUserId")).isEqualTo(firstMember);
+    }
+
+    @Test
     void concurrentClaimsOnAdministratorRosterReuseOneEmployment() throws Exception {
         long id = create(a, email, "이교사");
         var session = verify(email, null);
@@ -322,7 +350,7 @@ class TeacherRosterMySqlTest {
         var teachers = http(get("/api/school/teachers").param("termId", "" + a), token, null, 200);
         assertThat(teachers.size()).isOne();
         var summary = teachers.get(0);
-        assertThat(summary.required("displayName").textValue()).isEqualTo("이교사");
+        assertThat(summary.required("displayName").textValue()).isEqualTo("신청 교사");
         assertThat(summary.required("subjects").size()).isZero();
         assertThat(summary.required("weeklyLessonCount").intValue()).isZero();
         assertThat(summary.required("rosterSubjects").size()).isEqualTo(2);
@@ -332,7 +360,7 @@ class TeacherRosterMySqlTest {
     }
 
     @Test
-    void onlyOneConcurrentVerificationConsumesTheCodeAndLinksTheSchool() throws Exception {
+    void onlyOneConcurrentVerificationConsumesTheCodeAndExplicitConfirmationLinksTheSchool() throws Exception {
         long id = create(a, email, "김과학");
         var payload = json.writeValueAsBytes(Map.of("email", email, "code", sendCode(email), "schoolCode", code(a)));
         var results = race(() -> mvc.perform(post(VERIFY).contentType(MediaType.APPLICATION_JSON).content(payload))
@@ -340,7 +368,9 @@ class TeacherRosterMySqlTest {
         assertThat(results).extracting(r -> r.getStatus()).containsExactlyInAnyOrder(200, 400);
         var success = results.stream().filter(r -> r.getStatus() == 200).findFirst().orElseThrow();
         var account = json.readTree(success.getContentAsByteArray());
-        assertThat(account.at("/schoolMembership/employmentStatus").textValue()).isEqualTo("HIRED");
+        assertThat(account.get("schoolMembership").isNull()).isTrue();
+        assertThat(members(account.required("userId").longValue(), a)).isZero();
+        http(post(ONBOARD), localSessionFor(account), Map.of("role","TEACHER","schoolCode",code(a),"displayName","김과학"), 200);
         assertThat(members(account.required("userId").longValue(), a)).isOne();
         assertThat(rosterCount(a, email)).isOne();
         assertThat(http(get(base(a) + "/" + id), admin(a), null, 200).required("status").textValue()).isEqualTo("LINKED");
@@ -352,7 +382,7 @@ class TeacherRosterMySqlTest {
         var first = verify(email, a);
         String token = localSessionFor(first);
         long user = first.required("userId").longValue();
-        long member = first.at("/schoolMembership/schoolUserId").longValue();
+        long member = http(post(ONBOARD), token, onboarding(a), 200).required("schoolUserId").longValue();
         http(get("/api/school/teachers"), token, null, 200);
         db.update("insert into notifications(user_id,school_id,category,type,message,is_read,created_at) values "
                         + "(?,?,'SCHEDULE_INPUT','SCHEDULE_INPUT_REQUEST','school notice',false,CURRENT_TIMESTAMP),"
@@ -430,7 +460,8 @@ class TeacherRosterMySqlTest {
         String newcomer = "new" + email;
         var direct = http(post(VERIFY), null, Map.of("email", newcomer, "code", sendCode(newcomer),
                 "schoolCode", code(a), "displayName", "신규 교사"), 200);
-        assertThat(direct.at("/schoolMembership/employmentStatus").textValue()).isEqualTo("PENDING");
+        assertThat(direct.get("schoolMembership").isNull()).isTrue();
+        http(post(ONBOARD), localSessionFor(direct), Map.of("role","TEACHER","schoolCode",code(a),"displayName","신규 교사"), 202);
         assertThat(members(direct.required("userId").longValue(), a)).isZero();
         assertThat(http(get(base(a) + "/me"), localSessionFor(direct), null, 200)
                 .required("displayName").textValue()).isEqualTo("신규 교사");
@@ -456,9 +487,8 @@ class TeacherRosterMySqlTest {
                     user, user, a);
             var session = verify(address, null);
             assertThat(session.at("/schoolMembership/schoolUserId").longValue()).isEqualTo(user);
-            String displayName = http(get(base(a) + "/me"), localSessionFor(session), null, 200)
-                    .required("displayName").textValue();
-            assertThat(displayName).isEqualTo(address.substring(0, address.indexOf('@')));
+            http(get(base(a) + "/me"), localSessionFor(session), null, 404);
+            assertThat(rosterCount(a, address)).isZero();
             assertThat(db.queryForObject("select username from users where id=?", String.class, user)).isEqualTo(names.get(i));
         }
     }
@@ -490,8 +520,16 @@ class TeacherRosterMySqlTest {
             assertThat(member.get("hire_date").toString()).isEqualTo("2022-03-01");
         }
         String token = localSessionFor(loggedIn);
-        var replay = http(post(ONBOARD), token, onboarding(b), 200);
-        assertThat(replay.required("employmentStatus").textValue()).isEqualTo("ON_LEAVE");
+        var preview = http(post(ONBOARD + "/name-preview"), token,
+                Map.of("schoolCode", code(a), "displayName", "본인이 확인한 이름"), 200);
+        assertThat(http(get(base(a)), admin(a), null, 200).get(0).required("status").asText()).isEqualTo("UNLINKED");
+        var confirmed = http(post(ONBOARD), token, Map.of("role", "TEACHER", "schoolCode", code(a),
+                "displayName", "본인이 확인한 이름", "nameConfirmation", preview.required("confirmation").asText()), 200);
+        assertThat(confirmed.required("schoolUserId").longValue()).isEqualTo(a + 4);
+        assertThat(http(get(base(a) + "/me"), token, null, 200).required("displayName").asText()).isEqualTo("본인이 확인한 이름");
+        assertThat(db.queryForObject("select username from users where id=?", String.class, user)).isEqualTo(localPart);
+        assertThat(rosterCount(b, email)).isZero();
+        http(post(ONBOARD), token, onboarding(b), 403);
         http(patch("/api/mypage/active-school/" + b), token, null, 403);
     }
 }

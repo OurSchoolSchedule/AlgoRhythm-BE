@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
+import java.util.HashSet;
 
 @Service
 @RequiredArgsConstructor
@@ -22,7 +23,7 @@ public class RosterMembershipService {
     private final TeacherRosterService roster;
 
     private record School(long id, String code, String name, String address, String phone) {}
-    private record Account(long id, String name, Long activeSchoolId) {}
+    private record Account(long id, Long activeSchoolId) {}
     private record Member(long id, String role, String employment, LocalDate hireDate) {}
     private record Entry(long id, Long memberId, Long pendingUserId) {}
 
@@ -32,75 +33,80 @@ public class RosterMembershipService {
     private static final RowMapper<Entry> ENTRY = (rs, n) -> new Entry(rs.getLong("id"),
             rs.getObject("school_user_id", Long.class), rs.getObject("pending_user_id", Long.class));
 
-    /** The caller has already proved control of this mailbox by OTP in this transaction's login flow. */
-    public OnboardingResponse afterVerification(long userId, String verifiedEmail, String schoolCode,
-                                                String displayName, Long activeSchoolId) {
-        if (schoolCode != null) {
-            School school = lockSchoolByCode(schoolCode);
-            return join(school, lockAccount(userId), verifiedEmail, displayName, null);
-        }
+    /** Email verification reports existing membership; only the signed-in owner can confirm a name. */
+    public OnboardingResponse existingMembership(long userId, Long activeSchoolId) {
         if (activeSchoolId == null) return null;
-        School school = db.query("SELECT * FROM school WHERE id=? FOR UPDATE", SCHOOL, activeSchoolId)
+        School school = db.query("SELECT * FROM school WHERE id=?", SCHOOL, activeSchoolId)
                 .stream().findFirst().orElse(null);
-        if (school == null) return null;
-        Account user = lockAccount(userId);
-        Member member = member(userId, school.id());
-        // A stale active-school pointer alone must never turn an email login into a school join.
-        if (!Objects.equals(user.activeSchoolId(), activeSchoolId) || member == null) return null;
-        if ("ADMIN".equals(member.role())) return response(userId, school, member);
-        return join(school, user, verifiedEmail, null, null);
+        Member member = member(userId, activeSchoolId);
+        return school == null || member == null ? null : response(userId, school, member);
     }
 
-    public OnboardingResponse requestSchool(long userId, String schoolCode, String displayName, LocalDate hireDate) {
-        School school = lockSchoolByCode(schoolCode);
+    private record Applicant(School school, Account user, String email, Member member, Entry entry) {}
+
+    private Applicant applicant(long userId, String code) {
+        School school = lockSchoolByCode(code);
         Account user = lockAccount(userId);
         String email = verifiedAddress(userId);
-        if (email == null) {
-            Member existing = member(userId, school.id());
-            if (existing != null) return response(userId, school, existing);
-            throw new ForbiddenException("새 학교에 가입하려면 이메일 인증이 필요합니다.");
-        }
-        return join(school, user, email, displayName, hireDate);
-    }
-
-    private OnboardingResponse join(School school, Account user, String email, String displayName, LocalDate hireDate) {
-        String requestedName = displayName == null ? null : TeacherRosterService.validateDisplayName(displayName);
-        Member member = member(user.id(), school.id());
-        Entry entry = db.query("""
+        if (email == null) throw new ForbiddenException("학교 이름 등록 전에 이메일 인증이 필요합니다.");
+        Member member = member(userId, school.id());
+        if (member != null && !"HIRED".equals(member.employment()))
+            throw new ForbiddenException("재직 중인 소속만 이름을 확인할 수 있습니다.");
+        // Also recognize an existing linked row if an older account has a different historical roster address.
+        var entries = db.query("""
                 SELECT id, school_user_id, pending_user_id FROM school_teacher_roster
-                WHERE school_id=? AND auth_email=? FOR UPDATE
-                """, ENTRY, school.id(), email).stream().findFirst().orElse(null);
-        if (entry == null) {
-            // Preserve legacy employment, including ADMIN, ON_LEAVE and RESIGNED, exactly as stored.
-            if (member != null && "ADMIN".equals(member.role())) return response(user.id(), school, member);
-            String name = displayNameForRequest(user, requestedName, email);
-            db.update("""
-                    INSERT INTO school_teacher_roster(school_id,auth_email,display_name,school_user_id,pending_user_id)
-                    VALUES (?,?,?,?,?)
-                    """, school.id(), email, name, member == null ? null : member.id(), member == null ? user.id() : null);
-        } else if (entry.memberId() != null) {
-            if (member == null || entry.memberId() != member.id())
-                throw new IllegalStateException("명부가 이미 다른 계정에 연결되어 있습니다.");
-        } else {
-            if (entry.pendingUserId() != null && entry.pendingUserId() != user.id())
-                throw new IllegalStateException("다른 계정의 승인 요청이 있습니다.");
-            if (member == null && entry.pendingUserId() == null) {
-                member = hire(school.id(), user.id(), hireDate);
-            }
-            if (member != null) link(entry.id(), member);
-        }
-        selectFirstSchool(user, school, member);
-        return response(user.id(), school, member);
+                WHERE school_id=? AND (auth_email=? OR school_user_id=? OR pending_user_id=?) FOR UPDATE
+                """, ENTRY, school.id(), email, member == null ? null : member.id(), userId);
+        if (entries.size() > 1) throw new IllegalStateException("소속과 인증 이메일의 명부가 다릅니다. 관리자에게 확인해 주세요.");
+        Entry entry = entries.isEmpty() ? null : entries.get(0);
+        if (entry != null && ((entry.memberId() != null && (member == null || entry.memberId() != member.id()))
+                || (entry.pendingUserId() != null && entry.pendingUserId() != userId)))
+            throw new IllegalStateException("명부가 이미 다른 계정에 연결되어 있습니다.");
+        return new Applicant(school, user, email, member, entry);
     }
 
-    private String displayNameForRequest(Account user, String requestedName, String verifiedEmail) {
-        if (requestedName != null) return requestedName;
-        String accountName = user.name() == null ? "" : user.name().strip();
-        if (!accountName.isEmpty() && accountName.codePointCount(0, accountName.length()) <= 100) {
-            return accountName;
+    private SchoolNamePlan plan(Applicant a, String name) {
+        var rows = db.query("""
+                SELECT id,display_name,base_name FROM school_teacher_roster WHERE school_id=? ORDER BY id
+                """, (r,n) -> new SchoolNamePlan.Row(r.getLong(1),r.getString(2),r.getString(3)), a.school.id());
+        var legacy = db.queryForList("""
+                SELECT u.username FROM school_user m JOIN users u ON u.id=m.user_id
+                WHERE m.school_id=? AND m.user_id<>? AND m.employment_status='HIRED'
+                  AND NOT EXISTS(SELECT 1 FROM school_teacher_roster r WHERE r.school_user_id=m.id)
+                """, String.class, a.school.id(), a.user.id());
+        return SchoolNamePlan.build(a.school.id(), a.school.name(), a.user.id(), name,
+                a.entry == null ? null : a.entry.id(), rows, new HashSet<>(legacy));
+    }
+
+    public SchoolNamePlan.Proposal preview(long userId, String code, String name) {
+        return plan(applicant(userId, code), name).proposal;
+    }
+
+    public OnboardingResponse requestSchool(long userId, String code, String name, LocalDate hireDate,
+                                             String confirmation) {
+        Applicant a = applicant(userId, code);
+        var plan = plan(a, name);
+        plan.requireConfirmation(confirmation);
+        var p = plan.proposal;
+        if (plan.rename != null)
+            db.update("UPDATE school_teacher_roster SET display_name=? WHERE id=?", p.renamedTo(), plan.rename.id());
+        Member member = a.member;
+        if (a.entry == null) {
+            db.update("""
+                    INSERT INTO school_teacher_roster(school_id,auth_email,display_name,base_name,school_user_id,pending_user_id)
+                    VALUES (?,?,?,?,?,?)
+                    """, a.school.id(), a.email, p.displayName(), p.baseName(),
+                    member == null ? null : member.id(), member == null ? userId : null);
+        } else {
+            if (!plan.replay)
+                db.update("UPDATE school_teacher_roster SET display_name=?,base_name=? WHERE id=?",
+                        p.displayName(), p.baseName(), a.entry.id());
+            if (member == null && a.entry.pendingUserId() == null)
+                member = hire(a.school.id(), userId, hireDate);
+            if (member != null && a.entry.memberId() == null) link(a.entry.id(), member);
         }
-        // Old accounts can lack a usable profile name. Set only the new school display label.
-        return verifiedEmail.substring(0, verifiedEmail.indexOf('@'));
+        selectFirstSchool(a.user, a.school, member);
+        return response(userId, a.school, member);
     }
 
     public void approve(Long adminUserId, Long schoolId, Long rosterId) {
@@ -132,8 +138,8 @@ public class RosterMembershipService {
     }
 
     private Account lockAccount(long id) {
-        return db.query("SELECT id, username, active_school_id FROM users WHERE id=? FOR UPDATE",
-                        (rs, n) -> new Account(rs.getLong(1), rs.getString(2), rs.getObject(3, Long.class)), id)
+        return db.query("SELECT id, active_school_id FROM users WHERE id=? FOR UPDATE",
+                        (rs, n) -> new Account(rs.getLong(1), rs.getObject(2, Long.class)), id)
                 .stream().findFirst().orElseThrow(() -> new NotFoundException("사용자를 찾을 수 없습니다."));
     }
 

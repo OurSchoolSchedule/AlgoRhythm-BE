@@ -93,7 +93,7 @@ public class TimetableSwapService {
                 new Target(receiverTimetable, receiverDate));
 
         String msg = String.format("%s 교사가 %s %s교시↔%s %s교시 교환을 요청했습니다.",
-                requester.getUser().getUsername(),
+                requester.getSchoolDisplayName(),
                 requesterDate,
                 requesterTimetable.getPeriodSetting().getPeriodNumber(),
                 receiverDate,
@@ -151,8 +151,8 @@ public class TimetableSwapService {
                         request.getSchool().getId(), SchoolUser.Position.ADMIN);
                 for (SchoolUser admin : admins) {
                     String msg = String.format("%s 교사가 %s 교사의 교환 요청을 수락했습니다. 최종 승인해주세요.",
-                            request.getReceiver().getUser().getUsername(),
-                            request.getRequester().getUser().getUsername());
+                            request.getReceiver().getSchoolDisplayName(),
+                            request.getRequester().getSchoolDisplayName());
                     notificationRepo.save(Notification.builder()
                             .userId(admin.getUser().getId())
                             .school(request.getSchool())

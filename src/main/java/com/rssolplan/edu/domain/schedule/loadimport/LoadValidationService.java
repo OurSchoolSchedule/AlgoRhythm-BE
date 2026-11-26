@@ -46,7 +46,7 @@ public class LoadValidationService {
                         .findBySchool_IdAndEmploymentStatus(
                                 schoolId, SchoolUser.EmploymentStatus.HIRED)
                         .stream()
-                        .map(m -> new LoadCatalog.Name(m.getId(), m.getUser().getUsername()))
+                        .map(m -> new LoadCatalog.Name(m.getId(), m.getSchoolDisplayName()))
                         .toList();
         var schoolSubjects = subjects.findBySchool_Id(schoolId);
         var names =

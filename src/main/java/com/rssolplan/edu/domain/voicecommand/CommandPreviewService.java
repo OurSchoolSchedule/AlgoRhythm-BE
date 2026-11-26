@@ -71,7 +71,7 @@ public class CommandPreviewService {
         preview.put("note", intent.note());
         preview.put("candidateTeachers", candidates.stream().map(c -> Map.of(
                 "schoolUserId", c.getId(),
-                "name", c.getUser().getUsername()
+                "name", c.getSchoolDisplayName()
         )).toList());
         return preview;
     }
@@ -107,7 +107,7 @@ public class CommandPreviewService {
         SubstituteRequest req = resp.getSubstituteRequest();
         return Map.of(
                 "responseId", resp.getId(),
-                "teacherName", resp.getCandidate().getUser().getUsername(),
+                "teacherName", resp.getCandidate().getSchoolDisplayName(),
                 "teacherAction", resp.getWorkerAction().name(),
                 "timetableInfo", buildTimetableInfo(req.getTimetable()),
                 "substituteDate", req.getSubstituteDate(),
@@ -136,6 +136,6 @@ public class CommandPreviewService {
                 t.getDayOfWeek().name(),
                 t.getSubject().getName(),
                 t.getPeriodSetting().getPeriodNumber(),
-                t.getTeacher().getUser().getUsername());
+                t.getTeacher().getSchoolDisplayName());
     }
 }

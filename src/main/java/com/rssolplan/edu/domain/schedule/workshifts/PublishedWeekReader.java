@@ -54,10 +54,11 @@ class PublishedWeekReader {
               and (e.term_id is null or e.in_term or not e.published)
         )
         select s.*, c.grade, c.class_number, p.period_number, p.start_time, p.end_time,
-               sub.name as subject_name, u.username as teacher_name
+               sub.name as subject_name, coalesce(r.display_name,u.username) as teacher_name
         from slots s join school_class c on c.id=s.class_id join period_setting p on p.id=s.period_id
         join subject sub on sub.id=s.subject_id join school_user su on su.id=s.teacher_id
         join users u on u.id=su.user_id
+        left join school_teacher_roster r on r.school_id=:school and r.school_user_id=su.id and r.base_name is not null
         order by s.day_no, p.period_number, c.grade, c.class_number, s.teacher_id
         """;
 
