@@ -32,12 +32,13 @@ public class School42Round {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void open() {
         db.update("insert into school42_rehearsal(school_id,round_no) values (?,0) on duplicate key update school_id=school_id", SCHOOL);
-        if (round(true) == 0) {
+        long previous = round(true);
+        if (previous <= 0) {
             if (count("select count(*) from school where id=540001") != 0 ||
                     count("select count(*) from timetable_set where id=547001") != 0)
                 throw conflict("지정한 ID가 이미 사용 중이므로 시연 명부를 생성할 수 없습니다.");
             script("fixture");
-            db.update("update school42_rehearsal set round_no=1 where school_id=?", SCHOOL);
+            db.update("update school42_rehearsal set round_no=? where school_id=?", Math.max(1L, -previous), SCHOOL);
         }
         verifyIdentity();
     }
@@ -59,7 +60,7 @@ public class School42Round {
     }
 
     void requireRound(long expected) {
-        if (round(true) != expected) throw conflict("다른 팀원이 회차를 초기화했습니다. 다시 입장하세요.");
+        if (expected <= 0 || round(true) != expected) throw conflict("다른 팀원이 회차를 초기화했습니다. 다시 입장하세요.");
         verifyIdentity();
     }
 

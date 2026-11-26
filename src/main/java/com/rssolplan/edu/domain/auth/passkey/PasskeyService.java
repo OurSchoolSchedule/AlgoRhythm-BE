@@ -173,6 +173,7 @@ public class PasskeyService {
                     case "ADD" -> ADD;
                     case "DELETE" -> DELETE;
                     case "ROTATE" -> ROTATE;
+                    case "DEMO_RESET" -> DEMO_RESET;
                     default -> throw PasskeyProblem.invalid();
                 };
         var account = store.lock(user);
@@ -267,6 +268,10 @@ public class PasskeyService {
         approved(user, token, ROTATE, null);
         store.advance(user);
         return new Recovery(rotateCode(user));
+    }
+
+    public void approveDemoReset(long user, String token) {
+        approved(user, token, DEMO_RESET, null);
     }
 
     private State approved(long user, String token, Action action, String target) {

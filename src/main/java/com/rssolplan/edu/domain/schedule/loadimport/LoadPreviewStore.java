@@ -1,5 +1,6 @@
 package com.rssolplan.edu.domain.schedule.loadimport;
 
+import com.rssolplan.edu.domain.demoreset.DemoRound;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rssolplan.edu.global.exception.NotFoundException;
@@ -17,6 +18,7 @@ import java.util.*;
 public class LoadPreviewStore {
     private final StringRedisTemplate redis;
     private final ObjectMapper json;
+    private final DemoRound round;
     static final Duration TTL = Duration.ofMinutes(30);
 
     public static final class Unavailable extends RuntimeException {
@@ -65,8 +67,8 @@ public class LoadPreviewStore {
         }
     }
 
-    private static String key(LoadCatalog scope, Long termId, UUID id) {
-        return "schedule:load:v1:"
+    private String key(LoadCatalog scope, Long termId, UUID id) {
+        return round.prefix() + "schedule:load:v1:"
                 + scope.schoolId()
                 + ":"
                 + scope.academicYear()

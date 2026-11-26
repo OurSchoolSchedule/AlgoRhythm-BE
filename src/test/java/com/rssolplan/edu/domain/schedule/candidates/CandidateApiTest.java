@@ -1,5 +1,6 @@
 package com.rssolplan.edu.domain.schedule.candidates;
 
+import com.rssolplan.edu.domain.demoreset.DemoRound;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -62,7 +63,9 @@ class CandidateApiTest {
                 .set(anyString(), anyString(), eq(Duration.ofMinutes(30)));
         when(values.get(anyString())).thenAnswer(call -> cache.get((String) call.getArgument(0)));
         var loads = new LoadValidationService(auth, terms, members, subjects, classes);
-        var previews = new LoadPreviewStore(redis, json);
+        var round = org.mockito.Mockito.mock(DemoRound.class);
+        org.mockito.Mockito.lenient().when(round.prefix()).thenReturn("");
+        var previews = new LoadPreviewStore(redis, json, round);
         var inputs = new CandidateInputService(loads, previews, settings, blocks);
         var store = mock(GenerationStore.class);
         when(store.insert(any(), any(), anyLong()))

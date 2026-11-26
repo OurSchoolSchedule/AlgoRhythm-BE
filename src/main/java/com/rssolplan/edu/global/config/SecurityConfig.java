@@ -138,6 +138,7 @@ public class SecurityConfig {
         passkeys.setAllowedOriginPatterns(List.of());
         passkeys.setAllowedOrigins(List.of(realm.origin()));
         source.registerCorsConfiguration("/api/auth/passkeys/**", passkeys);
+        source.registerCorsConfiguration("/api/demo-reset", passkeys);
         // 전체 경로 적용
         source.registerCorsConfiguration("/**", cfg);
         return source;

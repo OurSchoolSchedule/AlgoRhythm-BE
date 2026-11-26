@@ -1,5 +1,6 @@
 package com.rssolplan.edu.domain.voicecommand;
 
+import com.rssolplan.edu.domain.demoreset.DemoRound;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rssolplan.edu.domain.voicecommand.dto.DraftData;
 import com.rssolplan.edu.global.exception.DraftExpiredException;
@@ -19,13 +20,14 @@ public class CommandDraftStore {
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final DemoRound round;
 
     /** DraftData를 저장하고 draftToken(key)을 반환한다. */
     public String save(DraftData data) {
         String token = KEY_PREFIX + UUID.randomUUID();
         try {
             String json = objectMapper.writeValueAsString(data);
-            redisTemplate.opsForValue().set(token, json, TTL);
+            redisTemplate.opsForValue().set(round.prefix() + token, json, TTL);
             return token;
         } catch (Exception e) {
             throw new IllegalStateException("드래프트 저장 중 오류가 발생했습니다.", e);
@@ -38,7 +40,8 @@ public class CommandDraftStore {
      */
     public DraftData getAndDelete(String token) {
         // GETDEL — Spring Data Redis 2.6+ 지원 (Spring Boot 3.x)
-        String json = redisTemplate.opsForValue().getAndDelete(token);
+        if (token == null || !token.startsWith(KEY_PREFIX)) throw new DraftExpiredException("유효하지 않은 드래프트입니다.");
+        String json = redisTemplate.opsForValue().getAndDelete(round.prefix() + token);
         if (json == null) {
             throw new DraftExpiredException("드래프트 토큰이 만료되었거나 존재하지 않습니다.");
         }

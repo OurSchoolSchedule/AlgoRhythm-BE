@@ -1,5 +1,6 @@
 package com.rssolplan.edu.domain.auth.passkey;
 
+import com.rssolplan.edu.domain.demoreset.DemoRound;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -20,7 +21,8 @@ class PasskeyFlows {
         LOGIN,
         ADD,
         DELETE,
-        ROTATE
+        ROTATE,
+        DEMO_RESET
     }
 
     record State(Action action, Long user, long revision, String target, String options) {
@@ -33,6 +35,7 @@ class PasskeyFlows {
     private final StringRedisTemplate redis;
     private final ObjectMapper json;
     private final PasskeyRealm realm;
+    private final DemoRound round;
 
     String put(String stage, State state) {
         String token =
@@ -57,6 +60,6 @@ class PasskeyFlows {
     }
 
     private String key(String stage, String token) {
-        return "passkey:" + realm.id() + ":" + stage + ":" + token;
+        return round.prefix() + "passkey:" + realm.id() + ":" + stage + ":" + token;
     }
 }

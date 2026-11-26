@@ -96,7 +96,8 @@ public class JwtTokenProvider {
         if ("dev".equals(method)) return LocalDevLoginEnabled.enabled(environment);
         if ("kakao".equals(method)) {
             String linkedUser = claims.get("linkedUser", String.class);
-            return !enrolled(user) && (linkedUser == null || !enrolled(Long.parseLong(linkedUser)));
+            return Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from users where id=? and provider='kakao')", Boolean.class, user))
+                    && !enrolled(user) && (linkedUser == null || !enrolled(Long.parseLong(linkedUser)));
         }
         if (!"passkey".equals(method)) return false;
         String id = claims.get("credential", String.class);

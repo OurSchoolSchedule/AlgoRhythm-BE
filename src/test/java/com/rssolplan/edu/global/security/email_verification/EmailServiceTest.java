@@ -1,5 +1,6 @@
 package com.rssolplan.edu.global.security.email_verification;
 
+import com.rssolplan.edu.domain.demoreset.DemoRound;
 import com.rssolplan.edu.domain.auth.EmailVerificationHistory;
 import com.rssolplan.edu.domain.auth.EmailVerificationHistoryRepository;
 import com.rssolplan.edu.domain.auth.passkey.PasskeyService;
@@ -51,8 +52,10 @@ class EmailServiceTest {
         resolver.setCharacterEncoding("UTF-8");
         SpringTemplateEngine templateEngine = new SpringTemplateEngine();
         templateEngine.setTemplateResolver(resolver);
+        var round = org.mockito.Mockito.mock(DemoRound.class);
+        org.mockito.Mockito.lenient().when(round.prefix()).thenReturn("");
         service = new EmailService(sender, properties, redis, templateEngine,
-                historyRepository, signup, passkeys, passkeyStore);
+                historyRepository, signup, passkeys, passkeyStore, round);
     }
 
     @Test

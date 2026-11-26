@@ -1,5 +1,6 @@
 package com.rssolplan.edu.global.security.email_verification;
 
+import com.rssolplan.edu.domain.demoreset.DemoRound;
 import com.rssolplan.edu.domain.auth.EmailVerificationHistory;
 import com.rssolplan.edu.domain.auth.EmailVerificationHistoryRepository;
 import com.rssolplan.edu.domain.auth.passkey.PasskeyService;
@@ -39,6 +40,7 @@ public class EmailService {
     private final VerifiedRosterSignup rosterSignup;
     private final PasskeyService passkeys;
     private final PasskeyStore passkeyStore;
+    private final DemoRound round;
 
     private static final String AUTH_PREFIX = "EMAIL_AUTH:";
     private static final SecureRandom CODE_RANDOM = new SecureRandom();
@@ -59,14 +61,15 @@ public class EmailService {
         context.setVariable("expirationMinutes", verificationProperties.getExpiration());
         String html = templateEngine.process("email-auth", context);
 
-        redisTemplate.opsForValue().set(AUTH_PREFIX + email, code,
+        String key = round.prefix() + AUTH_PREFIX + email;
+        redisTemplate.opsForValue().set(key, code,
                 Duration.ofMinutes(verificationProperties.getExpiration()));
 
         String messageId;
         try {
             messageId = mailSender.send(email, "[우리학교시간표] 교사 인증 번호 안내", html);
         } catch (EmailDeliveryException e) {
-            recordDeliveryFailure(email, code, e);
+            recordDeliveryFailure(email, key, code, e);
             throw e;
         }
 
@@ -79,10 +82,10 @@ public class EmailService {
         log.info("[EmailService] Resend 인증 메일 발송 요청 완료: {} (메시지 ID: {})", email, messageId);
     }
 
-    private void recordDeliveryFailure(String email, String code, EmailDeliveryException failure) {
+    private void recordDeliveryFailure(String email, String key, String code, EmailDeliveryException failure) {
         try {
             // 동시에 새 발송 요청이 들어온 경우 새 인증 코드를 삭제하지 않습니다.
-            redisTemplate.execute(DELETE_MATCHING_CODE, List.of(AUTH_PREFIX + email), code);
+            redisTemplate.execute(DELETE_MATCHING_CODE, List.of(key), code);
         } catch (RuntimeException e) {
             log.error("[EmailService] 발송 실패 인증 코드 정리 실패: {}", e.getClass().getSimpleName());
         }
@@ -100,8 +103,9 @@ public class EmailService {
     }
 
     public boolean verifyCode(String email, String code) {
+        round.lockForVerification();
         email = TeacherRosterService.normalizeEmail(email);
-        Long consumed = redisTemplate.execute(DELETE_MATCHING_CODE, List.of(AUTH_PREFIX + email), code);
+        Long consumed = redisTemplate.execute(DELETE_MATCHING_CODE, List.of(round.prefix() + AUTH_PREFIX + email), code);
         if (Long.valueOf(1L).equals(consumed)) {
             // DB에 인증 성공 기록 저장
             EmailVerificationHistory successHistory = EmailVerificationHistory.builder()

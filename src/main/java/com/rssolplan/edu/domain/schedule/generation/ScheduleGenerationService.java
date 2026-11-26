@@ -1,5 +1,6 @@
 package com.rssolplan.edu.domain.schedule.generation;
 
+import com.rssolplan.edu.domain.demoreset.DemoRound;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -64,6 +65,7 @@ public class ScheduleGenerationService {
     private final AuthorizationService authService;
     private final NotificationService notificationService;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final DemoRound round;
 
     private final BalancedStrategy balancedStrategy;
     private final CoverageFirstStrategy coverageFirstStrategy;
@@ -184,6 +186,8 @@ public class ScheduleGenerationService {
     // 3. 후보 시간표 조회
     // =========================================================
     public List<CandidateSchedule> getCandidates(String redisKey) {
+        if (redisKey == null || !redisKey.startsWith(round.prefix() + "school:candidate:"))
+            throw new NotFoundException("이 회차의 시간표가 아닙니다.");
         String json = (String) redisTemplate.opsForValue().get(redisKey);
         if (json == null) throw new NotFoundException("생성된 시간표가 없습니다.");
         try {
@@ -405,7 +409,7 @@ public class ScheduleGenerationService {
     }
 
     private String saveCandidatesToRedis(Long schoolId, List<CandidateSchedule> candidates) {
-        String key = "school:candidate:" + schoolId + ":" + UUID.randomUUID();
+        String key = round.prefix() + "school:candidate:" + schoolId + ":" + UUID.randomUUID();
         try {
             String json = objectMapper.writeValueAsString(candidates);
             redisTemplate.opsForValue().set(key, json, Duration.ofDays(1));
