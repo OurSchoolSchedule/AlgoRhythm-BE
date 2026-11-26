@@ -22,8 +22,26 @@ public final class CandidateApi {
 
     public record Preference(String teacherId, Kind kind, List<Slot> anyOf) {}
 
+    public enum Objective {
+        BALANCED,
+        MIN_TEACHER_GAPS,
+        PREFER_WANTS
+    }
+
     public record Request(
-            UUID validatedLoadId, List<Slot> teachingSlots, List<Preference> preferences) {}
+            UUID validatedLoadId,
+            List<Slot> teachingSlots,
+            List<Preference> preferences,
+            Objective objective) {
+        public Request {
+            if (objective == null) objective = Objective.BALANCED;
+        }
+
+        public Request(
+                UUID validatedLoadId, List<Slot> teachingSlots, List<Preference> preferences) {
+            this(validatedLoadId, teachingSlots, preferences, Objective.BALANCED);
+        }
+    }
 
     public record Placement(String teacherId, String subjectId, String classId, Slot slot) {}
 
@@ -32,7 +50,8 @@ public final class CandidateApi {
             int wantsTotal,
             int teachersWithNoWantMet,
             int avoidsMet,
-            int avoidsTotal) {}
+            int avoidsTotal,
+            Integer teacherGapPeriods) {}
 
     public record Candidate(String candidateId, Score score, List<Placement> placements) {}
 

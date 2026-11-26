@@ -141,7 +141,8 @@ class TimetableSearchTest {
                                     3,
                                     (w1 == 0 ? 1 : 0) + (w2 == 0 ? 1 : 0),
                                     (a != 4 ? 1 : 0) + (b != 1 ? 1 : 0),
-                                    2));
+                                    2,
+                                    0));
                 }
         expect.sort(CandidateRanking.QUALITY);
         var result = solve(p);
@@ -150,6 +151,57 @@ class TimetableSearchTest {
                 .extracting(Candidate::score)
                 .containsExactlyElementsOf(expect.subList(0, 4));
         result.candidates().forEach(c -> checkAssignments(p, c));
+    }
+
+    @Test
+    void sameLoadHasThreeDifferentBestLayoutsAccordingToObjective() {
+        var slots = List.of(mon(1), mon(2), mon(3), mon(4));
+        var demands = List.of(demand(1, 10, 1, 2), demand(2, 20, 1, 1), demand(3, 30, 1, 1));
+        var preferences =
+                List.of(
+                        new Preference("3", Kind.WANT, List.of(mon(3))),
+                        new Preference("1", Kind.WANT, List.of(mon(1))),
+                        new Preference("1", Kind.WANT, List.of(mon(4))),
+                        new Preference("2", Kind.WANT, List.of(mon(1))),
+                        new Preference("1", Kind.AVOID, List.of(mon(2))),
+                        new Preference("3", Kind.AVOID, List.of(mon(4))),
+                        new Preference("2", Kind.AVOID, List.of(mon(4))));
+        var expected =
+                Map.of(
+                        Objective.BALANCED, List.of("2", "1", "3", "1"),
+                        Objective.MIN_TEACHER_GAPS, List.of("2", "3", "1", "1"),
+                        Objective.PREFER_WANTS, List.of("1", "2", "3", "1"));
+        for (var objective : Objective.values()) {
+            var problem = new TimetableProblem(demands, slots, Map.of(), preferences, objective);
+            var result = solve(problem);
+            assertThat(result.candidates())
+                    .hasSize(4)
+                    .allSatisfy(c -> checkAssignments(problem, c));
+            var first = result.candidates().get(0);
+            var teachers =
+                    first.placements().stream()
+                            .sorted(Comparator.comparing(Placement::slot))
+                            .map(Placement::teacherId)
+                            .toList();
+            assertThat(teachers).isEqualTo(expected.get(objective));
+            assertThat(first.score().teacherGapPeriods())
+                    .isEqualTo(teachers.lastIndexOf("1") - teachers.indexOf("1") - 1);
+        }
+    }
+
+    @Test
+    void gapObjectiveCannotStopAtFourPreferencePerfectCandidatesWithGaps() {
+        var p =
+                new TimetableProblem(
+                        List.of(demand(1, 10, 1, 2)),
+                        List.of(mon(1), mon(3), mon(5), mon(7), new Slot(DayOfWeek.TUE, 2)),
+                        Map.of(),
+                        List.of(),
+                        Objective.MIN_TEACHER_GAPS);
+        var result = solve(p);
+        assertThat(result.candidates())
+                .hasSize(4)
+                .allSatisfy(c -> assertThat(c.score().teacherGapPeriods()).isZero());
     }
 
     @Test

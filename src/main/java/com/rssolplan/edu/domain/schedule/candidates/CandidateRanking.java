@@ -17,10 +17,28 @@ final class CandidateRanking {
             Comparator.comparing(Candidate::score, QUALITY).thenComparing(Candidate::candidateId);
     volatile List<Candidate> best = List.of();
 
-    boolean fourAtBound() {
+    private static final Comparator<Score> PREFER_WANTS =
+            Comparator.comparingInt(Score::wantsMet)
+                    .reversed()
+                    .thenComparing(Comparator.comparingInt(Score::avoidsMet).reversed())
+                    .thenComparingInt(Score::teachersWithNoWantMet);
+    private static final Comparator<Score> MIN_GAPS =
+            Comparator.comparingInt(Score::teacherGapPeriods).thenComparing(QUALITY);
+
+    static Comparator<Score> quality(Objective objective) {
+        return switch (objective) {
+            case BALANCED -> QUALITY;
+            case MIN_TEACHER_GAPS -> MIN_GAPS;
+            case PREFER_WANTS -> PREFER_WANTS;
+        };
+    }
+
+    boolean fourAtBound(Objective objective) {
         if (best.size() != 4) return false;
         Score worst = best.get(3).score();
-        return worst.wantsMet() == worst.wantsTotal() && worst.avoidsMet() == worst.avoidsTotal();
+        return worst.wantsMet() == worst.wantsTotal()
+                && worst.avoidsMet() == worst.avoidsTotal()
+                && (objective != Objective.MIN_TEACHER_GAPS || worst.teacherGapPeriods() == 0);
     }
 
     // Rebuild resource occupancy and each exact demand count independently of the search state.
@@ -64,8 +82,10 @@ final class CandidateRanking {
                         wants,
                         submitters.cardinality() - satisfied.cardinality(),
                         avoided,
-                        avoids);
-        if (best.size() == 4 && QUALITY.compare(score, best.get(3).score()) > 0) return;
+                        avoids,
+                        gapPeriods(input.slots, teacher));
+        if (best.size() == 4 && quality(input.objective).compare(score, best.get(3).score()) > 0)
+            return;
         MessageDigest digest;
         try {
             digest = MessageDigest.getInstance("SHA-256");
@@ -92,10 +112,27 @@ final class CandidateRanking {
         if (best.stream().anyMatch(c -> c.candidateId().equals(id))) return;
         var updated = new ArrayList<>(best);
         updated.add(new Candidate(id, score, List.copyOf(placements)));
-        updated.sort(ORDER);
+        updated.sort(
+                Comparator.comparing(Candidate::score, quality(input.objective))
+                        .thenComparing(Candidate::candidateId));
         if (updated.size() > 4) updated.remove(4);
         budget.check();
         best = List.copyOf(updated);
+    }
+
+    // Slots are ordered by weekday and registered period. Overnight and closed periods do not
+    // count.
+    private static int gapPeriods(List<Slot> slots, BitSet[] teachers) {
+        int gaps = 0;
+        for (var busy : teachers) {
+            int previous = -1;
+            for (int next = busy.nextSetBit(0); next >= 0; next = busy.nextSetBit(next + 1)) {
+                if (previous >= 0 && slots.get(previous).day() == slots.get(next).day())
+                    gaps += next - previous - 1;
+                previous = next;
+            }
+        }
+        return gaps;
     }
 
     static BitSet[] emptySets(int size) {
