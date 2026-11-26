@@ -93,3 +93,9 @@ management:
 school42:
   admin-hash: ${SCHOOL42_ADMIN_HASH:}
   teacher-hash: ${SCHOOL42_TEACHER_HASH:}
+
+demo:
+  reset:
+    operator: ${DEMO_RESET_OPERATOR:}
+    database: ${DEMO_RESET_DATABASE:}
+    pin-hash: ${DEMO_RESET_PIN_HASH:}

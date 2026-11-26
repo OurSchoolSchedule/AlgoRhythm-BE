@@ -103,6 +103,7 @@ public class EmailVerificationController {
      * @param request 이메일과 인증 코드
      * @return 검증 결과
      */
+    @org.springframework.transaction.annotation.Transactional
     @PostMapping("/verify")
     public ResponseEntity<EmailVerificationAuthResponse> verifyCode(
             @AuthenticationPrincipal Long authenticatedUserId,
