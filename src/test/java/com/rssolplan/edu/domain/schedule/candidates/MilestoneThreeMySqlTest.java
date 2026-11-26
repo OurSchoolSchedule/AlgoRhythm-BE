@@ -15,6 +15,7 @@ import com.rssolplan.edu.domain.schedule.loadimport.*;
 import com.rssolplan.edu.domain.schedule.operations.*;
 import com.rssolplan.edu.domain.schedule.operations.DatedLessons.Lesson;
 import com.rssolplan.edu.global.exception.NotFoundException;
+import com.rssolplan.edu.global.exception.ForbiddenException;
 
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -312,6 +313,39 @@ class MilestoneThreeMySqlTest {
     @Test
     void coverAgainstSwap() {
         conflict("CS");
+    }
+
+    @Test
+    void cancellationBlocksRequestsAndAcceptanceWithoutChangingTheRequest() {
+        var week = publish();
+        var a = week.get(0);
+        var b = week.get(1);
+        var body = new NewChange(ChangeService.Kind.SWAP, a.id(), a.rev(), b.id(), b.rev(), null);
+        var c = changes.create(a.actual().teacherId(), term, body);
+        db.update("update dated_lesson set actual=json_set(actual,'$.cancelled',true),rev=rev+1 where id=?", b.id());
+
+        assertThat(lessons.get(term, b.id()).actual().cancelled()).isTrue();
+        assertThatThrownBy(() -> changes.create(a.actual().teacherId(), term, body))
+                .isInstanceOfSatisfying(ScheduleConflict.class, x -> assertThat(x.code).isEqualTo("LESSON_CANCELLED"));
+        assertThatThrownBy(() -> changes.respond(b.actual().teacherId(), term, c.id(), true, 0))
+                .isInstanceOfSatisfying(ScheduleConflict.class, x -> assertThat(x.code).isEqualTo("LESSON_CANCELLED"));
+        assertThat(changes.list(admin, term)).singleElement().satisfies(row -> {
+            assertThat(row.state()).isEqualTo("PENDING");
+            assertThat(row.rev()).isZero();
+        });
+    }
+
+    @Test
+    void teachingAnAssignedLessonDoesNotGiveAnAdministratorSwapPermission() {
+        var week = publish();
+        var a = week.get(0);
+        var b = week.get(1);
+        db.update("update dated_lesson set actual=json_set(actual,'$.teacherId',?) where id=?", admin, a.id());
+        var body = new NewChange(ChangeService.Kind.SWAP, a.id(), a.rev(), b.id(), b.rev(), null);
+        assertThatThrownBy(() -> changes.create(admin, term, body)).isInstanceOf(ForbiddenException.class);
+        assertThatThrownBy(() -> changes.create(other, term,
+                new NewChange(ChangeService.Kind.SUBSTITUTE, b.id(), b.rev(), null, null, admin)))
+                .isInstanceOf(NotFoundException.class);
     }
 
     @Test
