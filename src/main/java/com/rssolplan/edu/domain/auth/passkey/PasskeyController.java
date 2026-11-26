@@ -24,6 +24,11 @@ public class PasskeyController {
 
     public record Finish(@NotBlank String ceremonyId, @NotNull JsonNode credential) {}
 
+    public record RegistrationFinish(
+            @NotBlank String ceremonyId,
+            @NotNull JsonNode credential,
+            Boolean includeRecoveryCode) {}
+
     public record Reauth(@NotBlank String operation, String credentialId) {}
 
     public record Approval(@NotBlank String approvalToken) {}
@@ -46,8 +51,12 @@ public class PasskeyController {
 
     @PostMapping("/registration/finish")
     public PasskeyService.Session finishRegistration(
-            @AuthenticationPrincipal Long user, @Valid @RequestBody Finish request) {
-        return passkeys.finishRegistration(request.ceremonyId(), request.credential(), user);
+            @AuthenticationPrincipal Long user, @Valid @RequestBody RegistrationFinish request) {
+        return passkeys.finishRegistration(
+                request.ceremonyId(),
+                request.credential(),
+                user,
+                !Boolean.FALSE.equals(request.includeRecoveryCode()));
     }
 
     @PostMapping("/authentication/options")

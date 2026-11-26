@@ -18,6 +18,7 @@ class PasskeyFlows {
         FIRST,
         RECOVER,
         LOGIN,
+        VERIFY,
         ADD,
         DELETE,
         ROTATE

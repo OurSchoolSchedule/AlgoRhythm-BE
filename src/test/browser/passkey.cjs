@@ -67,9 +67,16 @@ async function main() {
     await usable(first.flowToken,403);
     const pending = await pk('/registration/options',{body:first});
     assert.equal(pending.publicKey.rp.id, new URL(origin).hostname);
+    assert.equal(pending.publicKey.user.name, email);
+    assert.equal(pending.publicKey.user.displayName, email);
+    assert.equal(Buffer.from(pending.publicKey.user.id, 'base64url').length, 32);
     assert.equal(pending.publicKey.authenticatorSelection.userVerification,'required');
     await pk('/registration/options',{body:first,status:409});
-    const firstResponse = await response(pending,'create');
+    // Existing authenticators can retain the numeric label from an earlier release.
+    const legacyOptions = structuredClone(pending);
+    legacyOptions.publicKey.user.name = String(first.userId);
+    legacyOptions.publicKey.user.displayName = String(first.userId);
+    const firstResponse = await response(legacyOptions,'create');
     const session = await regFinish(firstResponse);
     assert.ok(session.recoveryCode);
     await regFinish(firstResponse,undefined,409);
@@ -80,7 +87,21 @@ async function main() {
     await usable(session.refreshToken,403);
     const refreshed = await request('/api/auth/refresh-token',{token:session.refreshToken});
     await usable(refreshed.accessToken);
-    await usable((await login()).accessToken);
+    const signedIn = await login();
+    await usable(signedIn.accessToken);
+    assert.deepEqual(signedIn.passkeyUser, {
+      rpId: pending.publicKey.rp.id, userId: pending.publicKey.user.id, name: email, displayName: email
+    });
+    let lastChallenge;
+    for (let press = 0; press < 2; press++) {
+      const options = await pk('/reauthentication/options',{token,body:{operation:'VERIFY'}});
+      assert.equal(options.publicKey.userVerification,'required');
+      assert.deepEqual(options.publicKey.allowCredentials.map(key => key.id),[key1]);
+      assert.notEqual(options.publicKey.challenge,lastChallenge);
+      lastChallenge = options.publicKey.challenge;
+      const checked = await authFinish(await response(options,'get'),token);
+      assert.deepEqual(checked,{verified:true, passkeyUser:signedIn.passkeyUser});
+    }
     const repeat = await otp(email,'A2-UNKNOWN');
     assert.equal(repeat.nextStep,'AUTHENTICATE');
     assert.ok(!repeat.schoolMembership && !repeat.accessToken);
@@ -127,6 +148,8 @@ async function main() {
     const add = await approval(token,'ADD');
     const addOptions = await pk('/credentials/options',{token,body:{approvalToken:add}});
     await pk('/credentials/options',{token,body:{approvalToken:add},status:409});
+    assert.deepEqual(addOptions.publicKey.user, pending.publicKey.user);
+    assert.ok(addOptions.publicKey.excludeCredentials.some(key => key.id === key1));
     await removeDevice(firstDevice);
     const secondDevice = await device();
     const secondResponse = await response(addOptions,'create');
@@ -144,11 +167,21 @@ async function main() {
     await recovery(session.recoveryCode,400);
     await removeDevice(secondDevice);
     await device();
-    const replacement = await regFinish(await response(await recovery(recoveryCode),'create'));
+    const replacement = await regFinish({...await response(await recovery(recoveryCode),'create'), includeRecoveryCode:false});
+    assert.equal(replacement.recoveryCode,null);
     await usable(replacement.accessToken);
     await usable(second.accessToken,403);
     await recovery(recoveryCode,400);
     assert.equal((await pk('/credentials',{method:'GET',token:replacement.accessToken})).length,1);
+
+    const newEmail = 'a2-' + randomUUID() + '@ewha.ac.kr';
+    const newOptions = await pk('/registration/options', {body:await otp(newEmail)});
+    assert.equal(newOptions.publicKey.user.name, newEmail);
+    const newSession = await regFinish({...await response(newOptions,'create'), includeRecoveryCode:false});
+    assert.equal(newSession.recoveryCode,null);
+    await usable(newSession.accessToken);
+    const ownCheck = await pk('/reauthentication/options',{token:newSession.accessToken,body:{operation:'VERIFY'}});
+    await authFinish(await response(ownCheck,'get'), replacement.accessToken,400);
   } finally { await browser.close(); }
 }
 main().catch(error => { console.error(error.message); process.exitCode=1; });
