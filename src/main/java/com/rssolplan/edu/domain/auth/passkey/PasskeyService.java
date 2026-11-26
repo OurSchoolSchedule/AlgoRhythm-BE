@@ -8,7 +8,6 @@ import com.rssolplan.edu.domain.auth.UserRefreshToken;
 import com.rssolplan.edu.domain.auth.UserRefreshTokenRepository;
 import com.rssolplan.edu.domain.auth.passkey.PasskeyFlows.Action;
 import com.rssolplan.edu.domain.auth.passkey.PasskeyFlows.State;
-import com.rssolplan.edu.domain.user.User;
 import com.rssolplan.edu.domain.user.UserRepository;
 import com.rssolplan.edu.global.config.JwtTokenProvider;
 import com.yubico.webauthn.*;
@@ -36,6 +35,7 @@ import java.util.*;
 @Transactional(isolation = Isolation.READ_COMMITTED)
 public class PasskeyService {
     private final PasskeyStore store;
+    private final PasskeyRealm realm;
     private final PasskeyFlows flows;
     private final RelyingParty rp;
     private final ObjectMapper json;
@@ -47,9 +47,19 @@ public class PasskeyService {
 
     public record Options(String ceremonyId, JsonNode publicKey) {}
 
-    public sealed interface AssertionFinish permits Session, Approval {}
+    public sealed interface AssertionFinish permits Session, Approval, Verification {}
 
-    public record Session(long userId, String accessToken, String refreshToken, String recoveryCode)
+    public record PasskeyUser(String rpId, String userId, String name, String displayName) {}
+
+    public record Verification(boolean verified, PasskeyUser passkeyUser)
+            implements AssertionFinish {}
+
+    public record Session(
+            long userId,
+            String accessToken,
+            String refreshToken,
+            String recoveryCode,
+            PasskeyUser passkeyUser)
             implements AssertionFinish {}
 
     public record Approval(String approvalToken) implements AssertionFinish {}
@@ -90,16 +100,9 @@ public class PasskeyService {
 
     private Options registration(State state) {
         var account = current(state);
-        User user = users.findById(state.user()).orElseThrow(PasskeyProblem::stale);
+        String email = store.verifiedEmail(state.user()).orElseThrow(PasskeyProblem::stale);
         var identity =
-                UserIdentity.builder()
-                        .name(Long.toString(state.user()))
-                        .displayName(
-                                Optional.ofNullable(user.getUsername())
-                                        .filter(s -> !s.isBlank())
-                                        .orElse("교사"))
-                        .id(account.handle())
-                        .build();
+                UserIdentity.builder().name(email).displayName(email).id(account.handle()).build();
         var creation =
                 rp.startRegistration(
                         StartRegistrationOptions.builder()
@@ -120,7 +123,8 @@ public class PasskeyService {
         }
     }
 
-    public Session finishRegistration(String ceremonyId, JsonNode response, Long signedInUser) {
+    public Session finishRegistration(
+            String ceremonyId, JsonNode response, Long signedInUser, boolean includeRecoveryCode) {
         State state = flows.take("register", ceremonyId);
         if (state.action() == ADD && !Objects.equals(signedInUser, state.user()))
             throw PasskeyProblem.invalid();
@@ -158,18 +162,21 @@ public class PasskeyService {
         } catch (DuplicateKeyException e) {
             throw PasskeyProblem.stale();
         }
-        String recovery = state.action() == ADD ? null : rotateCode(user);
+        String recovery = null;
+        if (state.action() != ADD && includeRecoveryCode) recovery = rotateCode(user);
+        else if (state.action() == RECOVER) store.clearRecovery(user);
         store.advance(user);
-        return session(user, id, recovery);
+        return session(user, id, recovery, null);
     }
 
     public Options login() {
-        return assertion(new State(LOGIN, null, 0, null, null));
+        return assertion(new State(LOGIN, null, 0, null, null), null);
     }
 
     public Options reauthenticate(long user, String operation, String target) {
         Action action =
                 switch (operation) {
+                    case "VERIFY" -> VERIFY;
                     case "ADD" -> ADD;
                     case "DELETE" -> DELETE;
                     case "ROTATE" -> ROTATE;
@@ -179,15 +186,15 @@ public class PasskeyService {
         if (store.devices(user).isEmpty()) throw PasskeyProblem.required();
         if (action == DELETE) decode(target);
         else if (target != null) throw PasskeyProblem.invalid();
-        return assertion(new State(action, user, account.revision(), target, null));
+        return assertion(new State(action, user, account.revision(), target, null), account.handle());
     }
 
-    private Options assertion(State state) {
+    private Options assertion(State state, ByteArray handle) {
         var builder =
                 StartAssertionOptions.builder()
                         .userVerification(UserVerificationRequirement.REQUIRED)
                         .timeout(PasskeyFlows.TTL.toMillis());
-        if (state.user() != null) builder.username(state.user().toString());
+        if (handle != null) builder.userHandle(handle);
         var request = rp.startAssertion(builder.build());
         try {
             return options("assert", state, request.toJson(), request.toCredentialsGetJson());
@@ -224,9 +231,8 @@ public class PasskeyService {
                             .findFirst()
                             .orElseThrow(PasskeyProblem::invalid);
             long user =
-                    Long.parseLong(
-                            store.getUsernameForUserHandle(found.getUserHandle())
-                                    .orElseThrow(PasskeyProblem::invalid));
+                    store.userIdForHandle(found.getUserHandle())
+                            .orElseThrow(PasskeyProblem::invalid);
             var account = store.lock(user);
             if (state.user() != null
                     && (state.user() != user || state.revision() != account.revision()))
@@ -239,11 +245,24 @@ public class PasskeyService {
                                     .build());
             if (!result.isSuccess()
                     || !result.isUserVerified()
-                    || !Long.toString(user).equals(result.getUsername()))
+                    || !account.handle().equals(result.getCredential().getUserHandle()))
                 throw PasskeyProblem.invalid();
             store.recordAssertion(
                     user, credential.getId(), result.getSignatureCount(), result.isBackedUp());
-            if (state.action() == LOGIN) return session(user, credential.getId(), null);
+            if (state.action() == LOGIN || state.action() == VERIFY) {
+                var details =
+                        store.verifiedEmail(user)
+                                .map(
+                                        email ->
+                                                new PasskeyUser(
+                                                        realm.id(),
+                                                        account.handle().getBase64Url(),
+                                                        email,
+                                                        email))
+                                .orElse(null);
+                if (state.action() == VERIFY) return new Verification(true, details);
+                return session(user, credential.getId(), null, details);
+            }
             return new Approval(flows.put("approval", state.withOptions(null)));
         } catch (IOException | AssertionFailedException | IllegalArgumentException e) {
             throw PasskeyProblem.invalid();
@@ -317,7 +336,7 @@ public class PasskeyService {
         }
     }
 
-    private Session session(long user, ByteArray id, String recovery) {
+    private Session session(long user, ByteArray id, String recovery, PasskeyUser details) {
         String fingerprint = HexFormat.of().formatHex(hash(id.getBytes()));
         String access = jwt.issue(user, "access", "passkey", fingerprint);
         String refresh = jwt.issue(user, "refresh", "passkey", fingerprint);
@@ -327,6 +346,6 @@ public class PasskeyService {
                         .refreshToken(refresh)
                         .expiresAt(LocalDateTime.now().plusDays(14))
                         .build());
-        return new Session(user, access, refresh, recovery);
+        return new Session(user, access, refresh, recovery, details);
     }
 }

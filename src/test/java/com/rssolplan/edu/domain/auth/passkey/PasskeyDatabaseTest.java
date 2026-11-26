@@ -88,6 +88,26 @@ class PasskeyDatabaseTest {
     }
 
     @Test
+    void credentialLabelsUseVerifiedAddressesAndKeepTheOpaqueHandle() {
+        String verified = "bound-" + UUID.randomUUID() + "@ewha.ac.kr";
+        db.update(
+                "INSERT INTO roster_verified_account(user_id,auth_email) VALUES (?,?)",
+                user.getId(),
+                verified);
+        var step = passkeys.afterVerifiedEmail(user.getId());
+        var identity = passkeys.initialRegistration(step.flowToken()).publicKey().path("user");
+        assertThat(identity.path("name").asText()).isEqualTo(verified);
+        assertThat(identity.path("displayName").asText()).isEqualTo(verified);
+        var handle = store.getUserHandleForUsername(verified).orElseThrow();
+        assertThat(handle.getBase64Url()).isEqualTo(identity.path("id").asText());
+        assertThat(store.getUsernameForUserHandle(handle)).contains(verified);
+        assertThat(store.getUserHandleForUsername(user.getId().toString())).contains(handle);
+        enrollFixture();
+        assertThat(store.getCredentialIdsForUsername(verified)).hasSize(1);
+        assertThat(store.getCredentialIdsForUsername(user.getEmail())).isEmpty();
+    }
+
+    @Test
     void onlyOneConcurrentStartCanConsumeAnEmailGrant() throws Exception {
         var grant = passkeys.afterVerifiedEmail(user.getId()).flowToken();
         var start = new CountDownLatch(1);

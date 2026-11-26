@@ -18,24 +18,25 @@
 
 1. 기존 `POST /api/auth/email-verification/send`로 인증 코드를 보낸 뒤 `/api/auth/email-verification/verify`에 `{"email":"…","code":"…"}`를 보낸다. 성공 본문은 `{"success":true,"message":"…","nextStep":"REGISTER","flowToken":"…","userId":42,"newUser":false}` 형식이다. 첫 등록을 기다리는 기존 계정도 `REGISTER`다. 등록한 사용자는 `AUTHENTICATE`다. 이때 받은 flowToken은 분실 복구를 시작할 때만 사용한다. 평소 패스키 로그인에는 이메일 단계가 없다.
 2. 아래 표의 options 응답은 `{"ceremonyId":"…","publicKey":{…}}`다. 등록은 `PublicKeyCredential.parseCreationOptionsFromJSON(publicKey)`, 인증은 `parseRequestOptionsFromJSON(publicKey)`로 변환한 뒤 `navigator.credentials.create({publicKey})` 또는 `navigator.credentials.get({publicKey})`를 호출한다. 전송 형태는 `{"ceremonyId":"…","credential":credential.toJSON()}`이다. 브라우저 지원 여부와 취소를 확인하고 재시도 시 새 options를 받는다.
-3. 등록·로그인 완료 응답은 `{"userId":42,"accessToken":"…","refreshToken":"…","recoveryCode":null}`이다. 최초 등록·분실 복구 직후에만 recoveryCode가 채워진다. 사용자에게 한 번 표시해 보관하게 하고 URL·로그에 넣지 않는다. 정상 업무 토큰이 생긴 후 FE19의 학교 정보 확인 화면으로 진입한다.
+3. 등록 완료 시 새 웹 클라이언트는 `includeRecoveryCode: false`를 함께 보내고 업무 세션으로 바로 진입한다. 이 필드를 생략하는 기존 클라이언트는 최초 등록·복구 시 기존 발급 계약을 사용한다. 등록 옵션의 `user.name`과 `user.displayName`은 인증 이메일이고 `user.id`는 RP별 임의 핸들이다.
+4. 관리 열쇠를 누를 때마다 `VERIFY`로 재인증한다. 성공한 로그인·확인 응답의 `passkeyUser`는 인증 이메일과 핸들이 연결된 계정에서 제공한다. 지원하는 패스키 관리자는 이 값을 `PublicKeyCredential.signalCurrentUserDetails`로 받아 저장한 이름을 갱신할 수 있다.
 
 이하 경로 앞에 `/api/auth/passkeys`를 붙인다. ‘업무’는 `Authorization: Bearer <accessToken>`이다. 제한 세션·challenge·재인증 승인은 각각 5분간 한 번 사용한다. 등록·인증의 UV는 필수다.
 
 | 메서드와 경로 | 요청·권한 | 성공 응답 |
 | --- | --- | --- |
 | POST /registration/options | 첫 이메일 확인의 `{flowToken}` | 등록 options |
-| POST /registration/finish | `{ceremonyId,credential}`. 기기 추가는 같은 계정의 업무 토큰도 전달 | 업무 세션 |
+| POST /registration/finish | `{ceremonyId,credential}`. 선택 필드 `includeRecoveryCode`. 기기 추가는 같은 계정의 업무 토큰도 전달 | 업무 세션 |
 | POST /authentication/options | 공개, 본문 없음 | 사용자 이름이 필요 없는 인증 options |
-| POST /authentication/finish | `{ceremonyId,credential}`. 재인증에는 같은 계정의 업무 토큰도 전달 | 로그인은 업무 세션, 재인증은 `{approvalToken}` |
+| POST /authentication/finish | `{ceremonyId,credential}`. 재인증에는 같은 계정의 업무 토큰도 전달 | 로그인은 업무 세션, VERIFY는 `{verified:true, passkeyUser}`, 변경 승인은 `{approvalToken}` |
 | GET /credentials | 업무 | `[{"id":"<base64url>","createdAt":"…"}]` |
-| POST /reauthentication/options | 업무, `{"operation":"ADD"}`, `{"operation":"DELETE","credentialId":"…"}` 또는 `{"operation":"ROTATE"}` | 해당 계정의 UV 인증 options |
+| POST /reauthentication/options | 업무, `{"operation":"VERIFY"}`, `{"operation":"ADD"}`, `{"operation":"DELETE","credentialId":"…"}` 또는 `{"operation":"ROTATE"}` | 해당 계정의 UV 인증 options |
 | POST /credentials/options | 업무, ADD 재인증의 `{approvalToken}` | 추가 등록 options. /registration/finish로 완료 |
 | DELETE /credentials/{id} | 업무, 해당 id에 대한 DELETE 재인증의 `{approvalToken}` | 204 |
 | POST /recovery-code | 업무, ROTATE 재인증의 `{approvalToken}` | `{recoveryCode}`. 기존 코드 즉시 무효 |
 | POST /recovery/options | 등록한 계정의 새 이메일 확인 `{flowToken,recoveryCode}` | 복구용 등록 options. /registration/finish로 완료 |
 
-보조 패스키가 있으면 평소처럼 로그인한 뒤 분실한 키를 철회한다. 모든 기기를 잃었다면 이메일 확인과 복구 코드를 함께 제시한다. 새 패스키 등록이 성공하는 트랜잭션에서 기존 키를 철회하고 복구 코드를 교체한다. 등록을 취소하면 기존 키와 코드는 유지된다. 마지막 키의 단순 삭제는 거절한다. 복구 코드는 256비트 난수이며 DB에는 해시와 만료 시각(발급 후 365일)만 저장한다. 자격 증명 DB에는 임의 사용자 핸들, 자격 증명 ID, COSE 공개키, 서명 카운터와 백업 플래그, 생성 시각을 저장한다. 개인키·PIN·생체 데이터는 수집하지 않는다.
+보조 패스키가 있으면 평소처럼 로그인한 뒤 분실한 키를 철회한다. 동기화된 패스키는 해당 비밀번호 관리자에서 사용할 수 있다. 기존 발급 코드를 가진 사용자는 이메일 확인과 코드로 복구할 수 있다. 새 웹 클라이언트에서 복구하면 새 키 등록과 함께 이전 키 및 사용한 코드가 무효화된다. 등록을 취소하면 기존 키와 코드는 유지된다. 마지막 키의 단순 삭제는 거절한다. 복구 코드는 256비트 난수이며 DB에는 해시와 만료 시각(발급 후 365일)만 저장한다. 자격 증명 DB에는 임의 사용자 핸들, 자격 증명 ID, COSE 공개키, 서명 카운터와 백업 플래그, 생성 시각을 저장한다. 개인키·PIN·생체 데이터는 수집하지 않는다.
 
 ## 실패 응답과 기존 호출자
 

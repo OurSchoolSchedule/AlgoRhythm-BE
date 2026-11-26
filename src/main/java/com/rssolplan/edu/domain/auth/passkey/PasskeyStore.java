@@ -47,6 +47,25 @@ public class PasskeyStore implements CredentialRepository {
                 address);
     }
 
+    Optional<String> verifiedEmail(long user) {
+        return db
+                .query(
+                        """
+                        SELECT COALESCE(v.auth_email, CASE WHEN u.provider='email' THEN LOWER(u.provider_id) END)
+                        FROM users u LEFT JOIN roster_verified_account v ON v.user_id=u.id WHERE u.id=?
+                        """,
+                        (rs, n) -> rs.getString(1),
+                        user)
+                .stream()
+                .filter(Objects::nonNull)
+                .findFirst();
+    }
+
+    private Long userIdForUsername(String name) {
+        // Older in-flight ceremonies may still contain the numeric username.
+        return name.contains("@") ? verifiedUserId(name) : Long.valueOf(name);
+    }
+
     Account lock(long user) {
         db.update(
                 """
@@ -57,7 +76,7 @@ public class PasskeyStore implements CredentialRepository {
                 user,
                 randomBytes());
         return db.queryForObject(
-                """
+"""
 SELECT user_handle,revision FROM passkey_account WHERE rp_id=? AND user_id=? FOR UPDATE
 """,
                 (rs, n) -> new Account(new ByteArray(rs.getBytes(1)), rs.getLong(2)),
@@ -87,7 +106,7 @@ SELECT user_handle,revision FROM passkey_account WHERE rp_id=? AND user_id=? FOR
             boolean backupEligible,
             boolean backedUp) {
         db.update(
-                """
+"""
 INSERT INTO passkey_credential(rp_id,user_id,credential_id,public_key_cose,signature_count,backup_eligible,backed_up)
 VALUES (?,?,?,?,?,?,?)
 """,
@@ -132,11 +151,19 @@ VALUES (?,?,?,?,?,?,?)
 
     void saveRecovery(long user, byte[] hash) {
         db.update(
-                """
+"""
 UPDATE passkey_account SET recovery_hash=?, recovery_expires_at=DATE_ADD(UTC_TIMESTAMP(6),INTERVAL 365 DAY)
 WHERE rp_id=? AND user_id=?
 """,
                 hash,
+                realm.id(),
+                user);
+    }
+
+    void clearRecovery(long user) {
+        db.update(
+                "UPDATE passkey_account SET recovery_hash=NULL, recovery_expires_at=NULL WHERE"
+                    + " rp_id=? AND user_id=?",
                 realm.id(),
                 user);
     }
@@ -164,7 +191,7 @@ WHERE rp_id=? AND user_id=?
                                         .id(new ByteArray(rs.getBytes(1)))
                                         .build(),
                         realm.id(),
-                        Long.parseLong(name)));
+                        userIdForUsername(name)));
     }
 
     @Override
@@ -174,17 +201,21 @@ WHERE rp_id=? AND user_id=?
                         "SELECT user_handle FROM passkey_account WHERE rp_id=? AND user_id=?",
                         (rs, n) -> new ByteArray(rs.getBytes(1)),
                         realm.id(),
-                        Long.parseLong(name))
+                        userIdForUsername(name))
                 .stream()
                 .findFirst();
     }
 
     @Override
     public Optional<String> getUsernameForUserHandle(ByteArray handle) {
+        return userIdForHandle(handle).map(id -> verifiedEmail(id).orElseGet(id::toString));
+    }
+
+    Optional<Long> userIdForHandle(ByteArray handle) {
         return db
                 .query(
                         "SELECT user_id FROM passkey_account WHERE rp_id=? AND user_handle=?",
-                        (rs, n) -> rs.getString(1),
+                        (rs, n) -> rs.getLong(1),
                         realm.id(),
                         handle.getBytes())
                 .stream()
@@ -200,7 +231,7 @@ WHERE rp_id=? AND user_id=?
     public Set<RegisteredCredential> lookupAll(ByteArray id) {
         return new HashSet<>(
                 db.query(
-                        """
+"""
 SELECT a.user_handle,c.public_key_cose,c.signature_count,c.backup_eligible,c.backed_up FROM passkey_credential c
 JOIN passkey_account a ON a.rp_id=c.rp_id AND a.user_id=c.user_id
 WHERE c.rp_id=? AND c.credential_id=?
