@@ -28,7 +28,7 @@ class ResendEmailConfigurationTest {
             });
 
     @Test
-    void bindsEnvironmentVariablesAndRecipientDomainListFromApplicationYaml() {
+    void bindsSenderAndExpirationFromApplicationYaml() {
         runner.withPropertyValues("RESEND_API_KEY=re_test_key",
                         "RESEND_FROM_EMAIL=우리학교시간표 <no-reply@school.example>")
                 .run(context -> {
@@ -37,7 +37,6 @@ class ResendEmailConfigurationTest {
                     assertThat(resend.getApiKey()).isEqualTo("re_test_key");
                     assertThat(resend.getFrom()).isEqualTo("우리학교시간표 <no-reply@school.example>");
                     EmailVerificationProperties verification = context.getBean(EmailVerificationProperties.class);
-                    assertThat(verification.getAllowedDomains()).containsExactly("ewha.ac.kr", "gmail.com");
                     assertThat(verification.getExpiration()).isEqualTo(5);
                     // Resend's private client must not make the existing shared RestClient ambiguous.
                     assertThat(context).hasSingleBean(RestClient.class);

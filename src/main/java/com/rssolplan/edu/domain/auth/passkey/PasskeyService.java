@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rssolplan.edu.domain.auth.UserRefreshToken;
 import com.rssolplan.edu.domain.auth.UserRefreshTokenRepository;
+import com.rssolplan.edu.domain.auth.email.LoginEmail;
 import com.rssolplan.edu.domain.auth.passkey.PasskeyFlows.Action;
 import com.rssolplan.edu.domain.auth.passkey.PasskeyFlows.State;
 import com.rssolplan.edu.domain.user.UserRepository;
@@ -103,9 +104,13 @@ public class PasskeyService {
         return registration(approved(user, approval, ADD, null));
     }
 
+    private String allowedEmail(long user) {
+        return LoginEmail.require(store.verifiedEmail(user).orElseThrow(LoginEmail.Denied::new));
+    }
+
     private Options registration(State state) {
         var account = current(state);
-        String email = store.verifiedEmail(state.user()).orElseThrow(PasskeyProblem::stale);
+        String email = allowedEmail(state.user());
         var identity =
                 UserIdentity.builder().name(email).displayName(email).id(account.handle()).build();
         var creation =
@@ -135,6 +140,7 @@ public class PasskeyService {
             throw PasskeyProblem.invalid();
         current(state);
         long user = state.user();
+        allowedEmail(user);
         if (state.action() == FIRST && !store.devices(user).isEmpty()) throw PasskeyProblem.stale();
         if (state.action() == RECOVER
                 && !store.validRecovery(user, decode(state.target()).getBytes()))
@@ -253,19 +259,11 @@ public class PasskeyService {
                     || !result.isUserVerified()
                     || !account.handle().equals(result.getCredential().getUserHandle()))
                 throw PasskeyProblem.invalid();
+            String email = allowedEmail(user);
             store.recordAssertion(
                     user, credential.getId(), result.getSignatureCount(), result.isBackedUp());
             if (state.action() == LOGIN || state.action() == VERIFY) {
-                var details =
-                        store.verifiedEmail(user)
-                                .map(
-                                        email ->
-                                                new PasskeyUser(
-                                                        realm.id(),
-                                                        account.handle().getBase64Url(),
-                                                        email,
-                                                        email))
-                                .orElse(null);
+                var details = new PasskeyUser(realm.id(), account.handle().getBase64Url(), email, email);
                 if (state.action() == VERIFY) return new Verification(true, details);
                 return session(user, credential.getId(), null, details);
             }

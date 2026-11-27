@@ -30,7 +30,7 @@ public class TeacherRosterService {
     public record Homeroom(long classId, int academicYear, int grade, int classNumber) {}
     public record Term(long termId, List<SubjectItem> subjects, Homeroom homeroomClass, boolean assignmentRecorded) {}
     public record Entry(long rosterId, long schoolId, String authEmail, String displayName, String baseName,
-                        String status, Long schoolUserId, String employmentStatus, Term term) {}
+                        String status, Long schoolUserId, String employmentStatus, Term term, Long teachingSchoolUserId) {}
 
     private final JdbcTemplate jdbc;
     private final NamedParameterJdbcTemplate namedJdbc;
@@ -232,11 +232,12 @@ public class TeacherRosterService {
         params.add(schoolId);
         params.addAll(arguments);
         String sql = """
-                SELECT r.id, r.auth_email, r.display_name, r.base_name, r.school_user_id, r.pending_user_id, m.employment_status,
+                SELECT l.teacher_school_user_id, r.id, r.auth_email, r.display_name, r.base_name, r.school_user_id, r.pending_user_id, m.employment_status,
                        t.term_id AS assignment_term_id, s.id AS subject_id, s.name AS subject_name, c.id AS class_id,
                        c.academic_year, c.grade, c.class_number
                 FROM school_teacher_roster r
                 LEFT JOIN school_user m ON m.id=r.school_user_id AND m.school_id=r.school_id
+                LEFT JOIN roster_teaching_link l ON l.roster_id=r.id
                 LEFT JOIN roster_term t ON t.roster_id=r.id AND t.term_id=?
                 LEFT JOIN roster_term_subject a ON a.roster_id=t.roster_id AND a.term_id=t.term_id
                 LEFT JOIN subject s ON s.id=a.subject_id
@@ -270,6 +271,6 @@ public class TeacherRosterService {
         Long member = rs.getObject("school_user_id", Long.class);
         String status = member != null ? "LINKED" : (rs.getObject("pending_user_id") != null ? "PENDING" : "UNLINKED");
         return new Entry(rs.getLong("id"), schoolId, rs.getString("auth_email"),
-                rs.getString("display_name"), rs.getString("base_name"), status, member, rs.getString("employment_status"), term);
+                rs.getString("display_name"), rs.getString("base_name"), status, member, rs.getString("employment_status"), term, rs.getObject("teacher_school_user_id", Long.class));
     }
 }

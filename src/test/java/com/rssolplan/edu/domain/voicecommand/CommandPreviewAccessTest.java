@@ -46,7 +46,7 @@ class CommandPreviewAccessTest {
         var request = SubstituteRequest.builder().id(50L).timetable(lesson).school(school)
                 .receiverUserIds("18, 80").substituteDate(LocalDate.of(2026, 11, 25)).build();
         when(requests.findById(50L)).thenReturn(Optional.of(request));
-        var intent = new ParsedIntent("SUBSTITUTE_RESPOND", "HIGH", null, null, null, 50L, "ACCEPT", null, null);
+        var intent = new ParsedIntent("SUBSTITUTE_RESPOND", "HIGH", null, null, null, 50L, "ACCEPT", null, null, null, null);
 
         assertThat(previews.buildPreview(10L, intent)).containsEntry("requestId", 50L);
         request.setReceiverUserIds("8, 180");
@@ -60,12 +60,12 @@ class CommandPreviewAccessTest {
     void administrationPreviewsRequireAnAdministratorAndASameSchoolRecord() {
         when(access.member(10L, true)).thenThrow(new ForbiddenException("관리자 권한이 필요합니다."));
         when(access.member(11L, true)).thenReturn(member);
-        var create = new ParsedIntent("SUBSTITUTE_CREATE", "HIGH", 30L, "2026-11-25", null, null, null, null, null);
+        var create = new ParsedIntent("SUBSTITUTE_CREATE", "HIGH", 30L, "2026-11-25", null, null, null, null, null, null, null);
         when(timetables.findById(30L)).thenReturn(Optional.of(Timetable.builder().school(foreignSchool).build()));
         assertThatThrownBy(() -> previews.buildPreview(10L, create)).isInstanceOf(ForbiddenException.class);
         assertThatThrownBy(() -> previews.buildPreview(11L, create)).isInstanceOf(NotFoundException.class);
 
-        var approve = new ParsedIntent("SUBSTITUTE_APPROVE", "HIGH", null, null, null, null, "APPROVE", 60L, null);
+        var approve = new ParsedIntent("SUBSTITUTE_APPROVE", "HIGH", null, null, null, null, "APPROVE", 60L, null, null, null);
         var request = SubstituteRequest.builder().school(foreignSchool).build();
         when(responses.findById(60L)).thenReturn(Optional.of(SubstituteResponse.builder().substituteRequest(request).build()));
         assertThatThrownBy(() -> previews.buildPreview(10L, approve)).isInstanceOf(ForbiddenException.class);

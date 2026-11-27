@@ -22,6 +22,18 @@ import java.util.UUID;
 public class School42Round {
     static final long ADMIN = 541000, TEACHER = 541004, SCHOOL = 540001, TERM = 547001;
     private final JdbcTemplate db;
+    private final RehearsalApplicant applicant;
+
+    public enum Mode { TIMETABLE, FULL }
+    private static final String LESSONS = """
+            from dated_lesson d join weekly_lesson w on w.id=d.origin_id
+            join schedule_version v on v.id=w.version_id where v.term_id=547001
+            """;
+    private static final String NOTIFICATIONS = """
+            from notifications n join lesson_change c on n.target_id=c.id
+            where n.school_id=540001 and n.target_type='LESSON_CHANGE' and c.term_id=547001
+            """;
+
 
     public void prepareTable() {
         db.execute("""
@@ -68,7 +80,7 @@ public class School42Round {
             code = com.rssolplan.edu.global.fordevToken.SchoolCodeGenerator.generate();
             db.update("update school set school_code=? where id=?", code, SCHOOL);
         }
-        return new Setup(scope(round(false)), code);
+        return new Setup(scope(round(false), Mode.TIMETABLE, false), code);
     }
 
     long round(boolean lock) {
@@ -103,21 +115,35 @@ public class School42Round {
     }
 
     public record TimetableScope(@Positive long schoolId, @Positive long termId, @Positive long round,
-                                 @PositiveOrZero long jobs, @PositiveOrZero long versions) {}
+            @PositiveOrZero long jobs, @PositiveOrZero long versions, Mode mode, long candidates,
+            long weeklyLessons, long datedLessons, long requests, long notifications, long receipts,
+            RehearsalApplicant.Target applicant) {}
 
-    private TimetableScope scope(long revision) {
+    private TimetableScope scope(long revision, Mode mode, boolean lock) {
         return new TimetableScope(SCHOOL, TERM, revision,
                 count("select count(*) from generation_job where school_id=540001 and term_id=547001"),
-                count("select count(*) from schedule_version where term_id=547001"));
+                count("select count(*) from schedule_version where term_id=547001"), mode,
+                count("select coalesce(sum(json_length(result,'$.candidates')),0) from generation_job where school_id=540001 and term_id=547001"),
+                count("select count(*) from weekly_lesson w join schedule_version v on v.id=w.version_id where v.term_id=547001"),
+                count("select count(*) " + LESSONS),
+                count("select count(*) from lesson_change where term_id=547001"),
+                count("select count(*) " + NOTIFICATIONS),
+                count("select count(*) from publication_receipt r join schedule_version v on v.id=r.version_id where v.term_id=547001"),
+                mode == Mode.FULL ? applicant.inspect(lock) : null);
     }
 
     @Transactional(readOnly = true)
     public TimetableScope timetableScope() {
+        return timetableScope(Mode.TIMETABLE);
+    }
+
+    @Transactional(readOnly = true)
+    public TimetableScope timetableScope(Mode mode) {
         verifyIdentity();
         if (count("select count(*) from information_schema.tables where table_schema=database() and table_name='school42_rehearsal'") == 0 ||
                 count("select count(*) from school42_rehearsal where school_id=540001 and round_no>0") == 0)
-            throw conflict("School42 실습실에 관리자로 입장해 시연 회차를 먼저 준비하세요.");
-        return scope(round(false));
+            throw conflict("시연 학교와 회차를 먼저 준비하세요.");
+        return scope(round(false), mode, false);
     }
 
     private void lockReset(long expected) {
@@ -128,30 +154,52 @@ public class School42Round {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public TimetableScope resetTimetables(TimetableScope expected) {
         lockReset(expected.round());
-        if (!scope(expected.round()).equals(expected))
+        if (expected.mode() == null || !scope(expected.round(), expected.mode(), true).equals(expected))
             throw conflict("초기화할 시간표가 바뀌었습니다. 현재 범위를 다시 확인하세요.");
-        return scope(clearTimetables(expected.round()));
+        ensureResettable();
+        db.update("delete n " + NOTIFICATIONS);
+        db.update("delete from lesson_change where term_id=?", TERM);
+        long next = clearTimetables(expected.round());
+        if (expected.mode() == Mode.FULL) applicant.clear(expected.applicant());
+        return scope(next, expected.mode(), false);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public long reset(long expected) {
         lockReset(expected);
+        if (count("select count(*) from lesson_change where term_id=547001") != 0)
+            throw conflict("보결·교환이 있는 회차는 운영자 확인이 필요합니다.");
+        ensureResettable();
         return clearTimetables(expected);
     }
 
-    private long clearTimetables(long expected) {
+    private void ensureResettable() {
         if (count("select count(*) from generation_job where school_id=540001 and term_id=547001 and state in ('QUEUED','RUNNING')") != 0)
             throw conflict("편성이 끝난 뒤 초기화하세요.");
-        if (count("select count(*) from lesson_change where term_id=547001") != 0 ||
-                count("""
+        if (count("""
+                    select count(*) from lesson_change c
+                    left join dated_lesson a on a.id=c.first_id left join weekly_lesson aw on aw.id=a.origin_id
+                    left join schedule_version av on av.id=aw.version_id
+                    left join dated_lesson b on b.id=c.second_id left join weekly_lesson bw on bw.id=b.origin_id
+                    left join schedule_version bv on bv.id=bw.version_id
+                    where (c.term_id=547001 and (av.term_id<>547001 or bv.term_id<>547001))
+                    or (c.term_id<>547001 and (av.term_id=547001 or bv.term_id=547001))
+                    """) != 0 || count("""
                     select count(*) from legacy_approval_input a join dated_lesson d on d.id=a.dated_id
                     join weekly_lesson w on w.id=d.origin_id join schedule_version v on v.id=w.version_id
                     where v.term_id=547001
                     """) != 0 || count("""
+                    select count(*) from notifications n join lesson_change c on n.target_id=c.id
+                    where n.target_type='LESSON_CHANGE' and c.term_id=547001 and (n.school_id is null or n.school_id<>540001)
+                    """) != 0 || count("""
                     select count(*) from publication_receipt r join generation_job j on j.id=r.job_id
-                    join schedule_version v on v.id=r.version_id where v.term_id=547001
-                    and (j.school_id<>540001 or j.term_id is null or j.term_id<>547001)
+                    join schedule_version v on v.id=r.version_id
+                    where (v.term_id=547001 and (j.school_id<>540001 or j.term_id is null or j.term_id<>547001))
+                       or (j.school_id=540001 and j.term_id=547001 and v.term_id<>547001)
                     """) != 0) throw conflict("별도의 승인·변경 기록이 연결되어 초기화를 중단했습니다.");
+    }
+
+    private long clearTimetables(long expected) {
         script("reset");
         db.update("update school42_rehearsal set round_no=round_no+1 where school_id=?", SCHOOL);
         return expected + 1;

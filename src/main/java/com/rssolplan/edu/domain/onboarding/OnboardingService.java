@@ -33,7 +33,7 @@ public class OnboardingService {
         String role = req.getRole().toUpperCase(java.util.Locale.ROOT);
 
         if ("TEACHER".equals(role)) {
-            return memberships.requestSchool(userId, req.getSchoolCode(), req.getDisplayName(), req.getHireDate(), req.getNameConfirmation());
+            return memberships.requestSchool(userId, req.getSchoolCode(), req.getDisplayName(), req.getHireDate(), req.getNameConfirmation(), req.getSubjectHint());
         }
         if (!"ADMIN".equals(role) || (req.getSchoolCode() != null && !req.getSchoolCode().isBlank())) {
             throw new IllegalArgumentException("기존 학교는 학교 코드로 교사 가입을 요청하세요.");

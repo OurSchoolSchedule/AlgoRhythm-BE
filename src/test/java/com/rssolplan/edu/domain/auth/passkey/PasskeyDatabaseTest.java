@@ -223,6 +223,25 @@ class PasskeyDatabaseTest {
     }
 
     @Test
+    void legacyDeniedIdentityCannotEnrollOrUseItsExistingPasskeySession() throws Exception {
+        enrollFixture();
+        String fingerprint = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(id.getBytes()));
+        var access = jwt.issue(user.getId(), "access", "passkey", fingerprint);
+        var refresh = jwt.issue(user.getId(), "refresh", "passkey", fingerprint);
+        var openGrant = passkeys.afterVerifiedEmail(user.getId());
+        db.update("INSERT INTO roster_verified_account(user_id,auth_email) VALUES (?,?)",
+                user.getId(), UUID.randomUUID() + "@naver.com");
+
+        assertThatThrownBy(() -> passkeys.initialRegistration(openGrant.flowToken()))
+                .isInstanceOf(com.rssolplan.edu.domain.auth.email.LoginEmail.Denied.class);
+        assertThat(jwt.validate(access)).isFalse();
+        assertThatThrownBy(() -> jwt.renewAccess(refresh, user.getId()))
+                .isInstanceOf(com.rssolplan.edu.global.exception.UnauthorizedException.class);
+        assertThat(users.existsById(user.getId())).isTrue();
+        assertThat(store.devices(user.getId())).hasSize(1);
+    }
+
+    @Test
     void rpNamespacesAndTokenIssuersAreIndependentEvenWithSameTestInfrastructure()
             throws Exception {
         enrollFixture();
@@ -241,6 +260,19 @@ class PasskeyDatabaseTest {
         assertThat(prodJwt.validate(token)).isFalse();
         assertThatThrownBy(() -> new PasskeyRealm("unconfigured"))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void unsupportedKakaoEmailDoesNotCreateOrLogInAnAccountFromEitherEntryPoint() {
+        String id = "test-" + UUID.randomUUID();
+        when(kakao.fetchProfile("provider-token")).thenReturn(
+                SocialProfile.builder().providerId(id).email("teacher@naver.com").build());
+        when(kakao.getAccessTokenFromCode("callback-code")).thenReturn("provider-token");
+        assertThatThrownBy(() -> auth.handleKakaoCallback("callback-code"))
+                .isInstanceOf(com.rssolplan.edu.domain.auth.email.LoginEmail.Denied.class);
+        assertThatThrownBy(() -> auth.handleKakaoAppLogin("provider-token"))
+                .isInstanceOf(com.rssolplan.edu.domain.auth.email.LoginEmail.Denied.class);
+        assertThat(users.findByProviderAndProviderId("kakao", id)).isEmpty();
     }
 
     @org.junit.jupiter.params.ParameterizedTest

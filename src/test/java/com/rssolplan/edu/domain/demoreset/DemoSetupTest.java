@@ -31,12 +31,12 @@ class DemoSetupTest {
     var service = service(db, identities, round);
     when(db.queryForObject("select database()", String.class)).thenReturn("test");
     when(identities.verifiedUserId("operator@example.invalid")).thenReturn(1L);
-    when(db.queryForObject(anyString(), eq(Boolean.class), eq(1L))).thenReturn(true);
+    when(db.queryForObject(anyString(), eq(Boolean.class), eq(1L), eq("operator@example.invalid"))).thenReturn(true);
     when(round.setupStatus()).thenReturn(new School42Round.Setup(null, null));
     assertThat(service.setupStatus(1L).scope()).isNull();
     verify(round, never()).prepareTable();
     verify(round, never()).prepare();
-    var ready = new School42Round.Setup(new School42Round.TimetableScope(540001,547001,1,0,0),"TESTCODE");
+    var ready = new School42Round.Setup(new School42Round.TimetableScope(540001,547001,1,0,0,School42Round.Mode.TIMETABLE,0,0,0,0,0,0,null),"TESTCODE");
     when(round.prepare()).thenReturn(ready);
     assertThat(service.prepare(1L)).isEqualTo(ready);
     verify(round).prepareTable();

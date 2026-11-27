@@ -45,12 +45,12 @@ public class SubstituteService {
     private final ChangeService approvals;
 
     // 교감/교장: 보결 요청 생성
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public SubstituteRequestDetail create(Long adminUserId, SubstituteCreateRequest req) {
+        Long schoolId = guard.lockMember(adminUserId, true);
         User requester = userRepository.findById(adminUserId)
                 .orElseThrow(() -> new NotFoundException("요청자 유저를 찾을 수 없습니다."));
 
-        Long schoolId = authService.getActiveSchoolIdOrThrow(adminUserId);
         SchoolUser admin = authService.getSchoolUserOrThrow(adminUserId, schoolId);
 
         if (admin.getPosition() != SchoolUser.Position.ADMIN) {

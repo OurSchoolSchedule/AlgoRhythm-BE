@@ -1,5 +1,6 @@
 package com.rssolplan.edu.global.security.email_verification;
 
+import com.rssolplan.edu.domain.auth.email.LoginEmail;
 import com.rssolplan.edu.domain.demoreset.DemoRound;
 import com.rssolplan.edu.domain.auth.EmailVerificationHistory;
 import com.rssolplan.edu.domain.auth.EmailVerificationHistoryRepository;
@@ -44,7 +45,6 @@ class EmailServiceTest {
     @BeforeEach
     void setUp() {
         EmailVerificationProperties properties = new EmailVerificationProperties();
-        properties.setAllowedDomains(List.of("ewha.ac.kr", "gmail.com"));
         properties.setExpiration(7);
         ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
         resolver.setPrefix("templates/");
@@ -63,7 +63,7 @@ class EmailServiceTest {
         when(redis.opsForValue()).thenReturn(values);
         when(sender.send(eq("teacher@gmail.com"), anyString(), anyString())).thenReturn("email-123");
 
-        service.sendVerificationEmail("teacher@gmail.com");
+        service.sendVerificationEmail("  teacher@GMAIL.COM  ");
 
         ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
         verify(values).set(eq("EMAIL_AUTH:teacher@gmail.com"), code.capture(), eq(Duration.ofMinutes(7)));
@@ -106,9 +106,13 @@ class EmailServiceTest {
 
     @Test
     void disallowedRecipientDoesNotStoreOrSendAnything() {
-        assertThrows(IllegalArgumentException.class,
-                () -> service.sendVerificationEmail("teacher@unauthorized.example"));
-        verifyNoInteractions(sender, redis, historyRepository);
+        for (String denied : List.of("teacher@naver.com", "teacher@daum.net",
+                "teacher@sub.gmail.com", "teacher@gmail.com.example")) {
+            assertThrows(LoginEmail.Denied.class, () -> service.sendVerificationEmail(denied));
+            assertThrows(LoginEmail.Denied.class, () -> service.verifyCode(denied, "123456"));
+            assertThrows(LoginEmail.Denied.class, () -> service.issueTokensForVerifiedEmail(denied, null, null, null));
+        }
+        verifyNoInteractions(sender, redis, historyRepository, signup, passkeys, passkeyStore);
     }
 
     @Test

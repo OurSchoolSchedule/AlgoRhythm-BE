@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rssolplan.edu.domain.auth.email.ResendEmailSender;
 import com.rssolplan.edu.global.config.JwtTokenProvider;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -62,7 +63,6 @@ class TeacherRosterMySqlTest {
 
     @BeforeEach
     void fixtures() {
-        migrate();
         for (long school : List.of(a, b)) {
             db.update("insert into school(id,school_code,name) values(?,?,?)", school, code(school), "School " + school);
             db.update("insert into users(id,username,active_school_id) values(?,'admin',?)", school, school);
@@ -79,10 +79,13 @@ class TeacherRosterMySqlTest {
         when(mail.send(anyString(), anyString(), anyString())).thenReturn("fixture-message");
     }
 
-    void migrate() {
+    @BeforeAll
+    static void migrate(@Autowired DataSource source) {
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V20261122_01__school_load_and_schedule_versions.sql"),
+                new ClassPathResource("db/migration/V20261124_01__generation_and_lesson_operations.sql"),
                 new ClassPathResource(R1),
                 new ClassPathResource("db/migration/V20261126_31__school_roster_names.sql"),
+                new ClassPathResource("db/migration/V20261127_41__roster_teaching_link.sql"),
                 new ClassPathResource("db/migration/V20261125_21__passkey_auth.sql")).execute(source);
     }
 
@@ -157,6 +160,80 @@ class TeacherRosterMySqlTest {
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    @Test
+    @org.springframework.transaction.annotation.Transactional
+    void adminBindsVerifiedApplicantToExistingTeachingIdentityWithoutChangingItsLessons() throws Exception {
+        long school = 540001, term = 547001, dummy = 542004;
+        db.update("insert into school(id,name,school_code) values(?, '시연한들고등학교',?)", school,code(school));
+        db.update("insert into users(id,username,active_school_id) values(?,'시연 관리자',?)", a+8,school);
+        db.update("insert into school_user(id,user_id,school_id,position,employment_status) values(?,?,?,'ADMIN','HIRED')",
+                a+8,a+8,school);
+        db.update("insert into users(id,username,email,active_school_id) values(541004,'최도현','teacher42-04@example.invalid',?)",school);
+        db.update("insert into school_user(id,user_id,school_id,position,employment_status) values(?,541004,?,'TEACHER','HIRED')", dummy, school);
+        db.update("insert into timetable_set(id,school_id,academic_year,semester,start_date,end_date) values(?,?,2026,2,'2026-11-23','2026-12-04')",term,school);
+        db.update("insert into subject(id,school_id,name) values(?,?, '공통국어2')",a+8,school);
+        db.update("insert into school_class(id,school_id,academic_year,grade,class_number) values(?,?,2026,1,1)",a+8,school);
+        db.update("insert into load_import(id,term_id,version_no,created_by,normalized_sha,sheet_name) values(?,?,1,?,?,'검증')",
+                a+8,term,a+8,"a".repeat(64));
+        db.update("insert into load_demand(load_id,teacher_id,subject_id,class_id,weekly_periods,source_cell) values(?,?,?,?,4,'A2')",
+                a+8,dummy,a+8,a+8);
+        db.update("insert into school_setting(id,school_id,break_duration,period_duration) values(?,?,10,50)",a+8,school);
+        db.update("insert into period_setting(id,school_setting_id,period_number,start_time,end_time) values(?,?,1,'08:40','09:30')",a+8,a+8);
+        db.update("insert into schedule_version(id,term_id,load_id,version_no,effective_from) values(?,?,?,1,'2026-11-23')",a+8,term,a+8);
+        db.update("insert into weekly_lesson(version_id,lesson_key,class_id,period_id,subject_id,teacher_id,weekday) values(?,'fixture',?,?,?,?,1)",
+                a+8,a+8,a+8,a+8,dummy);
+        String requester = localSessionFor(verify(email,null)), administrator = admin(a+8);
+        String requestedName = "같은 과목 교사";
+        var payload = Map.of("role","TEACHER","schoolCode",code(school),"displayName",requestedName,"subjectHint","공통국어2");
+        http(post(ONBOARD),requester,payload,202);
+        http(get("/api/school/teachers"),requester,null,403);
+        long applicant = http(get(base(school)+"/me"),requester,null,200).required("rosterId").asLong();
+        String path = base(school)+"/"+applicant;
+        var options = http(get(path+"/match-options"),administrator,null,200);
+        assertThat(options.required("applicantName").asText()).isEqualTo(requestedName);
+        assertThat(options.required("verifiedEmail").asText()).isEqualTo(email);
+        assertThat(options.required("requestedAt").isTextual()).isTrue();
+        assertThat(options.required("subjectHint").asText()).isEqualTo("공통국어2");
+        assertThat(options.at("/candidates/0/teacherSchoolUserId").asLong()).isEqualTo(dummy);
+        assertThat(options.at("/candidates/0/weeklyPeriods").asInt()).isEqualTo(4);
+        assertThat(options.at("/candidates/0/subjects/0").asText()).isEqualTo("공통국어2");
+        http(get(path+"/match-options"),requester,null,403);
+        http(get(path+"/match-options").param("termId",""+b),administrator,null,404);
+        http(post(path+"/approve"),administrator,null,400);
+        http(post(path+"/approve"),administrator,Map.of("teacherSchoolUserId",b),400);
+        var bind = Map.of("teacherSchoolUserId",dummy);
+        var approved = http(post(path+"/approve"),administrator,bind,200);
+        assertThat(approved.required("teachingSchoolUserId").asLong()).isEqualTo(dummy);
+        long accountMember = approved.required("schoolUserId").asLong();
+        assertThat(accountMember).isNotEqualTo(dummy);
+        assertThat(http(post(path+"/approve"),administrator,bind,200)).isEqualTo(approved);
+        var teachers = http(get("/api/school/teachers"),requester,null,200);
+        assertThat(teachers.size()).isOne();
+        assertThat(teachers.at("/0/schoolUserId").asLong()).isEqualTo(dummy);
+        assertThat(teachers.at("/0/username").asText()).isEqualTo("최도현");
+        assertThat(teachers.at("/0/userId").asLong()).isEqualTo(db.queryForObject("SELECT user_id FROM school_user WHERE id=?",Long.class,accountMember));
+        var personalWeek = http(get("/api/timetable/me").param("termId",""+term)
+                .param("weekOf","2026-11-23"),requester,null,200);
+        assertThat(personalWeek.size()).isOne();
+        assertThat(personalWeek.at("/0/subjectName").asText()).isEqualTo("공통국어2");
+        assertThat(personalWeek.at("/0/teacherId").asLong()).isEqualTo(dummy);
+        assertThat(personalWeek.at("/0/teacherName").asText()).isEqualTo("최도현");
+        // An already employed teacher from an older release may still need a teaching link.
+        db.update("DELETE FROM roster_teaching_link WHERE roster_id=?", applicant);
+        db.update("INSERT INTO teacher_availability(school_user_id,day_of_week,period_number) VALUES(?,'THU',2)", accountMember);
+        http(post(path+"/approve"),administrator,bind,409);
+        assertThat(db.queryForObject("SELECT COUNT(*) FROM roster_teaching_link WHERE roster_id=?",Long.class,applicant)).isZero();
+        db.update("DELETE FROM teacher_availability WHERE school_user_id=?", accountMember);
+        assertThat(http(get(path+"/match-options"),administrator,null,200).required("verifiedEmail").asText()).isEqualTo(email);
+        assertThat(http(post(path+"/approve"),administrator,bind,200).required("schoolUserId").asLong()).isEqualTo(accountMember);
+        String second = localSessionFor(verify("second"+email,null));
+        http(post(ONBOARD),second,Map.of("role","TEACHER","schoolCode",code(school),"displayName","다른 신청자"),202);
+        long secondId = http(get(base(school)+"/me"),second,null,200).required("rosterId").asLong();
+        http(post(base(school)+"/"+secondId+"/approve"),administrator,bind,409);
+        assertThat(http(get(base(school)+"/me"),second,null,200).required("status").asText()).isEqualTo("PENDING");
+        assertThat(db.queryForObject("SELECT teacher_id FROM load_demand WHERE load_id=?",Long.class,a+8)).isEqualTo(dummy);
     }
 
     @Test
@@ -538,7 +615,7 @@ class TeacherRosterMySqlTest {
                             + " values(?,?,?,'TEACHER',?,'2022-03-01')",
                     school + 4, user, school, school == a ? "HIRED" : "ON_LEAVE");
         }
-        migrate();
+        migrate(source);
         create(a, email, "학교 표시 이름");
         var loggedIn = verify(email, a);
         assertThat(loggedIn.required("userId").longValue()).isEqualTo(user);

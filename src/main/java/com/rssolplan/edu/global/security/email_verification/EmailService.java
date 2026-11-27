@@ -10,7 +10,7 @@ import com.rssolplan.edu.domain.auth.email.EmailVerificationProperties;
 import com.rssolplan.edu.domain.auth.email.ResendEmailSender;
 import com.rssolplan.edu.domain.user.User;
 import com.rssolplan.edu.domain.roster.VerifiedRosterSignup;
-import com.rssolplan.edu.domain.roster.TeacherRosterService;
+import com.rssolplan.edu.domain.auth.email.LoginEmail;
 import com.rssolplan.edu.global.security.email_verification.dto.EmailVerificationToken;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -60,11 +60,7 @@ public class EmailService {
                     + "return 0", Long.class);
 
     public void sendVerificationEmail(String email) {
-        email = TeacherRosterService.normalizeEmail(email);
-        // 1. 도메인 체크 (설정 가능한 도메인)
-        if (!isValidEmailDomain(email)) {
-            throw new IllegalArgumentException("허용된 이메일 도메인만 인증이 가능합니다.");
-        }
+        email = LoginEmail.require(email);
 
         String code = String.valueOf(CODE_RANDOM.nextInt(900000) + 100000);
         Context context = new Context();
@@ -114,8 +110,8 @@ public class EmailService {
     }
 
     public boolean verifyCode(String email, String code) {
+        email = LoginEmail.require(email);
         round.lockForVerification();
-        email = TeacherRosterService.normalizeEmail(email);
         String key = round.prefix() + AUTH_PREFIX + email;
         // The failed-attempt budget survives resends so requesting another code cannot reset it.
         // Redis checks, counts and consumes atomically, including concurrent verification requests.
@@ -149,24 +145,11 @@ public class EmailService {
         return false;
     }
 
-    /**
-     * 이메일 도메인 검증
-     * - 설정된 도메인 목록에서 허용된 도메인인지 확인
-     */
-    private boolean isValidEmailDomain(String email) {
-        if (email == null || email.lastIndexOf('@') <= 0) {
-            return false;
-        }
-        String emailDomain = email.substring(email.lastIndexOf('@') + 1);
-        return verificationProperties.getAllowedDomains().stream()
-                .map(String::trim)
-                .anyMatch(domain -> emailDomain.equalsIgnoreCase(domain));
-    }
-
     @Transactional
     public EmailVerificationToken issueTokensForVerifiedEmail(String email, Long authenticatedUserId,
                                                                String schoolCode, String displayName) {
         // A repeat email proof may enroll a new device; it cannot change school membership.
+        email = LoginEmail.require(email);
         Long existing = passkeyStore.verifiedUserId(email);
         if (authenticatedUserId == null && existing != null && passkeys.requiresPasskey(existing)) {
             var step = passkeys.afterVerifiedEmail(existing);

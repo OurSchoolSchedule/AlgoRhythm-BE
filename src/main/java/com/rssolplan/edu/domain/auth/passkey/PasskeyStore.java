@@ -47,7 +47,7 @@ public class PasskeyStore implements CredentialRepository {
                 address);
     }
 
-    Optional<String> verifiedEmail(long user) {
+    public Optional<String> verifiedEmail(long user) {
         return db
                 .query(
                         """

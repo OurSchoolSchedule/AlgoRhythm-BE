@@ -138,13 +138,13 @@ public class RosterImportService {
         if (db.queryForList("""
                 SELECT m.id FROM school_user m JOIN users u ON u.id=m.user_id
                 WHERE u.id=? AND u.active_school_id=? AND m.school_id=?
-                  AND m.position='ADMIN' AND m.employment_status='HIRED' FOR SHARE
+                  AND m.position='ADMIN' AND m.employment_status='HIRED' LOCK IN SHARE MODE
                 """, Long.class, user, school, school).isEmpty())
             throw new ForbiddenException("활성 학교의 재직 관리자만 명부를 가져올 수 있습니다.");
     }
 
     private Catalog catalog(long school, long term, boolean lock) {
-        String suffix = lock ? " FOR SHARE" : "";
+        String suffix = lock ? " LOCK IN SHARE MODE" : "";
         int[] period = db.query("SELECT academic_year,semester FROM timetable_set WHERE school_id=? AND id=?" + suffix,
                 (rs, i) -> new int[]{rs.getInt(1), rs.getInt(2)}, school, term).stream().findFirst()
                 .orElseThrow(() -> new NotFoundException("해당 학교의 학기를 찾을 수 없습니다."));

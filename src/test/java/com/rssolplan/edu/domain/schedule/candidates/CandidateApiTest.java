@@ -62,7 +62,8 @@ class CandidateApiTest {
                 .when(values)
                 .set(anyString(), anyString(), eq(Duration.ofMinutes(30)));
         when(values.get(anyString())).thenAnswer(call -> cache.get((String) call.getArgument(0)));
-        var loads = new LoadValidationService(auth, terms, members, subjects, classes);
+        var loads = new LoadValidationService(auth, terms, members, subjects, classes,
+                    mock(com.rssolplan.edu.domain.roster.RosterMatchingService.class));
         var round = org.mockito.Mockito.mock(DemoRound.class);
         org.mockito.Mockito.lenient().when(round.prefix()).thenReturn("");
         var previews = new LoadPreviewStore(redis, json, round);

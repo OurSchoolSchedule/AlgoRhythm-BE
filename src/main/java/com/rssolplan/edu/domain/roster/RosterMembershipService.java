@@ -21,6 +21,7 @@ import java.util.HashSet;
 public class RosterMembershipService {
     private final JdbcTemplate db;
     private final TeacherRosterService roster;
+    private final RosterMatchingService matching;
 
     private record School(long id, String code, String name, String address, String phone) {}
     private record Account(long id, Long activeSchoolId) {}
@@ -84,6 +85,11 @@ public class RosterMembershipService {
 
     public OnboardingResponse requestSchool(long userId, String code, String name, LocalDate hireDate,
                                              String confirmation) {
+        return requestSchool(userId, code, name, hireDate, confirmation, null);
+    }
+
+    public OnboardingResponse requestSchool(long userId, String code, String name, LocalDate hireDate,
+                                            String confirmation, String subjectHint) {
         Applicant a = applicant(userId, code);
         var plan = plan(a, name);
         plan.requireConfirmation(confirmation);
@@ -101,15 +107,19 @@ public class RosterMembershipService {
             if (!plan.replay)
                 db.update("UPDATE school_teacher_roster SET display_name=?,base_name=? WHERE id=?",
                         p.displayName(), p.baseName(), a.entry.id());
-            if (member == null && a.entry.pendingUserId() == null)
-                member = hire(a.school.id(), userId, hireDate);
+            if (member == null && a.entry.pendingUserId() == null) {
+                if (a.school.id() == RosterMatchingService.SCHOOL42)
+                    db.update("UPDATE school_teacher_roster SET pending_user_id=? WHERE id=?", userId, a.entry.id());
+                else member = hire(a.school.id(), userId, hireDate);
+            }
             if (member != null && a.entry.memberId() == null) link(a.entry.id(), member);
         }
+        if (member == null) matching.recordRequest(a.school.id(), userId, subjectHint);
         selectFirstSchool(a.user, a.school, member);
         return response(userId, a.school, member);
     }
 
-    public void approve(Long adminUserId, Long schoolId, Long rosterId) {
+    public void approve(Long adminUserId, Long schoolId, Long rosterId, Long teacher) {
         School school = lockSchool(schoolId);
         roster.requireAdmin(adminUserId, schoolId);
         Entry entry = db.query("""
@@ -117,10 +127,21 @@ public class RosterMembershipService {
                 WHERE school_id=? AND id=? FOR UPDATE
                 """, ENTRY, schoolId, rosterId).stream().findFirst()
                 .orElseThrow(() -> new NotFoundException("학교 명부 항목을 찾을 수 없습니다."));
-        if (entry.memberId() != null) return;
+        if (entry.memberId() != null) {
+            matching.bindPreviouslyApproved(schoolId, rosterId, entry.memberId(), teacher);
+            return;
+        }
         if (entry.pendingUserId() == null) throw new IllegalStateException("승인 대기 중인 계정이 없습니다.");
         Account user = lockAccount(entry.pendingUserId());
         Member member = member(user.id(), schoolId);
+        String address = verifiedAddress(user.id());
+        if (address == null || !db.queryForList(
+                "SELECT id FROM school_teacher_roster WHERE id=? AND auth_email=?",
+                Long.class, rosterId, address).contains(rosterId))
+            throw new ForbiddenException("이메일 인증을 완료한 신청만 승인할 수 있습니다.");
+        if (member != null && (!"TEACHER".equals(member.role()) || !"HIRED".equals(member.employment())))
+            throw new ForbiddenException("이 계정의 학교 역할 또는 재직 상태를 확인해 주세요.");
+        matching.bind(schoolId, rosterId, teacher);
         if (member == null) member = hire(schoolId, user.id(), null);
         link(entry.id(), member);
         selectFirstSchool(user, school, member);

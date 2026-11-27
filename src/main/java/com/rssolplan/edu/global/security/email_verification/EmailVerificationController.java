@@ -1,5 +1,6 @@
 package com.rssolplan.edu.global.security.email_verification;
 
+import com.rssolplan.edu.domain.auth.email.LoginEmail;
 import com.rssolplan.edu.domain.auth.dto.ApiResponse;
 import com.rssolplan.edu.domain.auth.email.EmailVerificationProperties;
 import com.rssolplan.edu.global.exception.BadRequestException;
@@ -55,7 +56,7 @@ public class EmailVerificationController {
 
     /**
      * 인증 코드 발송 API
-     * - 설정된 수신 허용 도메인만 인증 가능
+     * - 서비스의 두 로그인 도메인만 인증 가능
      * - 6자리 코드를 이메일로 발송하고 설정된 만료 시간 동안 유효
      *
      * @param request 이메일 정보
@@ -76,6 +77,8 @@ public class EmailVerificationController {
                                     + verificationProperties.getExpiration() + "분간 유효)")
                             .build()
             );
+        } catch (LoginEmail.Denied e) {
+            throw e;
         } catch (IllegalArgumentException | BadRequestException e) {
             log.warn("[EmailVerification] 도메인 검증 실패: {}", e.getMessage());
             return ResponseEntity.badRequest()

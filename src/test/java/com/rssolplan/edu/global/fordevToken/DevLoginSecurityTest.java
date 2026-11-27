@@ -47,7 +47,7 @@ class DevLoginSecurityTest {
 
     private MockHttpServletRequestBuilder devLogin() {
         return post("/api/auth/dev-token").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"email\":\"teacher@example.invalid\"}");
+                .content("{\"email\":\"dev-fixture@gmail.com\"}");
     }
 
     private RequestPostProcessor remoteAddress(String address) {
@@ -85,7 +85,7 @@ class DevLoginSecurityTest {
                 .run(context -> {
                     assertThat(context).hasSingleBean(DevTokenController.class);
                     var teacher = User.builder().id(1L).build();
-                    when(context.getBean(UserRepository.class).findByEmail("teacher@example.invalid"))
+                    when(context.getBean(UserRepository.class).findByEmail("dev-fixture@gmail.com"))
                             .thenReturn(Optional.of(teacher));
                     when(context.getBean(JwtTokenProvider.class).generateAccess(1L)).thenReturn("local-test-token");
 

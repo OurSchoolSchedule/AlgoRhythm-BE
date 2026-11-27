@@ -85,6 +85,7 @@ async function main() {
     const memberships = await request('/api/mypage/teacher/schools', initial.accessToken, null, 'GET');
     assert.ok(JSON.stringify(memberships).includes(schoolId));
     assert.equal((await request('/api/auth/passkeys/credentials', initial.accessToken, null, 'GET')).length, 1);
+    await original.context.unrouteAll({ behavior: 'wait' });
     await original.context.close(); // Simulate losing access to every saved credential.
 
     const replacement = await device(false);
@@ -137,6 +138,9 @@ async function main() {
     assert.ok(calls.filter(call => call.path.endsWith('/registration/finish')).every(call => call.body.includeRecoveryCode === false));
     assert.deepEqual(pageErrors, []);
     console.log('PASS actual FE/API: existing account + empty device; cancel/fresh email/reissue; same account/school; no recovery code; new-key login; desktop/tablet/mobile');
-  } finally { await browser.close(); }
+  } finally {
+    for (const context of browser.contexts()) await context.unrouteAll({ behavior: 'wait' });
+    await browser.close();
+  }
 }
 main().catch(error => { console.error(error); process.exit(1); });

@@ -6,5 +6,10 @@ public enum IntentType {
     SUBSTITUTE_APPROVE,     // 보결 최종 승인 (Admin)
     AVAILABILITY_ADD,       // 불가 교시 추가
     AVAILABILITY_REPLACE,   // 불가 교시 전체 교체
-    UNKNOWN
+    MY_WEEK, COVER_OPTIONS, SWAP_OPTIONS, CHANGE_STATUS,
+    UNKNOWN;
+
+    public boolean isLessonAssistant() {
+        return this == MY_WEEK || this == COVER_OPTIONS || this == SWAP_OPTIONS || this == CHANGE_STATUS;
+    }
 }

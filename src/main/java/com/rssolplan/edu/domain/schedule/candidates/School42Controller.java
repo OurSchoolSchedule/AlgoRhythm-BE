@@ -28,22 +28,33 @@ public class School42Controller {
     private final GenerationController generation;
     private final TimetableService timetables;
 
-    record Status(String role, long round, long teachers, long classes, long subjects, long jobs, long versions) {}
+    @org.springframework.beans.factory.annotation.Value("${app.passkeys.environment:production}")
+    private String environment;
+    @org.springframework.beans.factory.annotation.Value("${school42.team-reset-enabled:false}")
+    private boolean teamResetEnabled;
+    @org.springframework.beans.factory.annotation.Value("${demo.reset.operator:}")
+    private String resetOperator;
+
+    private boolean localLab() {
+        return "local".equals(environment) && teamResetEnabled && resetOperator.isBlank();
+    }
+
+    record Status(String role, long round, long teachers, long classes, long subjects, long jobs, long versions, boolean teamResetEnabled) {}
 
     @GetMapping("/status")
     Status status(@RequestAttribute(School42Access.ROLE) String role) {
-        if ("ADMIN".equals(role)) {
+        if ("ADMIN".equals(role) && localLab()) {
             rounds.prepareTable();
             rounds.open();
         } else {
             rounds.verifyIdentity();
         }
         return new Status(role, rounds.round(false),
-                rounds.count("select count(*) from school_user where school_id=540001 and position='TEACHER'"),
+                rounds.count("select count(*) from school_user where school_id=540001 and id between 542001 and 542042 and position='TEACHER'"),
                 rounds.count("select count(*) from school_class where school_id=540001"),
                 rounds.count("select count(*) from subject where school_id=540001"),
                 rounds.count("select count(*) from generation_job where school_id=540001 and term_id=547001"),
-                rounds.count("select count(*) from schedule_version where term_id=547001"));
+                rounds.count("select count(*) from schedule_version where term_id=547001"), localLab());
     }
 
     @PostMapping(TERM_PATH + "/load-imports/validate")
@@ -96,6 +107,7 @@ public class School42Controller {
 
     @PostMapping("/reset")
     Map<String,Long> reset(@RequestHeader("X-School42-Round") long round) {
+        if (!localLab()) throw new SecurityException("지정 운영자 계정에서 AI 도우미의 초기화를 사용하세요.");
         return Map.of("round", rounds.reset(round));
     }
 }

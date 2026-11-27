@@ -31,6 +31,7 @@ public class TeachingDirectoryService {
     private final TeacherRosterService roster;
     private final SubjectRepository subjects;
     private final JdbcTemplate jdbc;
+    private final RosterMatchingService matching;
 
     @Transactional(readOnly = true)
     public Directory read(long userId, long termId) {
@@ -39,7 +40,9 @@ public class TeachingDirectoryService {
         var entries = roster.list(userId, school, termId);
         var teachers = new ArrayList<Teacher>();
         var byMembership = new HashMap<Long, Teacher>();
+        var aliasedMembers = new java.util.HashSet<>(matching.directoryLinks(school).values());
         for (var entry : entries) {
+            if (entry.schoolUserId() != null && aliasedMembers.contains(entry.schoolUserId())) continue;
             var teacher = new Teacher(entry.rosterId(), entry.schoolUserId(), entry.displayName());
             entry.term().subjects().forEach(subject -> teacher.subjectIds().add(subject.subjectId()));
             teachers.add(teacher);
@@ -69,6 +72,7 @@ public class TeachingDirectoryService {
                                           OR a.subject_id IS NOT NULL)
                 """, rs -> {
             long memberId = rs.getLong("id");
+            if (aliasedMembers.contains(memberId)) return;
             var teacher = byMembership.get(memberId);
             if (teacher == null) {
                 teacher = new Teacher(null, memberId, rs.getString("legacy_name"));

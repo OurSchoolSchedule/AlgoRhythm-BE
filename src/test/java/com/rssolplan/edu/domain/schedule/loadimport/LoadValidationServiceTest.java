@@ -20,7 +20,8 @@ class LoadValidationServiceTest {
     final SubjectRepository subjects = mock(SubjectRepository.class);
     final SchoolClassRepository classes = mock(SchoolClassRepository.class);
     final LoadValidationService service =
-            new LoadValidationService(auth, terms, members, subjects, classes);
+            new LoadValidationService(auth, terms, members, subjects, classes,
+                    mock(com.rssolplan.edu.domain.roster.RosterMatchingService.class));
 
     private void member(SchoolUser.Position role) {
         when(auth.getActiveSchoolIdOrThrow(42L)).thenReturn(1L);

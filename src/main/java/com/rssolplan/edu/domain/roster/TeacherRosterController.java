@@ -18,6 +18,14 @@ import static com.rssolplan.edu.domain.roster.TeacherRosterService.*;
 public class TeacherRosterController {
     private final TeacherRosterService roster;
     private final RosterMembershipService memberships;
+    private final RosterMatchingService matching;
+    public record ApprovalInput(Long teacherSchoolUserId) {}
+
+    @GetMapping("/{rosterId}/match-options")
+    public RosterMatchingService.Options matchOptions(@AuthenticationPrincipal Long userId,
+            @PathVariable Long schoolId, @PathVariable Long rosterId, @RequestParam(required=false) Long termId) {
+        return matching.options(userId, schoolId, rosterId, termId);
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -59,8 +67,8 @@ public class TeacherRosterController {
 
     @PostMapping("/{rosterId}/approve")
     public Entry approve(@AuthenticationPrincipal Long userId, @PathVariable Long schoolId,
-                         @PathVariable Long rosterId) {
-        memberships.approve(userId, schoolId, rosterId);
+                         @PathVariable Long rosterId, @RequestBody(required=false) ApprovalInput input) {
+        memberships.approve(userId, schoolId, rosterId, input == null ? null : input.teacherSchoolUserId());
         return roster.get(userId, schoolId, rosterId, null);
     }
 

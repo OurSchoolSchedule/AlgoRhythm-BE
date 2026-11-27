@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.rssolplan.edu.domain.voicecommand.dto.ParsedIntent;
+import com.rssolplan.edu.domain.voicecommand.dto.IntentType;
 import com.rssolplan.edu.global.config.OpenAiProperties;
 import com.rssolplan.edu.global.exception.IntentParseException;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.TextStyle;
 import java.util.Locale;
 
@@ -27,6 +29,8 @@ public class IntentParserService {
     private final RestClient restClient;
 
     public ParsedIntent parse(String text) {
+        if (openAiProperties.getApiKey() == null || openAiProperties.getApiKey().isBlank())
+            return localLessonOrError(text);
         try {
             String requestBody = buildRequestBody(text);
 
@@ -38,12 +42,18 @@ public class IntentParserService {
                     .retrieve()
                     .body(String.class);
 
-            return extractParsedIntent(responseJson);
-        } catch (IntentParseException e) {
-            throw e;
+            var parsed = extractParsedIntent(responseJson);
+            return parsed.resolvedType() == IntentType.UNKNOWN
+                    ? localLessonOrError(text) : parsed;
         } catch (Exception e) {
-            throw new IntentParseException("AI 파싱 중 오류가 발생했습니다: " + e.getMessage());
+            return localLessonOrError(text);
         }
+    }
+
+    private ParsedIntent localLessonOrError(String text) {
+        var fallback = LessonPhrases.tryRead(text, LocalDate.now(ZoneId.of("Asia/Seoul")));
+        if (fallback != null) return fallback;
+        throw new IntentParseException("명령을 해석하지 못했습니다. 수업 날짜와 업무를 다시 입력하세요.");
     }
 
     private String buildRequestBody(String userText) throws Exception {
@@ -78,7 +88,7 @@ public class IntentParserService {
     }
 
     private String buildSystemPrompt() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
         String koreanDay = today.getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.KOREAN);
         return String.format("""
                 당신은 학교 행정 시스템의 명령 파서입니다.
@@ -87,6 +97,12 @@ public class IntentParserService {
                 사용자의 자연어 입력을 분석하여 아래 parse_intent 함수의 파라미터를 정확히 추출하세요.
 
                 지원 기능:
+                - MY_WEEK: 내 시간표 또는 내 수업 조회
+                - COVER_OPTIONS: 내 수업을 대신할 선생님/공강 찾기, 교사가 보내는 보결 요청 (1명 또는 여러 명)
+                - SWAP_OPTIONS: 내 수업과 교환할 수업 찾기 또는 교환 신청
+                - CHANGE_STATUS: 내가 신청한 보결·교환의 진행 상태 조회
+                위 네 가지 의도에는 명시된 날짜(substituteDate), 교시(periodNumber), 상대 교사 이름(teacherName)만 추출하세요.
+                사용자가 말하지 않은 날짜·교시·이름·ID는 만들어 내지 마세요. 이번 주 시간표는 날짜를 비워 두세요.
                 - SUBSTITUTE_CREATE : 보결 교사 요청 생성 (교감/교장)
                 - SUBSTITUTE_RESPOND: 보결 수락/거절 (교사, action: ACCEPT 또는 REJECT)
                 - SUBSTITUTE_APPROVE: 보결 최종 승인 (교감/교장, action: APPROVE 또는 REJECT)
@@ -109,7 +125,8 @@ public class IntentParserService {
 
         addEnumProp(properties, "intentType",
                 new String[]{"SUBSTITUTE_CREATE", "SUBSTITUTE_RESPOND", "SUBSTITUTE_APPROVE",
-                        "AVAILABILITY_ADD", "AVAILABILITY_REPLACE", "UNKNOWN"},
+                        "AVAILABILITY_ADD", "AVAILABILITY_REPLACE", "MY_WEEK", "COVER_OPTIONS",
+                        "SWAP_OPTIONS", "CHANGE_STATUS", "UNKNOWN"},
                 "추출된 의도 유형");
 
         addEnumProp(properties, "confidence",
@@ -117,7 +134,9 @@ public class IntentParserService {
                 "추출 신뢰도");
 
         addNullableInt(properties, "timetableId", "SUBSTITUTE_CREATE: 시간표 ID");
-        addNullableString(properties, "substituteDate", "SUBSTITUTE_CREATE: 보결 날짜 (YYYY-MM-DD)");
+        addNullableString(properties, "substituteDate", "SUBSTITUTE_CREATE: 수업 날짜 (YYYY-MM-DD)");
+        addNullableInt(properties, "periodNumber", "교사가 명시한 교시 번호");
+        addNullableString(properties, "teacherName", "교사가 언급한 상대 교사의 이름");
         addNullableString(properties, "note", "SUBSTITUTE_CREATE: 비고");
         addNullableInt(properties, "requestId", "SUBSTITUTE_RESPOND: 보결 요청 ID");
         addNullableInt(properties, "responseId", "SUBSTITUTE_APPROVE: 교사 응답 ID");
@@ -128,7 +147,6 @@ public class IntentParserService {
         // unavailabilitySlots array
         ObjectNode slots = properties.putObject("unavailabilitySlots");
         slots.put("type", "array");
-        slots.putNull("nullable");
         slots.put("description", "불가 교시 목록");
         ObjectNode slotItem = slots.putObject("items");
         slotItem.put("type", "object");
