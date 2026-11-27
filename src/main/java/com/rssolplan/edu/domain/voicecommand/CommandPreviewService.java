@@ -6,20 +6,21 @@ import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteRequest;
 import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteResponse;
 import com.rssolplan.edu.domain.schedule.generation.TimetableRepository;
 import com.rssolplan.edu.domain.schedule.generation.entity.Timetable;
+import com.rssolplan.edu.domain.schedule.operations.LegacyApprovalGuard;
+import com.rssolplan.edu.domain.schedule.operations.ScheduleAccess;
 import com.rssolplan.edu.domain.school.SchoolUser;
 import com.rssolplan.edu.domain.school.SchoolUserRepository;
 import com.rssolplan.edu.domain.voicecommand.dto.IntentType;
 import com.rssolplan.edu.domain.voicecommand.dto.ParsedIntent;
 import com.rssolplan.edu.global.exception.IntentParseException;
 import com.rssolplan.edu.global.exception.NotFoundException;
-import com.rssolplan.edu.domain.schedule.operations.ScheduleAccess;
 import com.rssolplan.edu.global.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Service
@@ -31,6 +32,7 @@ public class CommandPreviewService {
     private final SubstituteResponseRepository substituteResponseRepository;
     private final SchoolUserRepository schoolUserRepository;
     private final ScheduleAccess access;
+    private final LegacyApprovalGuard guard;
 
     public void requireActiveMember(long userId) {
         access.member(userId, false);
@@ -79,12 +81,14 @@ public class CommandPreviewService {
                 .filter(t -> schoolId.equals(t.getSchool().getId()))
                 .orElseThrow(() -> new NotFoundException("해당 시간표를 찾을 수 없습니다."));
 
-        List<SchoolUser> candidates = schoolUserRepository
-                .findBySchool_IdAndPosition(schoolId, SchoolUser.Position.TEACHER)
-                .stream()
-                .filter(t -> t.getEmploymentStatus() == SchoolUser.EmploymentStatus.HIRED)
-                .filter(t -> !t.getId().equals(timetable.getTeacher().getId()))
-                .toList();
+        LocalDate date;
+        try {
+            date = LocalDate.parse(intent.substituteDate() == null ? "" : intent.substituteDate());
+        } catch (java.time.DateTimeException invalid) {
+            throw new IntentParseException("보결 날짜를 다시 입력하세요.");
+        }
+        var eligible = guard.coverCandidates(new LegacyApprovalGuard.Target(timetable, date), null);
+        var candidates = schoolUserRepository.findAllById(eligible);
 
         Map<String, Object> preview = new HashMap<>();
         preview.put("timetableId", timetable.getId());
@@ -106,7 +110,7 @@ public class CommandPreviewService {
                 .filter(r -> r.getSchool().getId().equals(member.getSchool().getId()))
                 .orElseThrow(() -> new NotFoundException("보결 요청을 찾을 수 없습니다."));
 
-        if (!req.includesCandidate(member.getId())) {
+        if (!req.includesCandidate(member.getId()) && !req.includesCandidate(access.teachingId(member))) {
             throw new ForbiddenException("해당 보결 요청에 응답할 권한이 없습니다.");
         }
         return Map.of(

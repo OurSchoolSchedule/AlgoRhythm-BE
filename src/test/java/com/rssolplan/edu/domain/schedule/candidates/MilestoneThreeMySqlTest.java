@@ -14,6 +14,7 @@ import com.rssolplan.edu.domain.schedule.workshifts.dto.TimetableDto;
 import com.rssolplan.edu.domain.schedule.loadimport.*;
 import com.rssolplan.edu.domain.schedule.operations.*;
 import com.rssolplan.edu.domain.schedule.operations.DatedLessons.Lesson;
+import com.rssolplan.edu.domain.schedule.substitute.dto.*;
 import com.rssolplan.edu.global.exception.NotFoundException;
 import com.rssolplan.edu.global.exception.ForbiddenException;
 
@@ -64,7 +65,8 @@ class MilestoneThreeMySqlTest {
                         new ClassPathResource("db/migration/V20261125_11__school_teacher_roster.sql"),
                         new ClassPathResource("db/migration/V20261126_31__school_roster_names.sql"),
                         new ClassPathResource("db/migration/V20261127_41__roster_teaching_link.sql"),
-                        new ClassPathResource("db/migration/V20261127_42__lesson_change_notification_target.sql"))
+                        new ClassPathResource("db/migration/V20261127_42__lesson_change_notification_target.sql"),
+                        new ClassPathResource("db/migration/V20261127_44__public_cover_recipients.sql"))
                 .execute(source);
         db.update("insert into school(id,name) values(?,'fixture')", school);
         for (int i = 0; i < 7; i++) {
@@ -405,6 +407,80 @@ class MilestoneThreeMySqlTest {
     }
 
     @Test
+    void coverRechecksTheActualTeacherInAnotherClassAndIgnoresCancelledLessons() {
+        var first = publish().get(0);
+        long busy = school + 5;
+        long released = school + 6;
+        long period = first.actual().periodId();
+        db.update("insert into school_class(id,school_id,academic_year,class_number,grade) values(?,?,2026,2,1)",
+                school + 1, school);
+        db.update("""
+                insert into weekly_lesson(version_id,lesson_key,class_id,subject_id,teacher_id,weekday,period_id)
+                values(?,'parallel-class',?,?,?,1,?)
+                """, first.versionId(), school + 1, school, released, period);
+        db.update("""
+                insert into dated_lesson(origin_id,origin_date,teaching_date,planned,actual,rev)
+                select id,?,?,json_object('teacherId',?,'periodId',?),json_object('teacherId',?,'periodId',?),1
+                from weekly_lesson where version_id=? and lesson_key='parallel-class'
+                """, monday, monday, released, period, busy, period, first.versionId());
+        var parallel = lessons.date(admin, term, monday).stream()
+                .filter(l -> l.classId() == school + 1).findFirst().orElseThrow();
+        var batch = new CoverBatch(first.id(), first.rev(), List.of(busy));
+        assertThat(changes.candidates(admin, term, first.id(), first.rev(), ChangeService.Kind.SUBSTITUTE, null))
+                .contains(released).doesNotContain(busy);
+        assertThatThrownBy(() -> changes.createBatch(admin, term, batch))
+                .isInstanceOfSatisfying(ScheduleConflict.class, e -> assertThat(e.code).isEqualTo("SLOT_CONFLICT"));
+
+        db.update("update dated_lesson set actual=json_set(actual,'$.cancelled',true),rev=rev+1 where id=?", parallel.id());
+        assertThat(changes.candidates(admin, term, first.id(), first.rev(), ChangeService.Kind.SUBSTITUTE, null)).contains(busy);
+        var accepted = cover(first, busy);
+        db.update("update dated_lesson set actual=json_remove(actual,'$.cancelled'),rev=rev+1 where id=?", parallel.id());
+        assertThatThrownBy(() -> approve(admin, accepted, UUID.randomUUID()))
+                .isInstanceOfSatisfying(ScheduleConflict.class, e -> assertThat(e.code).isEqualTo("SLOT_CONFLICT"));
+        assertThat(lessons.get(term, first.id())).isEqualTo(first);
+    }
+
+    @Test
+    void crossDateSwapHonorsBothTeachersIncludingTheLinkedLoginAtListingAndApproval() {
+        var first = publish().get(0);
+        long owner = first.actual().teacherId();
+        var second = lessons.date(admin, term, monday.plusWeeks(1)).stream()
+                .filter(l -> l.actual().teacherId() != owner).findFirst().orElseThrow();
+        long login = school + 5;
+        db.update("""
+                insert into school_teacher_roster(school_id,auth_email,display_name,school_user_id)
+                values(?,'linked@example.invalid','연결 교사',?)
+                """, school, login);
+        db.update("""
+                insert into roster_teaching_link(roster_id,teacher_school_user_id)
+                select id,? from school_teacher_roster where school_id=? and school_user_id=?
+                """, second.actual().teacherId(), school, login);
+        String block = """
+                insert into teacher_availability(school_user_id,day_of_week,period_number)
+                select ?,'MON',period_number from period_setting where id=?
+                """;
+        var body = new NewChange(ChangeService.Kind.SWAP, first.id(), first.rev(), second.id(), second.rev(), null);
+        for (var teacherAndPeriod : List.of(
+                List.of(owner, second.actual().periodId()), List.of(login, first.actual().periodId()))) {
+            long teacher = teacherAndPeriod.get(0);
+            db.update(block, teacher, teacherAndPeriod.get(1));
+            assertThat(changes.candidates(owner, term, first.id(), first.rev(), ChangeService.Kind.SWAP, second.date()))
+                    .doesNotContain(second.id());
+            assertThatThrownBy(() -> changes.create(owner, term, body))
+                    .isInstanceOfSatisfying(ScheduleConflict.class, e -> assertThat(e.code).isEqualTo("SLOT_CONFLICT"));
+            db.update("delete from teacher_availability where school_user_id=?", teacher);
+        }
+        assertThat(changes.candidates(owner, term, first.id(), first.rev(), ChangeService.Kind.SWAP, second.date()))
+                .contains(second.id());
+        var created = changes.create(owner, term, body);
+        var accepted = changes.respond(login, term, created.id(), true, created.rev());
+        db.update(block, login, first.actual().periodId());
+        assertThatThrownBy(() -> approve(admin, accepted, UUID.randomUUID()))
+                .isInstanceOfSatisfying(ScheduleConflict.class, e -> assertThat(e.code).isEqualTo("SLOT_CONFLICT"));
+        assertThat(lessons.get(term, second.id())).isEqualTo(second);
+    }
+
+    @Test
     void coverAgainstSwap() {
         conflict("CS");
     }
@@ -555,6 +631,60 @@ class MilestoneThreeMySqlTest {
     }
 
     @Autowired com.rssolplan.edu.domain.schedule.substitute.SubstituteService legacy;
+
+    @Test
+    void publicCoverUsesFreeTeachersAtEachStepAndKeepsLongInvitationsAndLinkedIdentities() {
+        long owner = school + 2, busy = school + 3, unavailable = school + 4;
+        long teaching = school + 5, login = school + 6;
+        for (long id = school + 20; id < school + 58; id++) {
+            db.update("insert into users(id,active_school_id,username) values(?,?,'staff')", id, school);
+            db.update("insert into school_user(id,school_id,user_id,position,employment_status) values(?,?,?,'TEACHER','HIRED')",
+                    id, school, id);
+        }
+        db.update("""
+                insert into school_teacher_roster(school_id,auth_email,display_name,school_user_id)
+                values(?,'cover@example.invalid','연결 교사',?)
+                """, school, login);
+        db.update("""
+                insert into roster_teaching_link(roster_id,teacher_school_user_id)
+                select id,? from school_teacher_roster where school_id=? and school_user_id=?
+                """, teaching, school, login);
+        db.update("insert into school_class(id,school_id,academic_year,class_number,grade) values(?,?,2026,2,1)",
+                school + 1, school);
+        String slot = """
+                insert into timetable(id,school_id,academic_year,semester,school_class_id,period_setting_id,
+                    day_of_week,subject_id,teacher_id) values(?,?,2026,2,?,?,'MON',?,?)
+                """;
+        db.update(slot, school, school, school, school, school, owner);
+        db.update(slot, school + 1, school, school + 1, school, school, busy);
+        String block = "insert into teacher_availability(school_user_id,day_of_week,period_number) values(?,'MON',1)";
+        db.update(block, unavailable);
+        var invite = legacy.create(admin, new SubstituteCreateRequest(school, monday, "공개 모집"));
+        var stored = db.queryForObject("select receiver_user_ids from substitute_requests where id=?", String.class, invite.id());
+        assertThat(stored.length()).isGreaterThan(255);
+        assertThat(Arrays.asList(stored.split(","))).contains("" + teaching)
+                .doesNotContain("" + login, "" + owner, "" + unavailable, "" + busy);
+        var recipients = db.queryForList("select user_id from notifications where school_id=? and substitute_request_id=?",
+                Long.class, school, invite.id());
+        assertThat(recipients).hasSize(39).contains(login).doesNotContain(teaching, busy, unavailable);
+        assertThat(legacy.getRequests(busy, "OPEN")).isEmpty();
+        assertThat(legacy.getRequests(login, "OPEN")).extracting("id").contains(invite.id());
+        var accept = new SubstituteRespondRequest("ACCEPT");
+        assertThatThrownBy(() -> legacy.respond(teaching, invite.id(), accept)).isInstanceOf(ForbiddenException.class);
+        db.update(block, login);
+        assertThatThrownBy(() -> legacy.respond(login, invite.id(), accept)).isInstanceOf(ScheduleConflict.class);
+        db.update("delete from teacher_availability where school_user_id=?", login);
+        var accepted = legacy.respond(login, invite.id(), accept);
+        assertThat(accepted.candidateSchoolUserId()).isEqualTo(teaching);
+        var approval = new SubstituteApprovalRequest("APPROVE");
+        db.update(block, login);
+        assertThatThrownBy(() -> legacy.approve(admin, accepted.responseId(), approval)).isInstanceOf(ScheduleConflict.class);
+        db.update("delete from teacher_availability where school_user_id=?", login);
+        legacy.approve(admin, accepted.responseId(), approval);
+        var parallel = legacy.create(admin, new SubstituteCreateRequest(school + 1, monday, "다른 학급"));
+        assertThat(legacy.getRequests(owner, "OPEN")).extracting("id").contains(parallel.id());
+        assertThat(legacy.getRequests(login, "OPEN")).isEmpty();
+    }
 
     @Test
     void legacyCoverAndPublishedSwapShareOneRevision() {

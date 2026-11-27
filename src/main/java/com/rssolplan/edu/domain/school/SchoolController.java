@@ -4,6 +4,7 @@ import com.rssolplan.edu.domain.roster.RosterMatchingService;
 import com.rssolplan.edu.domain.school.homeroom.HomeroomService;
 import com.rssolplan.edu.domain.roster.TeacherRosterService;
 import com.rssolplan.edu.domain.schedule.generation.TimetableRepository;
+import com.rssolplan.edu.domain.schedule.generation.TimetableRepository.PublishedSubject;
 import com.rssolplan.edu.domain.schedule.generation.TimetableSetRepository;
 import com.rssolplan.edu.domain.schedule.generation.entity.TimetableSet;
 import com.rssolplan.edu.global.exception.NotFoundException;
@@ -70,9 +71,14 @@ public class SchoolController {
     private List<TeacherSummaryResponse> summaries(Long schoolId, Long termId, List<SchoolUser> members) {
         TimetableSet term = termId == null ? null : terms.findByIdAndSchool_Id(termId, schoolId)
                 .orElseThrow(() -> new NotFoundException("해당 학교의 학기를 찾을 수 없습니다."));
-        List<Timetable> lessons = term == null ? timetableRepository.findBySchool_Id(schoolId)
-                : timetableRepository.findBySchool_IdAndAcademicYearAndSemester(
-                        schoolId, term.getAcademicYear(), term.getSemester());
+        var published = term == null ? List.<PublishedSubject>of() : timetableRepository.publishedSubjects(schoolId, termId);
+        var publishedByTeacher = published.stream().collect(Collectors.groupingBy(PublishedSubject::getTeacherId));
+        List<Timetable> lessons = List.of();
+        if (published.isEmpty()) {
+            lessons = term == null ? timetableRepository.findBySchool_Id(schoolId)
+                    : timetableRepository.findBySchool_IdAndAcademicYearAndSemester(
+                            schoolId, term.getAcademicYear(), term.getSemester());
+        }
         List<SchoolClass> classes = term == null ? schoolClassRepository.findBySchool_Id(schoolId)
                 : schoolClassRepository.findBySchool_IdAndAcademicYear(schoolId, term.getAcademicYear());
         var lessonsByTeacher = lessons.stream().collect(Collectors.groupingBy(t -> t.getTeacher().getId()));
@@ -89,6 +95,7 @@ public class SchoolController {
                 .map(member -> new TeacherSummaryResponse(member,
                 accountRows.getOrDefault(links.get(member.getId()), member),
                 lessonsByTeacher.getOrDefault(member.getId(), List.of()),
+                publishedByTeacher.getOrDefault(member.getId(), List.of()),
                 termRoles ? room(byClass, roles.homerooms().get(member.getId()))
                         : classesByTeacher.getOrDefault(member.getId(), List.of()),
                 termRoles ? room(byClass, roles.deputies().get(member.getId())) : List.of(),
@@ -142,7 +149,7 @@ public class SchoolController {
         private final int weeklyLessonCount;
 
         public TeacherSummaryResponse(SchoolUser su, SchoolUser account,
-                                      List<Timetable> timetables,
+                                      List<Timetable> timetables, List<PublishedSubject> published,
                                       List<SchoolClass> homeroomClasses,
                                       List<SchoolClass> deputies, boolean termHomeroomsApplied,
                                       TeacherRosterService.Entry entry) {
@@ -158,10 +165,10 @@ public class SchoolController {
             this.rosterHomeroomClass = rosterTerm == null ? null : rosterTerm.homeroomClass();
             this.position = su.getPosition().name();
             this.employmentStatus = su.getEmploymentStatus().name();
-            this.subjects = timetables.stream()
+            this.subjects = published.isEmpty() ? timetables.stream()
                     .map(t -> new SubjectInfo(t.getSubject().getId(), t.getSubject().getName()))
                     .distinct()
-                    .collect(Collectors.toList());
+                    .toList() : published.stream().map(s -> new SubjectInfo(s.getSubjectId(), s.getSubjectName())).toList();
             this.homeroomClasses = homeroomClasses.stream()
                     .map(c -> new HomeroomClassInfo(c.getId(), c.getAcademicYear(), c.getGrade(), c.getClassNumber()))
                     .collect(Collectors.toList());
@@ -169,7 +176,7 @@ public class SchoolController {
                     .map(c -> new HomeroomClassInfo(c.getId(), c.getAcademicYear(), c.getGrade(), c.getClassNumber()))
                     .toList();
             this.termHomeroomsApplied = termHomeroomsApplied;
-            this.weeklyLessonCount = timetables.size();
+            this.weeklyLessonCount = timetables.size() + published.stream().mapToInt(PublishedSubject::getLessonCount).sum();
         }
     }
 

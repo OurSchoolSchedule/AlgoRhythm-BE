@@ -72,6 +72,50 @@ and ? between t.start_date and t.end_date and exists(select 1 from schedule_vers
         return new Binding(lesson.id(), lesson.rev(), term);
     }
 
+    /** Public recruitment uses the same dated teachers as the direct-invitation workflow. */
+    public List<Long> coverCandidates(Target target, Long requestId) {
+        var current = requestId == null ? current(target) : checked("COVER", requestId, 0, target);
+        var timetable = target.timetable;
+        long school = timetable.getSchool().getId();
+        if (current.id != null) {
+            var lesson = lessons.get(current.term, current.id);
+            DatedLessons.check(lesson, current.rev);
+            return lessons.candidates(school, lesson, ChangeService.Kind.SUBSTITUTE, target.date);
+        }
+        long period = timetable.getPeriodSetting().getId();
+        var busy = new HashSet<>(db.queryForList("""
+                with slots as (
+                    select id,teacher_id from timetable where school_id=? and academic_year=? and semester=?
+                        and day_of_week=? and period_setting_id=?
+                ), assignments as (
+                    select id,teacher_id,null applied,0 change_id,0 kind from slots
+                    union all
+                    select s.id,r.candidate_id,r.updated_at,r.id,1 from slots s
+                    join substitute_requests q on q.timetable_id=s.id and q.substitute_date=? and q.status='FILLED'
+                    join substitute_responses r on r.substitute_request_id=q.id and r.manager_approval='APPROVED'
+                    union all
+                    select s.id,q.receiver_id,q.updated_at,q.id,2 from slots s
+                    join timetable_swap_requests q on q.requester_timetable_id=s.id and q.requester_date=?
+                        and q.manager_approval_status='APPROVED'
+                    union all
+                    select s.id,q.requester_id,q.updated_at,q.id,2 from slots s
+                    join timetable_swap_requests q on q.receiver_timetable_id=s.id and q.receiver_date=?
+                        and q.manager_approval_status='APPROVED'
+                ), ranked as (
+                    select teacher_id,row_number() over(partition by id order by applied desc,change_id desc,kind desc) rn
+                    from assignments
+                )
+                select coalesce(l.teacher_school_user_id,a.teacher_id) from ranked a
+                left join school_teacher_roster r on r.school_user_id=a.teacher_id and r.school_id=?
+                left join roster_teaching_link l on l.roster_id=r.id where a.rn=1
+                """, Long.class, school, timetable.getAcademicYear(), timetable.getSemester(),
+                timetable.getDayOfWeek().name(), period, target.date, target.date, target.date, school));
+        var unavailable = lessons.unavailable(school, target.date);
+        return lessons.teachingMembers(school).stream()
+                .filter(id -> !busy.contains(id) && !unavailable.contains(new DatedLessons.Unavailable(id, period)))
+                .toList();
+    }
+
     public void capture(String kind, long request, Target... targets) {
         for (int i = 0; i < targets.length; i++) {
             var b = current(targets[i]);
@@ -87,25 +131,27 @@ and ? between t.start_date and t.end_date and exists(select 1 from schedule_vers
         }
     }
 
+    private Binding checked(String kind, long request, int side, Target target) {
+        var now = current(target);
+        var rows =
+                db.query(
+                        "select dated_id,expected_rev from legacy_approval_input where kind=?"
+                            + " and request_id=? and side_no=?",
+                        (r, n) ->
+                                new Binding(r.getObject(1, Long.class), r.getLong(2), now.term),
+                        kind,
+                        request,
+                        side);
+        var original = rows.isEmpty() ? new Binding(null, 0, 0) : rows.get(0);
+        if (!Objects.equals(now.id, original.id) || original.rev != now.rev)
+            throw DatedLessons.stale(now.rev);
+        return now;
+    }
+
     public List<?> approve(
             long school, String kind, long request, long substitute, Target... targets) {
         List<Binding> bound = new ArrayList<>();
-        for (int i = 0; i < targets.length; i++) {
-            var now = current(targets[i]);
-            var rows =
-                    db.query(
-                            "select dated_id,expected_rev from legacy_approval_input where kind=?"
-                                + " and request_id=? and side_no=?",
-                            (r, n) ->
-                                    new Binding(r.getObject(1, Long.class), r.getLong(2), now.term),
-                            kind,
-                            request,
-                            i);
-            var original = rows.isEmpty() ? new Binding(null, 0, 0) : rows.get(0);
-            if (!Objects.equals(now.id, original.id) || original.rev != now.rev)
-                throw DatedLessons.stale(now.rev);
-            bound.add(now);
-        }
+        for (int i = 0; i < targets.length; i++) bound.add(checked(kind, request, i, targets[i]));
         var a = bound.get(0);
         var b = bound.size() == 2 ? bound.get(1) : null;
         if (b != null && a.term != b.term) throw new BadRequestException("두 수업의 게시 범위가 다릅니다.");

@@ -66,12 +66,13 @@ async function rehearseChanges({ request, adminToken, teacherToken, responderTok
   let group
   if (uiRound) {
     await selectSource(cover)
-    const members = await request('/api/school/teachers', teacherToken)
     const form = teacherPage.getByRole('form', { name: '보결 신청' })
     for (const id of payload.substituteTeacherIds) {
-      const member = members.find(m => m.schoolUserId === id)
-      await form.getByRole('checkbox', { name: member.displayName ?? member.username, exact: true }).check()
+      await form.locator('input[type="checkbox"][value="' + id + '"]').check()
     }
+    const displayed = await form.getByRole('checkbox').evaluateAll(
+      boxes => boxes.map(box => Number(box.value)).sort((a, b) => a - b))
+    assert.deepEqual(displayed, (await candidates(cover, 'SUBSTITUTE')).sort((a, b) => a - b))
     if (capture) await capture(teacherPage, 'teacher-group-cover')
     group = await submit(teacherPage, changes + '/substitutes',
       form.getByRole('button', { name: '선택한 교사 2명에게 보결 요청' }), 201)
@@ -107,11 +108,18 @@ async function rehearseChanges({ request, adminToken, teacherToken, responderTok
   if (uiRound) {
     await selectSource(first)
     const form = teacherPage.getByRole('form', { name: '교환 신청' })
-    await form.getByRole('combobox', { name: /^상대 교사/ }).selectOption(String(responderId))
     if (second.date !== first.date) {
       await form.getByRole('checkbox', { name: '다른 날짜의 수업 선택' }).check()
       await form.getByLabel('교환 상대 수업 날짜').fill(second.date)
     }
+    const counterpart = form.getByRole('combobox', { name: /^상대 교사/ })
+    await counterpart.selectOption(String(responderId))
+    const eligibleIds = new Set(await candidates(first, 'SWAP', second.date))
+    const day = await request(term + '/lessons?date=' + second.date, teacherToken)
+    const eligibleTeachers = new Set(day.filter(row => eligibleIds.has(row.id)).map(row => row.actual.teacherId))
+    const offeredTeachers = await counterpart.locator('option').evaluateAll(options =>
+      options.filter(option => option.value).map(option => Number(option.value)))
+    assert.deepEqual(new Set(offeredTeachers), eligibleTeachers)
     await form.getByRole('combobox', { name: /교환할 상대 수업/ }).selectOption(second.id + '/' + second.rev)
     if (capture) await capture(teacherPage, 'teacher-exchange-preview')
     swap = await submit(teacherPage, changes, form.getByRole('button', { name: '교환 신청', exact: true }), 201)

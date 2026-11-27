@@ -39,6 +39,7 @@ public class SubstituteRequest {
     private LocalDate substituteDate;
 
     /** Comma-separated SchoolUser IDs to notify */
+    @Column(columnDefinition = "TEXT")
     private String receiverUserIds;
 
     public boolean includesCandidate(long schoolUserId) {

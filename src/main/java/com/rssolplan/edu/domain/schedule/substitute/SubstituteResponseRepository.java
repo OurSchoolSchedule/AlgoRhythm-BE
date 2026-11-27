@@ -5,13 +5,12 @@ import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteResponse.Wo
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
-import java.util.Optional;
 
 public interface SubstituteResponseRepository extends JpaRepository<SubstituteResponse, Long> {
 
     List<SubstituteResponse> findBySubstituteRequest_Id(Long substituteRequestId);
 
-    Optional<SubstituteResponse> findBySubstituteRequest_IdAndCandidate_Id(Long substituteRequestId, Long candidateId);
+    boolean existsBySubstituteRequest_IdAndCandidate_IdIn(Long substituteRequestId, List<Long> candidateIds);
 
     List<SubstituteResponse> findBySubstituteRequest_IdAndWorkerAction(Long substituteRequestId, WorkerAction action);
 }
