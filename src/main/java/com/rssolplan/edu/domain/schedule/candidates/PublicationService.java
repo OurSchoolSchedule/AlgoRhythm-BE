@@ -119,9 +119,12 @@ join schedule_version v on v.id=r.version_id where r.job_id=?
         var stored = job.snapshot();
         var fresh = inputs.refresh(user, term, stored);
         if (!stored.slots().equals(fresh.slots())
-                || !stored.bells().equals(fresh.bells())
-                || !stored.blocked().equals(fresh.blocked()))
+                || !stored.bells().equals(fresh.bells()))
             throw new ScheduleConflict("STALE_INPUT", null, "명부·교시·불가 시간이 변경되었습니다. 다시 생성하세요.");
+        for (var placement : chosen.placements()) {
+            if (fresh.blocked().getOrDefault(placement.teacherId(), Set.of()).contains(placement.slot()))
+                throw new ScheduleConflict("STALE_INPUT", rev, "선택한 후보의 수업이 교사의 현재 불가 시간과 겹칩니다. 다시 생성하세요.");
+        }
         verify(fresh.problem(), chosen);
         var dates =
                 db.queryForMap(
@@ -140,6 +143,12 @@ where v.term_id=? and d.rev>0 and (d.teaching_date>=? or d.origin_date>=?)
                         term,
                         from,
                         from);
+        boolean recruiting = db.queryForObject("""
+                select exists(select 1 from substitute_requests where dated_term_id=? and status='OPEN'
+                              and substitute_date between ? and ?)
+                """, Boolean.class, term, from, end);
+        if (recruiting)
+            throw new ScheduleConflict("DATED_CHANGES_EXIST", rev, "적용 기간의 공개 보결 모집을 먼저 마감하세요.");
         if (changed > 0
                 || legacyApprovals(
                         school, stored.year(), (Number) dates.get("semester"), from, end))

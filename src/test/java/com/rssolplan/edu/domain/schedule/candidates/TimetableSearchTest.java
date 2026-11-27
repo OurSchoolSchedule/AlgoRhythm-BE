@@ -110,6 +110,21 @@ class TimetableSearchTest {
     }
 
     @Test
+    void capacityCountsOnlyTheUnionOfATeachersOwnClassCalendars() {
+        var slots = List.of(mon(1), mon(2), mon(3));
+        var earlyOnly = new BitSet();
+        earlyOnly.set(2);
+        var assigned = List.of(demand(1, 10, 1, 2), demand(1, 10, 2, 1));
+        var impossible = new TimetableProblem(assigned, slots, Map.of(), List.of(),
+                Objective.BALANCED, Map.of("1", earlyOnly, "2", earlyOnly));
+        assertThat(solve(impossible).stopReason()).isEqualTo(Stop.CAPACITY);
+        assertThat(impossible.capacityFailure).contains("3차시", "2칸", "1차시 초과");
+        var feasible = new TimetableProblem(assigned, slots, Map.of(), List.of(),
+                Objective.BALANCED, Map.of("1", earlyOnly));
+        assertThat(solve(feasible).candidates()).isNotEmpty();
+    }
+
+    @Test
     void exhaustedSearchDetectsHallConflictEvenWhenIndividualCapacitiesPass() {
         var p =
                 new TimetableProblem(

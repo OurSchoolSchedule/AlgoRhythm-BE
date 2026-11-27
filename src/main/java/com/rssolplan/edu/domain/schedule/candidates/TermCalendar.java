@@ -141,17 +141,20 @@ class TermCalendar {
                     select d.origin_date,d.teaching_date from dated_lesson d
                     join weekly_lesson w on w.id=d.origin_id join schedule_version v on v.id=w.version_id
                     where v.term_id=? and (d.rev>0 or exists(select 1 from lesson_change c
-                        where c.term_id=v.term_id and (c.first_id=d.id or c.second_id=d.id)))
+                        where c.term_id=v.term_id and c.state in ('PENDING','ACCEPTED','APPROVED')
+                          and (c.first_id=d.id or c.second_id=d.id)))
                 ), swaps as (
                     select s.requester_date,s.receiver_date from timetable_swap_requests s
                     join timetable t on t.id=s.requester_timetable_id where s.school_id=?
-                        and t.academic_year=? and t.semester=?
+                        and t.academic_year=? and t.semester=? and s.status in ('PENDING','ACCEPTED')
+                        and s.manager_approval_status <> 'REJECTED'
                 )
                 select origin_date from dated union select teaching_date from dated
                 union select requester_date from swaps union select receiver_date from swaps
+                union select s.substitute_date from substitute_requests s where s.school_id=? and s.dated_term_id=? and s.status in ('OPEN','FILLED')
                 union select s.substitute_date from substitute_requests s join timetable t on t.id=s.timetable_id
-                    where s.school_id=? and t.academic_year=? and t.semester=?
+                    where s.school_id=? and t.academic_year=? and t.semester=? and s.status in ('OPEN','FILLED')
                 """, LocalDate.class, term.termId(), school, term.academicYear(), term.semester(),
-                school, term.academicYear(), term.semester()));
+                school, term.termId(), school, term.academicYear(), term.semester()));
     }
 }

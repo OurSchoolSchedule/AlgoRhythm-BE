@@ -32,8 +32,22 @@ public class SubstituteRequest {
     private SchoolUser owner;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "timetable_id", nullable = false)
+    @JoinColumn(name = "timetable_id")
     private Timetable timetable;
+
+    // Set together for a published occurrence. Legacy rows use timetable_id.
+    private Long datedTermId;
+    private Long datedLessonId;
+    private Long expectedLessonRev;
+    private Integer datedPeriodNumber;
+
+    public int periodNumber() {
+        return datedLessonId == null ? timetable.getPeriodSetting().getPeriodNumber() : datedPeriodNumber;
+    }
+
+    public String weekday() {
+        return datedLessonId == null ? timetable.getDayOfWeek().name() : substituteDate.getDayOfWeek().name().substring(0, 3);
+    }
 
     @Column(nullable = false)
     private LocalDate substituteDate;

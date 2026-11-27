@@ -140,6 +140,17 @@ class RosterImportMySqlTest {
         assertThat(uploadRoles(path,admin,file,200)).isEqualTo(receipt);
         assertThat(uploadRoles(path,admin,roleWorkbook(school+1),422).at("/fieldErrors/0/code").asText())
                 .isEqualTo("DUPLICATE_TEACHER");
+        try (var wrong = new XSSFWorkbook(new ByteArrayInputStream(file)); var bytes = new ByteArrayOutputStream()) {
+            wrong.getSheetAt(0).getRow(1).getCell(4).setCellValue("다른 교사");
+            wrong.getSheetAt(0).getRow(2).getCell(6).setCellValue("또 다른 교사");
+            wrong.write(bytes);
+            var issues = uploadRoles(path, admin, bytes.toByteArray(), 422).required("fieldErrors");
+            assertThat(issues.size()).isEqualTo(2);
+            assertThat(issues.at("/0/code").asText()).isEqualTo("TEACHER_NAME_MISMATCH");
+            assertThat(issues.at("/0/cell").asText()).isEqualTo("E2");
+            assertThat(issues.at("/0/message").asText()).contains("학교 이름", Long.toString(school + 1));
+            assertThat(issues.at("/1/cell").asText()).isEqualTo("G3");
+        }
         assertThat(uploadRoles(path,admin,roleWorkbook(other),422).at("/fieldErrors/0/code").asText()).isEqualTo("UNKNOWN_TEACHER");
         assertThat(request(HttpMethod.GET,path,school+1,null,200)).isEqualTo(receipt);
         assertThat(count("SELECT COUNT(*) FROM term_class_teacher_role WHERE term_id=?",term)).isEqualTo(4);
@@ -149,6 +160,22 @@ class RosterImportMySqlTest {
                 .filter(row -> row.get("schoolUserId").asLong() == school+4).findFirst().orElseThrow();
         assertThat(deputy.get("termHomeroomsApplied").asBoolean()).isTrue();
         assertThat(deputy.at("/deputyHomeroomClasses/0/classId").asLong()).isEqualTo(school+2);
+
+        member(school + 5, school, "TEACHER");
+        db.update("""
+                insert into school_class(id,school_id,academic_year,grade,class_number,homeroom_teacher_id)
+                values(?,?,2026,1,3,?)
+                """, school + 8, school, school + 5);
+        var added = request(HttpMethod.GET, path, school + 5, null, 200);
+        assertThat(added.at("/2/homeroomTeacher/schoolUserId").asLong()).isEqualTo(school + 5);
+        for (String directory : List.of("teachers","members")) {
+            var rows = request(HttpMethod.GET, "/api/school/" + directory + "?termId=" + term, admin, null, 200);
+            var row = java.util.stream.StreamSupport.stream(rows.spliterator(), false)
+                    .filter(r -> r.get("schoolUserId").asLong() == school + 5).findFirst().orElseThrow();
+            assertThat(row.at("/homeroomClasses/0/classId").asLong()).isEqualTo(school + 8);
+            assertThat(row.path("homeroomAssignmentTermId").asLong()).isEqualTo(term);
+            assertThat(row.path("deputyHomeroomClasses")).isEmpty();
+        }
     }
 
     private byte[] roleWorkbook(long lastDeputy) throws IOException {

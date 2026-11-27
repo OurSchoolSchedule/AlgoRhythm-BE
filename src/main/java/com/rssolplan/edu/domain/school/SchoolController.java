@@ -19,6 +19,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -79,14 +80,22 @@ public class SchoolController {
                     : timetableRepository.findBySchool_IdAndAcademicYearAndSemester(
                             schoolId, term.getAcademicYear(), term.getSemester());
         }
-        List<SchoolClass> classes = term == null ? schoolClassRepository.findBySchool_Id(schoolId)
-                : schoolClassRepository.findBySchool_IdAndAcademicYear(schoolId, term.getAcademicYear());
         var lessonsByTeacher = lessons.stream().collect(Collectors.groupingBy(t -> t.getTeacher().getId()));
-        var classesByTeacher = classes.stream().filter(c -> c.getHomeroomTeacher() != null)
-                .collect(Collectors.groupingBy(c -> c.getHomeroomTeacher().getId()));
-        var roles = termId == null ? null : homerooms.rolesForTerm(termId);
-        boolean termRoles = roles != null && roles.applied();
-        var byClass = classes.stream().collect(Collectors.toMap(SchoolClass::getId, c -> c));
+        Map<Long, List<HomeroomClassInfo>> primary;
+        Map<Long, List<HomeroomClassInfo>> deputies;
+        boolean applied;
+        if (term == null) {
+            primary = schoolClassRepository.findBySchool_Id(schoolId).stream().filter(c -> c.getHomeroomTeacher() != null)
+                    .collect(Collectors.groupingBy(c -> c.getHomeroomTeacher().getId(), Collectors.mapping(c ->
+                        new HomeroomClassInfo(c.getId(), c.getAcademicYear(), c.getGrade(), c.getClassNumber()), Collectors.toList())));
+            deputies = Map.of();
+            applied = false;
+        } else {
+            var assignments = homerooms.effectiveAssignments(schoolId, termId, term.getAcademicYear());
+            primary = groupRooms(assignments, HomeroomService.RoomAssignment::homeroomTeacher);
+            deputies = groupRooms(assignments, HomeroomService.RoomAssignment::deputyTeacher);
+            applied = assignments.stream().anyMatch(HomeroomService.RoomAssignment::explicitTermRole);
+        }
         var entries = roster.linkedByMembership(schoolId, termId);
         var links = matching.directoryLinks(schoolId);
         var accountRows = members.stream().collect(Collectors.toMap(SchoolUser::getId, m -> m));
@@ -96,14 +105,15 @@ public class SchoolController {
                 accountRows.getOrDefault(links.get(member.getId()), member),
                 lessonsByTeacher.getOrDefault(member.getId(), List.of()),
                 publishedByTeacher.getOrDefault(member.getId(), List.of()),
-                termRoles ? room(byClass, roles.homerooms().get(member.getId()))
-                        : classesByTeacher.getOrDefault(member.getId(), List.of()),
-                termRoles ? room(byClass, roles.deputies().get(member.getId())) : List.of(),
-                termRoles, entries.get(member.getId()))).toList();
+                primary.getOrDefault(member.getId(), List.of()), deputies.getOrDefault(member.getId(), List.of()),
+                applied, termId, entries.get(links.getOrDefault(member.getId(), member.getId())))).toList();
     }
 
-    private static List<SchoolClass> room(java.util.Map<Long,SchoolClass> byClass, Long id) {
-        return id == null || !byClass.containsKey(id) ? List.of() : List.of(byClass.get(id));
+    private static Map<Long, List<HomeroomClassInfo>> groupRooms(List<HomeroomService.RoomAssignment> rooms,
+            java.util.function.Function<HomeroomService.RoomAssignment, HomeroomService.Teacher> role) {
+        return rooms.stream().filter(room -> role.apply(room) != null && role.apply(room).schoolUserId() != null)
+                .collect(Collectors.groupingBy(room -> role.apply(room).schoolUserId(), Collectors.mapping(room ->
+                        new HomeroomClassInfo(room.classId(), room.academicYear(), room.grade(), room.classNumber()), Collectors.toList())));
     }
 
     @Getter
@@ -146,12 +156,13 @@ public class SchoolController {
         private final List<HomeroomClassInfo> homeroomClasses;
         private final List<HomeroomClassInfo> deputyHomeroomClasses;
         private final boolean termHomeroomsApplied;
+        private final Long homeroomAssignmentTermId;
         private final int weeklyLessonCount;
 
         public TeacherSummaryResponse(SchoolUser su, SchoolUser account,
                                       List<Timetable> timetables, List<PublishedSubject> published,
-                                      List<SchoolClass> homeroomClasses,
-                                      List<SchoolClass> deputies, boolean termHomeroomsApplied,
+                                      List<HomeroomClassInfo> homeroomClasses,
+                                      List<HomeroomClassInfo> deputies, boolean termHomeroomsApplied, Long homeroomAssignmentTermId,
                                       TeacherRosterService.Entry entry) {
             this.schoolUserId = su.getId();
             this.userId = account.getUser().getId();
@@ -169,13 +180,10 @@ public class SchoolController {
                     .map(t -> new SubjectInfo(t.getSubject().getId(), t.getSubject().getName()))
                     .distinct()
                     .toList() : published.stream().map(s -> new SubjectInfo(s.getSubjectId(), s.getSubjectName())).toList();
-            this.homeroomClasses = homeroomClasses.stream()
-                    .map(c -> new HomeroomClassInfo(c.getId(), c.getAcademicYear(), c.getGrade(), c.getClassNumber()))
-                    .collect(Collectors.toList());
-            this.deputyHomeroomClasses = deputies.stream()
-                    .map(c -> new HomeroomClassInfo(c.getId(), c.getAcademicYear(), c.getGrade(), c.getClassNumber()))
-                    .toList();
+            this.homeroomClasses = homeroomClasses;
+            this.deputyHomeroomClasses = deputies;
             this.termHomeroomsApplied = termHomeroomsApplied;
+            this.homeroomAssignmentTermId = homeroomAssignmentTermId;
             this.weeklyLessonCount = timetables.size() + published.stream().mapToInt(PublishedSubject::getLessonCount).sum();
         }
     }

@@ -44,7 +44,10 @@ public class LoadValidationService {
                     "INVALID_YEAR",
                     "학교의 학년도를 지정하세요.");
         Map<Long, Long> teachingIdByLogin = new HashMap<>();
-        matches.directoryLinks(schoolId).forEach((teaching, login) -> teachingIdByLogin.put(login, teaching));
+        var linked = matches.linkedAccounts(schoolId);
+        linked.forEach((teaching, account) -> {
+            if (teaching != account.memberId()) teachingIdByLogin.put(account.memberId(), teaching);
+        });
         var teachers =
                 members
                         .findBySchool_IdAndEmploymentStatus(
@@ -52,7 +55,8 @@ public class LoadValidationService {
                         .stream()
                         .filter(m -> !teachingIdByLogin.containsKey(m.getId()))
                         .map(m -> new LoadCatalog.Name(m.getId(), m.getSchoolDisplayName()))
-                        .toList();
+                        .collect(Collectors.toCollection(ArrayList::new));
+        linked.forEach((teaching, account) -> teachers.add(new LoadCatalog.Name(teaching, account.displayName())));
         var schoolSubjects = subjects.findBySchool_Id(schoolId);
         var names =
                 new LoadCatalog.Names(

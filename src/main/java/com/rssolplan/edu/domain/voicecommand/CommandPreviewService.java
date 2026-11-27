@@ -115,7 +115,7 @@ public class CommandPreviewService {
         }
         return Map.of(
                 "requestId", req.getId(),
-                "timetableInfo", buildTimetableInfo(req.getTimetable()),
+                "timetableInfo", coverLessonInfo(req),
                 "substituteDate", req.getSubstituteDate(),
                 "currentStatus", req.getStatus().name(),
                 "action", intent.action() != null ? intent.action() : "(미확인)"
@@ -135,7 +135,7 @@ public class CommandPreviewService {
                 "responseId", resp.getId(),
                 "teacherName", resp.getCandidate().getSchoolDisplayName(),
                 "teacherAction", resp.getWorkerAction().name(),
-                "timetableInfo", buildTimetableInfo(req.getTimetable()),
+                "timetableInfo", coverLessonInfo(req),
                 "substituteDate", req.getSubstituteDate(),
                 "action", intent.action() != null ? intent.action() : "(미확인)"
         );
@@ -154,6 +154,11 @@ public class CommandPreviewService {
                         "reason", slot.reason() != null ? slot.reason() : ""
                 )).toList()
         );
+    }
+
+    private String coverLessonInfo(SubstituteRequest request) {
+        return request.getDatedLessonId() == null ? buildTimetableInfo(request.getTimetable())
+                : String.format("%s %d교시 · 날짜 수업 #%d", request.getSubstituteDate(), request.periodNumber(), request.getDatedLessonId());
     }
 
     private String buildTimetableInfo(Timetable t) {
