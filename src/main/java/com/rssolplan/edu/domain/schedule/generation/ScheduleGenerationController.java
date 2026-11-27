@@ -1,5 +1,6 @@
 package com.rssolplan.edu.domain.schedule.generation;
 
+import com.rssolplan.edu.domain.auth.dto.ApiResponse;
 import com.rssolplan.edu.domain.schedule.generation.dto.TimetableGenerationRequestDto;
 import com.rssolplan.edu.domain.schedule.generation.dto.TimetableRequestResponseDto;
 import com.rssolplan.edu.domain.schedule.generation.dto.UnsubmittedTeacherDto;
@@ -24,6 +25,12 @@ import java.util.Map;
 public class ScheduleGenerationController {
 
     private final ScheduleGenerationService service;
+
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    ApiResponse<Object> invalidGenerationInput() {
+        return ApiResponse.error("BAD_REQUEST", "학년도·요일·교시 번호와 요청 형식을 확인하세요.");
+    }
 
     /**
      * 1. 시간표 생성 요청 (교사 불가 교시 제출 요청)

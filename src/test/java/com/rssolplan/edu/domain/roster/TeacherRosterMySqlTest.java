@@ -84,6 +84,7 @@ class TeacherRosterMySqlTest {
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V20261122_01__school_load_and_schedule_versions.sql"),
                 new ClassPathResource("db/migration/V20261124_01__generation_and_lesson_operations.sql"),
                 new ClassPathResource(R1),
+                new ClassPathResource("db/migration/V20261127_43__term_class_teacher_role.sql"),
                 new ClassPathResource("db/migration/V20261126_31__school_roster_names.sql"),
                 new ClassPathResource("db/migration/V20261127_41__roster_teaching_link.sql"),
                 new ClassPathResource("db/migration/V20261125_21__passkey_auth.sql")).execute(source);
@@ -367,7 +368,15 @@ class TeacherRosterMySqlTest {
         assertThat(me.required("displayName").asText()).isEqualTo("이수학");
         assertThat(http(get(base(b) + "/" + second), admin(b), null, 200).required("status").textValue())
                 .isEqualTo("UNLINKED");
-        http(put("/api/mypage/teacher/profile"), token, Map.of("username", "계정 이름", "email", different), 200);
+        var saved = http(put("/api/mypage/teacher/profile"), token,
+                Map.of("username", "  계정 이름  ", "email", different, "verifiedEmail", different), 200);
+        assertThat(saved.required("username").asText()).isEqualTo("계정 이름");
+        assertThat(saved.required("verifiedEmail").asText()).isEqualTo(email);
+        assertThat(saved.required("email").asText()).isEqualTo(email);
+        http(put("/api/mypage/teacher/profile"), token, Map.of("username", "   "), 400);
+        http(put("/api/mypage/teacher/profile"), token, Map.of("username", "이".repeat(101)), 400);
+        http(put("/api/mypage/admin/profile"), token, Map.of("username", "다른 역할"), 403);
+        assertThat(http(get(base(a) + "/me"), token, null, 200).required("displayName").asText()).isEqualTo("이수학");
         http(post(ADD_SCHOOL), token, Map.of("schoolCode", code(b), "displayName", "이과학"), 201);
         assertThat(members(user, a)).isOne();
         assertThat(members(user, b)).isOne();

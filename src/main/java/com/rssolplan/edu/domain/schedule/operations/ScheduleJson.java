@@ -20,6 +20,14 @@ public class ScheduleJson {
         }
     }
 
+    public <T> T read(String value, com.fasterxml.jackson.core.type.TypeReference<T> type) {
+        try {
+            return mapper.readValue(value, type);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("저장된 작업 자료를 읽을 수 없습니다.", e);
+        }
+    }
+
     public <T> T read(String value, Class<T> type) {
         try {
             return mapper.readValue(value, type);

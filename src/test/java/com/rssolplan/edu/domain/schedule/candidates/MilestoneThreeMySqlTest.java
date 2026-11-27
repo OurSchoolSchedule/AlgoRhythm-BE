@@ -266,6 +266,36 @@ class MilestoneThreeMySqlTest {
     }
 
     @Test
+    void frozenGradeLimitsRoundTripAndClassGradeChangesRequireRegeneration() {
+        var limits = new GradeLastPeriod(1, Map.of(DayOfWeek.MON, 3, DayOfWeek.TUE, 0,
+                DayOfWeek.WED, 0, DayOfWeek.THU, 0, DayOfWeek.FRI, 0));
+        request = new Request(request.validatedLoadId(), null, null, Objective.BALANCED, List.of(limits));
+        var result = generate();
+        var poll = store.poll(admin, term, result.jobId());
+        assertThat(poll.gradeLastPeriods()).containsExactly(limits);
+        assertThat(poll.classGrades()).containsExactly(Map.entry(Long.toString(school), 1));
+        assertThat(poll.registeredPeriods()).containsExactly(1, 2, 3);
+        assertThat(poll.teachingSlots()).containsExactly(new Slot(DayOfWeek.MON, 1),
+                new Slot(DayOfWeek.MON, 2), new Slot(DayOfWeek.MON, 3));
+        db.update("update school_class set grade=2 where id=?", school);
+        assertThatThrownBy(() -> publication.publish(admin, term, choose(result)))
+                .isInstanceOf(ScheduleConflict.class);
+        assertThat(store.poll(admin, term, result.jobId()).classGrades()).isEqualTo(poll.classGrades());
+    }
+
+    @Test
+    void preGradeSnapshotStillPollsAndPublishesItsOriginalCommonCalendar() {
+        var result = generate();
+        db.update("update generation_job set snapshot=json_remove(snapshot,'$.classGrades','$.request.gradeLastPeriods') where id=?",
+                result.jobId().toString());
+        var poll = store.poll(admin, term, result.jobId());
+        assertThat(poll.classGrades()).isNull();
+        assertThat(poll.gradeLastPeriods()).isNull();
+        assertThat(poll.teachingSlots()).isEqualTo(request.teachingSlots());
+        assertThat(publication.publish(admin, term, choose(result)).weeklyLessons()).isEqualTo(3);
+    }
+
+    @Test
     void wrongCandidateAndChangedHardConstraintCannotPublish() {
         var result = generate();
         assertThatThrownBy(

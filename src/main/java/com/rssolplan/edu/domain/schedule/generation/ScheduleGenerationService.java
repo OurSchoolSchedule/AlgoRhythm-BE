@@ -129,6 +129,12 @@ public class ScheduleGenerationService {
             throw new IllegalStateException("아직 요청 상태가 아닙니다.");
         }
 
+        if (request.getSlotRequirements() == null || request.getSlotRequirements().stream()
+                .anyMatch(slot -> slot == null || slot.getDayOfWeek() == null
+                        || slot.getDayOfWeek().getValue() > 5)) {
+            throw new BadRequestException("새 시간표의 운영 요일은 월요일부터 금요일까지입니다.");
+        }
+
         // 교사 목록 로드
         List<SchoolUser> teachers = schoolUserRepository.findBySchool_IdAndPosition(
                 schoolId, SchoolUser.Position.TEACHER);

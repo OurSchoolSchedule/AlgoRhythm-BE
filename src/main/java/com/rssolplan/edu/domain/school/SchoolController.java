@@ -1,6 +1,7 @@
 package com.rssolplan.edu.domain.school;
 
 import com.rssolplan.edu.domain.roster.RosterMatchingService;
+import com.rssolplan.edu.domain.school.homeroom.HomeroomService;
 import com.rssolplan.edu.domain.roster.TeacherRosterService;
 import com.rssolplan.edu.domain.schedule.generation.TimetableRepository;
 import com.rssolplan.edu.domain.schedule.generation.TimetableSetRepository;
@@ -33,6 +34,7 @@ public class SchoolController {
     private final TeacherRosterService roster;
     private final RosterMatchingService matching;
     private final TimetableSetRepository terms;
+    private final HomeroomService homerooms;
 
     /** 현재 활성 학교 요약 조회 */
     @GetMapping("/me")
@@ -76,6 +78,9 @@ public class SchoolController {
         var lessonsByTeacher = lessons.stream().collect(Collectors.groupingBy(t -> t.getTeacher().getId()));
         var classesByTeacher = classes.stream().filter(c -> c.getHomeroomTeacher() != null)
                 .collect(Collectors.groupingBy(c -> c.getHomeroomTeacher().getId()));
+        var roles = termId == null ? null : homerooms.rolesForTerm(termId);
+        boolean termRoles = roles != null && roles.applied();
+        var byClass = classes.stream().collect(Collectors.toMap(SchoolClass::getId, c -> c));
         var entries = roster.linkedByMembership(schoolId, termId);
         var links = matching.directoryLinks(schoolId);
         var accountRows = members.stream().collect(Collectors.toMap(SchoolUser::getId, m -> m));
@@ -84,8 +89,14 @@ public class SchoolController {
                 .map(member -> new TeacherSummaryResponse(member,
                 accountRows.getOrDefault(links.get(member.getId()), member),
                 lessonsByTeacher.getOrDefault(member.getId(), List.of()),
-                classesByTeacher.getOrDefault(member.getId(), List.of()),
-                entries.get(member.getId()))).toList();
+                termRoles ? room(byClass, roles.homerooms().get(member.getId()))
+                        : classesByTeacher.getOrDefault(member.getId(), List.of()),
+                termRoles ? room(byClass, roles.deputies().get(member.getId())) : List.of(),
+                termRoles, entries.get(member.getId()))).toList();
+    }
+
+    private static List<SchoolClass> room(java.util.Map<Long,SchoolClass> byClass, Long id) {
+        return id == null || !byClass.containsKey(id) ? List.of() : List.of(byClass.get(id));
     }
 
     @Getter
@@ -126,11 +137,14 @@ public class SchoolController {
         private final String employmentStatus;
         private final List<SubjectInfo> subjects;
         private final List<HomeroomClassInfo> homeroomClasses;
+        private final List<HomeroomClassInfo> deputyHomeroomClasses;
+        private final boolean termHomeroomsApplied;
         private final int weeklyLessonCount;
 
         public TeacherSummaryResponse(SchoolUser su, SchoolUser account,
                                       List<Timetable> timetables,
                                       List<SchoolClass> homeroomClasses,
+                                      List<SchoolClass> deputies, boolean termHomeroomsApplied,
                                       TeacherRosterService.Entry entry) {
             this.schoolUserId = su.getId();
             this.userId = account.getUser().getId();
@@ -151,6 +165,10 @@ public class SchoolController {
             this.homeroomClasses = homeroomClasses.stream()
                     .map(c -> new HomeroomClassInfo(c.getId(), c.getAcademicYear(), c.getGrade(), c.getClassNumber()))
                     .collect(Collectors.toList());
+            this.deputyHomeroomClasses = deputies.stream()
+                    .map(c -> new HomeroomClassInfo(c.getId(), c.getAcademicYear(), c.getGrade(), c.getClassNumber()))
+                    .toList();
+            this.termHomeroomsApplied = termHomeroomsApplied;
             this.weeklyLessonCount = timetables.size();
         }
     }

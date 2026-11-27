@@ -253,6 +253,53 @@ class CandidateApiTest {
     }
 
     @Test
+    void rejectsWeekendsIncompleteUnknownGradesUnregisteredPeriodsAndPerClassExcess() throws Exception {
+        String id = preview("/api/v2/terms/7/load-imports/validate");
+        when(classes.findBySchool_IdAndAcademicYear(1L, 2026)).thenReturn(List.of(
+                SchoolClass.builder().id(30L).grade(1).classNumber(1).build(),
+                SchoolClass.builder().id(31L).grade(2).classNumber(1).build()));
+        var first = Map.of("MON", 1, "TUE", 0, "WED", 0, "THU", 0, "FRI", 0);
+        var second = Map.of("MON", 0, "TUE", 0, "WED", 0, "THU", 0, "FRI", 1);
+        var grade1 = Map.of("grade", 1, "lastPeriods", first);
+        var grade2 = Map.of("grade", 2, "lastPeriods", second);
+        var allDays = Map.of("MON", 1, "TUE", 1, "WED", 1, "THU", 1, "FRI", 1);
+        for (Map<String, ?> invalid : List.of(
+                Map.of("gradeLastPeriods", List.of(Map.of("grade", 1.5, "lastPeriods", allDays), grade2)),
+                Map.of("gradeLastPeriods", List.of(Map.of("grade", 1, "lastPeriods",
+                        Map.of("MON", 1.5, "TUE", 1, "WED", 1, "THU", 1, "FRI", 1)), grade2)),
+                Map.of("teachingSlots", List.of(Map.of("day", "TUE", "period", 1.5),
+                        Map.of("day", "WED", "period", 1))))) {
+            Map<String, Object> body = new HashMap<>(invalid);
+            body.put("validatedLoadId", id);
+            api.perform(post("/api/v2/terms/7/schedule-candidates")
+                            .contentType("application/json").content(json.writeValueAsBytes(body)))
+                    .andExpect(status().isBadRequest());
+        }
+        for (Map<String, ?> fields : List.of(
+                Map.of("teachingSlots", List.of(Map.of("day", "SAT", "period", 1))),
+                Map.of("gradeLastPeriods", List.of(grade2)),
+                Map.of("gradeLastPeriods", List.of(grade1, grade1, grade2)),
+                Map.of("gradeLastPeriods", List.of(grade1, grade2, Map.of("grade", 3, "lastPeriods", first))),
+                Map.of("gradeLastPeriods", List.of(grade2, Map.of("grade", 1, "lastPeriods", Map.of("MON", 1)))),
+                Map.of("gradeLastPeriods", List.of(grade2, Map.of("grade", 1, "lastPeriods",
+                        Map.of("MON", 7, "TUE", 0, "WED", 0, "THU", 0, "FRI", 0)))))) {
+            Map<String, Object> body = new HashMap<>(fields);
+            body.put("validatedLoadId", id);
+            api.perform(post("/api/v2/terms/7/schedule-candidates")
+                            .contentType("application/json").content(json.writeValueAsBytes(body)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        // Both classes together have two slots for two lessons. Grade 1 still exceeds its capacity.
+        var body = Map.of("validatedLoadId", id, "gradeLastPeriods", List.of(grade1, grade2));
+        api.perform(post("/api/v2/terms/7/schedule-candidates")
+                        .contentType("application/json").content(json.writeValueAsBytes(body)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("1학년 1반")))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("1차시 초과")));
+    }
+
+    @Test
     void cacheOutageIsDistinctFromExpiredInput() throws Exception {
         String id = preview("/api/v2/terms/7/load-imports/validate");
         when(redis.opsForValue())

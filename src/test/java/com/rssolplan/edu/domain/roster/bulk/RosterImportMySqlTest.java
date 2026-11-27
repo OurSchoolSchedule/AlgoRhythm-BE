@@ -37,7 +37,8 @@ import static org.mockito.Mockito.doThrow;
                 "classpath:db/migration/V20261125_21__passkey_auth.sql," +
                 "classpath:db/migration/V20261125_22__roster_import_preview.sql," +
                 "classpath:db/migration/V20261126_31__school_roster_names.sql," +
-                "classpath:db/migration/V20261127_41__roster_teaching_link.sql"})
+                "classpath:db/migration/V20261127_41__roster_teaching_link.sql," +
+                "classpath:db/migration/V20261127_43__term_class_teacher_role.sql"})
 @EnabledIfEnvironmentVariable(named = "R2_MYSQL_TEST", matches = "1")
 class RosterImportMySqlTest {
     @Autowired TestRestTemplate http;
@@ -118,6 +119,69 @@ class RosterImportMySqlTest {
     }
     int count(String sql, Object... args) { return db.queryForObject(sql, Integer.class, args); }
     int teachers() { return count("select count(*) from school_teacher_roster where school_id=?", school); }
+
+    @Test
+    void termClassRolesUseTeachingIdsPreserveLinksAndRejectInvalidReplacementAtomically() throws Exception {
+        for (int i = 1; i <= 4; i++) member(school + i, school, "TEACHER");
+        String path = "/api/v2/terms/" + term + "/homerooms";
+        var teacher = roster.register(admin, school, new TeacherRosterService.IdentityInput("class@example.invalid", "학교 이름"));
+        db.update("UPDATE school_teacher_roster SET school_user_id=? WHERE id=?",school+1,teacher.rosterId());
+        roster.replaceAssignment(admin, school, teacher.rosterId(), term,
+                new TeacherRosterService.AssignmentInput(List.of(), school+2));
+        var previous = request(HttpMethod.GET,path,school+1,null,200);
+        assertThat(previous.at("/1/homeroomTeacher/schoolUserId").asLong()).isEqualTo(school+1);
+        assertThat(previous.at("/1/deputyTeacher").isNull()).isTrue();
+        byte[] file = roleWorkbook(school+4);
+        assertThat(uploadRoles(path,school+1,file,403)).isNotNull();
+        request(HttpMethod.GET,path,other,null,404);
+        var receipt = uploadRoles(path,admin,file,200);
+        assertThat(receipt.at("/0/homeroomTeacher/schoolUserId").asLong()).isEqualTo(school+1);
+        assertThat(receipt.at("/1/deputyTeacher/schoolUserId").asLong()).isEqualTo(school+4);
+        assertThat(uploadRoles(path,admin,file,200)).isEqualTo(receipt);
+        assertThat(uploadRoles(path,admin,roleWorkbook(school+1),422).at("/fieldErrors/0/code").asText())
+                .isEqualTo("DUPLICATE_TEACHER");
+        assertThat(uploadRoles(path,admin,roleWorkbook(other),422).at("/fieldErrors/0/code").asText()).isEqualTo("UNKNOWN_TEACHER");
+        assertThat(request(HttpMethod.GET,path,school+1,null,200)).isEqualTo(receipt);
+        assertThat(count("SELECT COUNT(*) FROM term_class_teacher_role WHERE term_id=?",term)).isEqualTo(4);
+        assertThat(roster.get(admin,school,teacher.rosterId(),term).schoolUserId()).isEqualTo(school+1);
+        var teachers = request(HttpMethod.GET,"/api/school/teachers?termId=" + term, school+1, null, 200);
+        var deputy = java.util.stream.StreamSupport.stream(teachers.spliterator(),false)
+                .filter(row -> row.get("schoolUserId").asLong() == school+4).findFirst().orElseThrow();
+        assertThat(deputy.get("termHomeroomsApplied").asBoolean()).isTrue();
+        assertThat(deputy.at("/deputyHomeroomClasses/0/classId").asLong()).isEqualTo(school+2);
+    }
+
+    private byte[] roleWorkbook(long lastDeputy) throws IOException {
+        try (var book = new XSSFWorkbook(); var bytes = new ByteArrayOutputStream()) {
+            var sheet = book.createSheet("학급담당");
+            var header = sheet.createRow(0);
+            var labels = List.of("학년","반","학급 ID","담임 교사 ID","담임 이름","부담임 교사 ID","부담임 이름");
+            for (int c=0;c<labels.size();c++) header.createCell(c).setCellValue(labels.get(c));
+            for (int i=1;i<=2;i++) {
+                var row = sheet.createRow(i);
+                row.createCell(0).setCellValue(1); row.createCell(1).setCellValue(i);
+                row.createCell(2).setCellValue(Long.toString(school+i));
+                row.createCell(3).setCellValue(Long.toString(school+i));
+                row.createCell(4).setCellValue("R2 사용자");
+                row.createCell(5).setCellValue(Long.toString(i==1 ? school+3 : lastDeputy));
+                row.createCell(6).setCellValue("R2 사용자");
+            }
+            book.write(bytes);
+            return bytes.toByteArray();
+        }
+    }
+
+    private JsonNode uploadRoles(String path, long user, byte[] bytes, int status) {
+        var h = headers(user);
+        h.setContentType(MediaType.MULTIPART_FORM_DATA);
+        var form = new LinkedMultiValueMap<String,Object>();
+        form.add("file",new ByteArrayResource(bytes) {
+            @Override public String getFilename() { return "classes.xlsx"; }
+        });
+        var response = http.postForEntity(path + "/import",new HttpEntity<>(form,h),JsonNode.class);
+        assertThat(response.getStatusCode().value()).as("%s",response.getBody()).isEqualTo(status);
+        return response.getBody();
+    }
 
     @Test
     void importingAnExplicitlyEmptyAssignmentCreatesAMissingTermOnlyOnce() throws Exception {

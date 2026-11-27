@@ -8,6 +8,7 @@ public class AdminProfileResponse {
     private Long userId;
     private String username;
     private String email;
+    private String verifiedEmail;
     private String profileImageUrl;
     private String position;
     private String employmentStatus;

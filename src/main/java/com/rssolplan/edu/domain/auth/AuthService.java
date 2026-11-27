@@ -86,7 +86,7 @@ public class AuthService {
             log.info("New Kakao user saved. id={}", user.getId());
         } else {
             user.setKakaoAccessToken(accessToken);
-            user.setUsername(finalUsername);
+            if (user.getUsername() == null || user.getUsername().isBlank()) user.setUsername(finalUsername);
             user.setEmail(address);
             user.setProfileImageUrl(finalProfileImageUrl);
 
@@ -201,7 +201,7 @@ public class AuthService {
             log.info("앱 로그인: 신규 유저 생성 id={}", user.getId());
         } else {
             user.setKakaoAccessToken(kakaoAccessToken);
-            user.setUsername(finalUsername);
+            if (user.getUsername() == null || user.getUsername().isBlank()) user.setUsername(finalUsername);
             user.setEmail(address);
             user.setProfileImageUrl(finalProfileImageUrl);
             users.save(user);

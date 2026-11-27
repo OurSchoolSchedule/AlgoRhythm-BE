@@ -34,8 +34,15 @@ async function main() {
       let filename = path.resolve(dist, '.' + decodeURIComponent(url.pathname));
       if (!filename.startsWith(dist + path.sep) || url.pathname === '/') filename = path.join(dist, 'index.html');
       const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon' };
-      try { await route.fulfill({ body: await readFile(filename), contentType: mime[path.extname(filename)] || 'application/octet-stream' }); }
-      catch { await route.fulfill({ body: await readFile(path.join(dist, 'index.html')), contentType: 'text/html' }); }
+      let body;
+      try {
+        body = await readFile(filename);
+      } catch (error) {
+        if (!['ENOENT', 'ENOTDIR', 'EISDIR'].includes(error.code)) throw error;
+        filename = path.join(dist, 'index.html');
+        body = await readFile(filename);
+      }
+      return route.fulfill({ body, contentType: mime[path.extname(filename)] || 'application/octet-stream' });
     });
     const page = await context.newPage();
     page.on('pageerror', error => pageErrors.push(error.message));
@@ -85,6 +92,7 @@ async function main() {
     const memberships = await request('/api/mypage/teacher/schools', initial.accessToken, null, 'GET');
     assert.ok(JSON.stringify(memberships).includes(schoolId));
     assert.equal((await request('/api/auth/passkeys/credentials', initial.accessToken, null, 'GET')).length, 1);
+    await original.page.waitForLoadState('networkidle');
     await original.context.unrouteAll({ behavior: 'wait' });
     await original.context.close(); // Simulate losing access to every saved credential.
 
@@ -124,20 +132,31 @@ async function main() {
     assert.equal(credentials.length, 1);
     assert.equal(credentials[0].userName, email);
 
+    const editedName = '패스키 재로그인 검증';
+    const profile = await request('/api/mypage/teacher/profile', recovered.accessToken,
+      { username: editedName }, 'PUT');
+    assert.equal(profile.username, editedName);
+    assert.equal(profile.verifiedEmail, email);
+
     await request('/api/auth/logout', recovered.accessToken);
     await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
     await page.reload();
     const emailCount = calls.filter(call => call.path.includes('/email-verification/')).length;
     const login = page.waitForResponse(res => res.url().endsWith('/authentication/finish'));
     await page.getByRole('button', { name: '패스키로 로그인', exact: true }).click();
-    assert.equal((await (await login).json()).userId, initial.userId);
+    const signedIn = await (await login).json();
+    assert.equal(signedIn.userId, initial.userId);
+    const reopened = await request('/api/mypage/teacher/profile', signedIn.accessToken, null, 'GET');
+    assert.equal(reopened.username, editedName);
+    assert.equal(reopened.verifiedEmail, email);
     await page.waitForFunction(() => Boolean(localStorage.getItem('accessToken')));
     assert.equal(calls.filter(call => call.path.includes('/email-verification/')).length, emailCount);
     assert.equal(calls.some(call => call.path.includes('/recovery/')), false);
     assert.equal(calls.filter(call => call.path.endsWith('/registration/finish')).length, 2);
     assert.ok(calls.filter(call => call.path.endsWith('/registration/finish')).every(call => call.body.includeRecoveryCode === false));
+    await page.waitForLoadState('networkidle');
     assert.deepEqual(pageErrors, []);
-    console.log('PASS actual FE/API: existing account + empty device; cancel/fresh email/reissue; same account/school; no recovery code; new-key login; desktop/tablet/mobile');
+    console.log('PASS actual FE/API: existing account + empty device; cancel/fresh email/reissue; same account/school; no recovery code; new-key login preserves the edited profile and verified email; desktop/tablet/mobile');
   } finally {
     for (const context of browser.contexts()) await context.unrouteAll({ behavior: 'wait' });
     await browser.close();

@@ -53,6 +53,7 @@ final class CandidateRanking {
             BitSet times = layout[i];
             if (times.length() > input.slots.size()
                     || times.cardinality() != row.demand().weeklyPeriods()
+                    || times.intersects(input.classClosed[row.group()])
                     || times.intersects(input.blocked[row.teacher()])
                     || times.intersects(teacher[row.teacher()])
                     || times.intersects(groups[row.group()])) throw new InvalidLayout();

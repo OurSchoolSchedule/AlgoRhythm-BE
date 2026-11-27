@@ -1,13 +1,15 @@
 package com.rssolplan.edu.domain.schedule.candidates;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.rssolplan.edu.domain.schedule.DayOfWeek;
+import com.rssolplan.edu.domain.schedule.ScheduleInteger;
 
 import java.util.*;
 
 public final class CandidateApi {
     private CandidateApi() {}
 
-    public record Slot(DayOfWeek day, int period) implements Comparable<Slot> {
+    public record Slot(DayOfWeek day, @JsonDeserialize(using = ScheduleInteger.class) int period) implements Comparable<Slot> {
         @Override
         public int compareTo(Slot other) {
             int byDay = day.compareTo(other.day);
@@ -28,13 +30,23 @@ public final class CandidateApi {
         PREFER_WANTS
     }
 
+    public record GradeLastPeriod(
+            @JsonDeserialize(using = ScheduleInteger.class) int grade,
+            @JsonDeserialize(contentUsing = ScheduleInteger.class) Map<DayOfWeek, Integer> lastPeriods) {}
+
     public record Request(
             UUID validatedLoadId,
             List<Slot> teachingSlots,
             List<Preference> preferences,
-            Objective objective) {
+            Objective objective,
+            List<GradeLastPeriod> gradeLastPeriods) {
         public Request {
             if (objective == null) objective = Objective.BALANCED;
+        }
+
+        public Request(UUID validatedLoadId, List<Slot> teachingSlots, List<Preference> preferences,
+                       Objective objective) {
+            this(validatedLoadId, teachingSlots, preferences, objective, null);
         }
 
         public Request(

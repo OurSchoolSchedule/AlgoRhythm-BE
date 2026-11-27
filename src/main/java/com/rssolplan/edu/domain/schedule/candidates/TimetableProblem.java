@@ -20,7 +20,7 @@ final class TimetableProblem {
     final List<Row> rows;
     final List<Wish> wishes;
     final Map<Integer, int[]> slotPriorities;
-    final BitSet[] blocked;
+    final BitSet[] blocked, classClosed;
     final int[] teacherHours, classHours;
     final int lessons;
     final String capacityFailure;
@@ -39,6 +39,12 @@ final class TimetableProblem {
             Map<String, Set<Slot>> forbidden,
             List<Preference> preferences,
             Objective objective) {
+        this(demands, slots, forbidden, preferences, objective, Map.of());
+    }
+
+    TimetableProblem(
+            List<Demand> demands, List<Slot> slots, Map<String, Set<Slot>> forbidden,
+            List<Preference> preferences, Objective objective, Map<String, BitSet> closedByClass) {
         this.objective = objective;
         if (demands.isEmpty() || demands.size() > 8192)
             throw new BadRequestException("편성은 시수 배당 1~8,192건을 지원합니다.");
@@ -63,6 +69,8 @@ final class TimetableProblem {
         this.rows = List.copyOf(rows);
         teacherHours = new int[teachers.size()];
         classHours = new int[classes.size()];
+        classClosed = new BitSet[classes.size()];
+        classes.forEach((id, index) -> classClosed[index] = closedByClass.getOrDefault(id, new BitSet()));
         blocked = new BitSet[teachers.size()];
         teachers.forEach(
                 (id, index) -> {
@@ -84,7 +92,7 @@ final class TimetableProblem {
             if (teacherHours[row.teacher()] > slots.size() - blocked[row.teacher()].cardinality())
                 failure =
                         d.sourceCell() + " · 교사 " + d.teacherId() + "의 주당 시수가 배정 가능한 교시 수를 초과합니다.";
-            else if (classHours[row.group()] > slots.size())
+            else if (classHours[row.group()] > slots.size() - classClosed[row.group()].cardinality())
                 failure = d.sourceCell() + " · 학급 " + d.classId() + "의 주당 시수가 편성 교시 수를 초과합니다.";
         }
         if (failure == null && sum > 8192)
