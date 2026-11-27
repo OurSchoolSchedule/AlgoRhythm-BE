@@ -41,7 +41,7 @@ public class MypageController {
     @PutMapping("/admin/profile")
     public ResponseEntity<AdminProfileResponse> updateAdminProfile(
             @AuthenticationPrincipal Long adminId,
-            @RequestBody AdminProfileUpdateRequest request) {
+            @RequestBody AccountProfileUpdateRequest request) {
         return ResponseEntity.ok(service.updateAdminProfile(adminId, request));
     }
 
@@ -87,7 +87,7 @@ public class MypageController {
     @PutMapping("/teacher/profile")
     public ResponseEntity<TeacherProfileResponse> updateTeacherProfile(
             @AuthenticationPrincipal Long teacherId,
-            @RequestBody TeacherProfileUpdateRequest request) {
+            @RequestBody AccountProfileUpdateRequest request) {
         return ResponseEntity.ok(service.updateTeacherProfile(teacherId, request));
     }
 

@@ -38,12 +38,28 @@
 {"validatedLoadId":"375d0754-c375-42c6-b1f0-f630a9693e37","teachingSlots":[{"day":"MON","period":1},{"day":"TUE","period":1}],"preferences":[{"teacherId":"10","kind":"WANT","anyOf":[{"day":"MON","period":1}]}]}
 ```
 
-`teachingSlots`와 `preferences`는 선택 입력이다. 생략 시 월~금의 학교 설정 교시를 연다. 요일은 MON~SUN이다. WANT는 교사가 수업하고 싶은 시간, AVOID는 피하고 싶은 시간이다. anyOf 중 한 교시만 충족해도 한 건이다. 실제 불가 시간은 서버가 읽는다. [선호 점수와 입력 크기 규격](m2-schedule-candidates.md)
+신규 편성의 운영 요일은 MON~FRI다. 학년별로 지정하려면 검증본 UUID와 함께 아래 `gradeLastPeriods`를 보낸다. 예시는 해당 학기에 1·2학년만 있는 학교다.
+
+```json
+{
+  "validatedLoadId": "375d0754-c375-42c6-b1f0-f630a9693e37",
+  "gradeLastPeriods": [
+    {"grade":1,"lastPeriods":{"MON":6,"TUE":6,"WED":6,"THU":6,"FRI":6}},
+    {"grade":2,"lastPeriods":{"MON":7,"TUE":6,"WED":6,"THU":7,"FRI":6}}
+  ]
+}
+```
+
+`grade`는 학기의 학년도에 속한 실제 학급의 학년이다. 모든 학년을 한 번씩, 평일 다섯 요일을 빠짐없이 지정한다. 마지막 교시는 등록된 교시 번호이며 0은 그날 휴업이다. 서버는 마지막 교시까지 실제로 등록된 교시만 센다. `teachingSlots`도 보내면 전체 학년의 합집합과 정확히 일치해야 한다. 학년별 설정 없이 보낸 기존 평일 공통 슬롯은 모든 학급에 똑같이 적용한다. 두 설정 모두 생략하면 월~금의 모든 등록 교시를 연다. 주말·없는 학년·누락·잘못된 교시를 보내거나 한 학급의 필요 시수가 용량을 초과하면 접수 전 400을 반환한다. 초과 오류 메시지에 학급명과 초과량이 포함된다.
+
+후보 조회는 이번 작업 시점의 `gradeLastPeriods`, 학급 ID 문자열을 학년에 대응시키는 `classGrades`(예 `{"30":1}`), 정렬된 학교 교시 번호 `registeredPeriods`, 편성 슬롯 합집합 `teachingSlots`를 함께 반환한다. 후보 표는 학년별 운영 시간 안의 빈 슬롯을 공강으로 표시한다. 기존 작업의 `gradeLastPeriods`는 null이고 학년 기능 이전 작업의 `classGrades`도 null이다. 그때의 공통 슬롯과 주말 기록은 원래대로 조회된다.
+
+`preferences`는 선택 입력이다. WANT는 교사가 수업하고 싶은 시간, AVOID는 피하고 싶은 시간이다. anyOf 중 한 교시만 충족해도 한 건이다. 실제 불가 시간은 서버가 읽는다. [선호 점수와 입력 크기 규격](m2-schedule-candidates.md)
 
 | 요청 | 성공 응답 | 화면 동작 |
 | --- | --- | --- |
 | POST T/generations | 202 `{jobId,state:"QUEUED",statusUrl,expectedPublishRev}`, Location과 Retry-After: 2 | statusUrl과 jobId를 보관한다. |
-| GET T/generations/{jobId} | 200 `{jobId,state,expectedPublishRev,result}` | QUEUED/RUNNING에서는 result=null. 약 2초 간격으로 조회한다. |
+| GET T/generations/{jobId} | 200 `{jobId,state,expectedPublishRev,result,teachingSlots,gradeLastPeriods,classGrades,registeredPeriods,objective}` | QUEUED/RUNNING에서는 result=null. 약 2초 간격으로 조회한다. |
 | READY | result에 동기 API와 같은 비교 결과가 담긴다. | 폴링을 중단하고 1~4개를 순서대로 표시한다. |
 | INFEASIBLE / TIME_LIMIT_NO_SOLUTION / FAILED | 더 조회할 필요가 없는 종료 상태. 워커 중단 후 만료·실패 시 result가 null일 수 있다. | 각각 조건 충돌, 제한 내 후보 미발견, 처리 실패로 구분한다. |
 

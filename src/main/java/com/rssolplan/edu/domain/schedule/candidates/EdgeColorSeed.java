@@ -48,7 +48,8 @@ final class EdgeColorSeed {
         int best = -1;
         int[] priorities = input.slotPriorities.get(t);
         for (int s : colours) {
-            if (teacherAt[t][s] >= 0 || classAt[group][s] >= 0 || input.blocked[t].get(s)) continue;
+            if (teacherAt[t][s] >= 0 || classAt[group][s] >= 0
+                    || input.blocked[t].get(s) || input.classClosed[group].get(s)) continue;
             if (priorities == null) {
                 best = s;
                 break;
@@ -64,7 +65,7 @@ final class EdgeColorSeed {
         for (int a : colours) {
             if (teacherAt[t][a] >= 0 || input.blocked[t].get(a)) continue;
             for (int b : colours) {
-                if (classAt[group][b] >= 0 || input.blocked[t].get(b)) continue;
+                if (classAt[group][b] >= 0 || input.blocked[t].get(b) || input.classClosed[group].get(b)) continue;
                 if (recolour(t, a, b)) {
                     assign(id, b, id);
                     return true;
@@ -82,7 +83,7 @@ final class EdgeColorSeed {
             budget.check();
             var row = input.rows.get(edge);
             int from = fromTeacher ? b : a, to = fromTeacher ? a : b;
-            if (input.blocked[row.teacher()].get(to)) return false;
+            if (input.blocked[row.teacher()].get(to) || input.classClosed[row.group()].get(to)) return false;
             moves.add(new Move(edge, from, to));
             edge = fromTeacher ? classAt[row.group()][to] : teacherAt[row.teacher()][to];
             fromTeacher = !fromTeacher;

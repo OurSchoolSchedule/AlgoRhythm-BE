@@ -21,6 +21,12 @@ class GenerationController {
 
     record Accepted(UUID jobId, String state, String statusUrl, long expectedPublishRev) {}
 
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    Map<String, String> invalidBody() {
+        return Map.of("code", "BAD_REQUEST", "message", "요청 형식과 학년·요일·교시 번호를 확인하세요.");
+    }
+
     @GetMapping
     List<PublicationService.TermSummary> terms(@AuthenticationPrincipal Long user) {
         return publications.terms(user);

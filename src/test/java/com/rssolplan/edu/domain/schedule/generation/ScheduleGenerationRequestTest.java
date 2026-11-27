@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rssolplan.edu.domain.notification.NotificationService;
 import com.rssolplan.edu.domain.schedule.generation.entity.TimetableRequest;
+import com.rssolplan.edu.domain.schedule.generation.dto.TimetableGenerationRequestDto;
+import com.rssolplan.edu.global.exception.BadRequestException;
 import com.rssolplan.edu.domain.school.School;
 import com.rssolplan.edu.domain.school.SchoolRepository;
 import com.rssolplan.edu.domain.school.SchoolUser;
@@ -34,6 +36,19 @@ class ScheduleGenerationRequestTest {
     @Mock private AuthorizationService authService;
     @Mock private NotificationService notificationService;
     @InjectMocks private ScheduleGenerationService service;
+
+    @Test
+    void legacyGenerationRejectsNewWeekendSlotsBeforeCreatingCandidates() throws Exception {
+        var school = School.builder().id(200L).build();
+        when(authService.getActiveSchoolIdOrThrow(100L)).thenReturn(200L);
+        when(timetableRequestRepository.findById(1203L)).thenReturn(
+                Optional.of(TimetableRequest.builder().school(school).build()));
+        var request = new ObjectMapper().readValue("""
+                {"slotRequirements":[{"schoolClassId":30,"dayOfWeek":"SUN","periodNumber":1,"subjectId":20}]}
+                """, TimetableGenerationRequestDto.class);
+        assertThrows(BadRequestException.class, () -> service.generateTimetable(100L, 1203L, request));
+        verify(timetableRequestRepository, never()).save(any());
+    }
 
     @Test
     void requestResponseSerializesWithAnUninitializedSchoolProxy() throws Exception {

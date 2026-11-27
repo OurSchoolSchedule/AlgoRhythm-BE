@@ -37,7 +37,10 @@ class GenerationStore {
             long expectedPublishRev,
             Response result,
             List<Slot> teachingSlots,
-            Objective objective) {}
+            Objective objective,
+            List<GradeLastPeriod> gradeLastPeriods,
+            Map<String, Integer> classGrades,
+            List<Integer> registeredPeriods) {}
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public Ticket insert(
@@ -179,7 +182,9 @@ where id=? and deadline>utc_timestamp(6) and (state='QUEUED' or (state='RUNNING'
                 .query(
                         """
                         select state,base_rev,result,json_extract(snapshot,'$.slots'),
-                               json_unquote(json_extract(snapshot,'$.request.objective'))
+                               json_unquote(json_extract(snapshot,'$.request.objective')),
+                               json_extract(snapshot,'$.request.gradeLastPeriods'),
+                               json_extract(snapshot,'$.classGrades'), json_keys(snapshot,'$.bells')
                         from generation_job where id=? and term_id=? and school_id=?
                         """,
                         (r, n) ->
@@ -193,7 +198,13 @@ where id=? and deadline>utc_timestamp(6) and (state='QUEUED' or (state='RUNNING'
                                         List.of(json.read(r.getString(4), Slot[].class)),
                                         r.getString(5) == null
                                                 ? Objective.BALANCED
-                                                : Objective.valueOf(r.getString(5))),
+                                                : Objective.valueOf(r.getString(5)),
+                                        r.getString(6) == null || r.getString(6).equals("null")
+                                                ? null : List.of(json.read(r.getString(6), GradeLastPeriod[].class)),
+                                        r.getString(7) == null ? null : json.read(r.getString(7),
+                                                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Integer>>() {}),
+                                        Arrays.stream(json.read(r.getString(8), String[].class))
+                                                .map(Integer::valueOf).sorted().toList()),
                         id.toString(),
                         term,
                         school)

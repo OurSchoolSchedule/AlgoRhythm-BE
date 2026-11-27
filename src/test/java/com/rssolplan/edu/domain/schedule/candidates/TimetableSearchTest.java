@@ -79,6 +79,27 @@ class TimetableSearchTest {
     }
 
     @Test
+    void bothSolversAndPublishVerifierRespectClassHoursAcrossGradesWithASharedTeacher() {
+        var slots = List.of(mon(1), mon(2), mon(3));
+        var closed = Map.of("1", BitSet.valueOf(new long[] {4}));
+        var p = new TimetableProblem(
+                List.of(demand(1, 10, 1, 1), demand(2, 20, 1, 1), demand(1, 30, 2, 2)),
+                slots, Map.of(), null, Objective.BALANCED, closed);
+        var result = solve(p);
+        assertThat(result.candidates()).isNotEmpty().allSatisfy(candidate -> {
+            checkAssignments(p, candidate);
+            assertThat(candidate.placements())
+                    .noneMatch(a -> a.classId().equals("1") && a.slot().equals(mon(3)));
+        });
+        // Correct counts, available teachers and an open school slot still cannot open grade 1.
+        var invalid = new Candidate("unused", null, List.of(
+                new Placement("1", "10", "1", mon(3)), new Placement("2", "20", "1", mon(1)),
+                new Placement("1", "30", "2", mon(1)), new Placement("1", "30", "2", mon(2))));
+        assertThatThrownBy(() -> PublicationService.verify(p, invalid))
+                .isInstanceOf(CandidateRanking.InvalidLayout.class);
+    }
+
+    @Test
     void identicalHoursAreIndistinguishableAndOneCandidateIsReturned() {
         var p =
                 new TimetableProblem(

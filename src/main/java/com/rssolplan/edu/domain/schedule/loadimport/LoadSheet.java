@@ -79,12 +79,14 @@ public final class LoadSheet extends DefaultHandler {
                         if (!it.getSheetPart().getContentType().endsWith("worksheet+xml")) continue;
                         String name = it.getSheetName();
                         names.add(name);
-                        if (wanted == null ? names.size() != 1 : !wanted.equals(name)) continue;
+                        if (wanted != null && !wanted.equals(name)) continue;
+                        if (wanted == null && names.size() != 1 && !name.equals("시수표")) continue;
                         selected = it.getSheetPart();
                         selectedName = name;
                     }
                 }
-                if (selected == null || (wanted == null && names.size() != 1))
+                boolean loadWithClassRoles = names.size() == 2 && names.contains("시수표") && names.contains("학급담당");
+                if (selected == null || (wanted == null && names.size() != 1 && !loadWithClassRoles))
                     throw LoadProblem.file(
                             HttpStatus.UNPROCESSABLE_ENTITY,
                             "SELECT_SHEET",

@@ -97,3 +97,27 @@ BE_A1_AUTH_TEST=1 R1_MYSQL_TEST=1 R2_MYSQL_TEST=1 M3_MYSQL_TEST=1 M2_FULL_BENCHM
 ```
 
 [통합 테스트](../src/test/java/com/rssolplan/edu/domain/roster/bulk/RosterImportMySqlTest.java)는 내장 Tomcat의 실제 HTTP와 MySQL을 쓴다. 반복 실행 가능한 School42 테스트는 동일 카탈로그를 격리 학교에 복제하고 코드 ID만 해당 학교의 값으로 치환한다. 중간 실패 테스트는 두 번째 쓰기에 예외를 주입한 뒤 첫 번째 쓰기와 확정 영수증이 함께 롤백되는지 실제 DB에서 확인한다.
+
+## 학급별 담임·부담임
+
+이미 편성용 교사 소속이 등록된 학교에서는 시수표와 같은 XLSX의 `학급담당` 시트를 업로드할 수 있다. 관리자 도구 → 명부 일괄 등록 → 학급 담당에서 학교·학기를 확인하고 **담임·부담임 적용**을 누른다. 같은 파일의 `시수표` 시트는 시간표 생성 화면에서 검증한다.
+
+| 학년 | 반 | 학급 ID | 담임 교사 ID | 담임 이름 | 부담임 교사 ID | 부담임 이름 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1 | 544001 | 542001 | 김서윤 | 542022 | 이도윤 |
+
+표의 첫 행과 같은 머리글을 사용한다. 데이터 행에는 선택한 학교와 학년도의 학급을 한 번씩 모두 포함한다. 학급 ID는 `school_class.id`, 교사 ID는 해당 학교에 재직 중인 편성용 `school_user.id`다. 교사가 여러 과목을 담당해도 이 시트에는 한 번만 등장한다. 이름 열은 파일을 읽는 사람에게 제공하는 표시값이다. 서버는 ID로 연결하고 응답에는 현재 학교 명부의 이름을 표시한다. School42에서 가입 계정과 연결된 교사는 원래 수업을 담당하는 소속 ID를 사용한다.
+
+| 요청 | 결과 |
+| --- | --- |
+| `POST /api/v2/terms/{termId}/homerooms/import` | 활성 학교의 재직 관리자가 멀티파트 `file`을 보낸다. 전체 시트가 유효하면 단일 트랜잭션에서 해당 학기의 학급 담당을 저장하고 200 조회 결과를 반환한다. 같은 배정을 재적용하면 기존 행을 보존한다. |
+| `GET /api/v2/terms/{termId}/homerooms` | 같은 학교에 재직 중인 교직원이 학년·반 순으로 학급별 배정을 조회한다. |
+| `GET /api/school/teachers?termId=…`, `GET /api/school/members?termId=…` | 학급담당 파일이 적용된 학기는 `termHomeroomsApplied:true`다. 이 때 편성용 교사 행의 `homeroomClasses`, `deputyHomeroomClasses`를 사용한다. 기존 교사·관리자 조회 권한을 따른다. |
+
+조회 응답은 `[{classId,academicYear,grade,classNumber,homeroomTeacher,deputyTeacher}]`이다. 각 교사는 `{schoolUserId,displayName}`이며 미배정은 `null`이다. 해당 학기에 학급 담당을 올린 적이 없으면 기존 학기 명부의 담임을 우선하고, 없는 학급은 학년도 담임을 표시한다. 구 명부의 미연결 교사는 표시 이름을 반환하고 소속 ID는 `null`이다. 신규 학기 배정은 계정, 패스키, 학교별 표시 이름, 가입 연결, 과목 및 다른 학기의 역할을 변경하지 않는다.
+
+다른 학교의 학기는 404, 권한 부족은 403이다. 다른 학교의 교사 ID, 학년·반 불일치, 누락/중복 학급 또는 교사 중복은 422이며 `fieldErrors`의 시트·셀·메시지를 확인한다. 어떤 행이라도 실패하면 기존 배정을 보존한다.
+
+기존 M1·M3·R1 및 교사 연결 스키마 이후 [V20261127_43__term_class_teacher_role.sql](../src/main/resources/db/migration/V20261127_43__term_class_teacher_role.sql)을 앱과 동일한 DB에 적용한다. 신규 테이블을 생성하며 데이터 이관은 필요하지 않다. 격리 시연 설정은 이 파일을 포함한다. 운영에서 시작 시 실행할 스키마 경로를 명시하는 경우 기존 경로와 순서를 유지하고 마지막에 이 파일을 추가한다.
+
+Railway에서 기존 `SPRING_SQL_INIT_SCHEMA_LOCATIONS`를 유지하며 추가할 때는, 다른 데이터 초기화 파일이 구성되지 않았는지 먼저 확인한다. 이 경우 백엔드 서비스에 `SPRING_SQL_INIT_DATA_LOCATIONS=optional:classpath:db/migration/V20261127_43__term_class_teacher_role.sql` 한 항목을 추가하면 기존 스키마 스크립트 다음에 이 DDL이 실행된다. `optional:`은 이전 JAR에 아직 파일이 없는 배포와도 호환된다. 배포 뒤 같은 앱 DB에서 `SHOW CREATE TABLE term_class_teacher_role` 또는 재직 계정의 학급 담당 조회로 반영을 확인한다.

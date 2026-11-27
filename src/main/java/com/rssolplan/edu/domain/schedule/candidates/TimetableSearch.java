@@ -81,7 +81,7 @@ final class TimetableSearch {
         var r = input.rows.get(i);
         return input.slots.size()
                 - Math.max(
-                        input.classHours[r.group()],
+                        input.classHours[r.group()] + input.classClosed[r.group()].cardinality(),
                         input.teacherHours[r.teacher()] + input.blocked[r.teacher()].cardinality());
     }
 
@@ -92,6 +92,7 @@ final class TimetableSearch {
         if (newRow && cannotBeatFourth()) return available;
         // Identical hours of a single subject have no identity: enumerate combinations once.
         available.set(newRow ? 0 : chosen[depth - 1] + 1, input.slots.size());
+        available.andNot(input.classClosed[r.group()]);
         available.andNot(input.blocked[r.teacher()]);
         available.andNot(teacherBusy[r.teacher()]);
         available.andNot(classBusy[r.group()]);

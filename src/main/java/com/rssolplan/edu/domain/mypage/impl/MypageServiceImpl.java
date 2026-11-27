@@ -1,5 +1,6 @@
 package com.rssolplan.edu.domain.mypage.impl;
 
+import com.rssolplan.edu.domain.auth.passkey.PasskeyStore;
 import com.rssolplan.edu.domain.mypage.MypageService;
 import com.rssolplan.edu.domain.onboarding.dto.OnboardingResponse;
 import com.rssolplan.edu.domain.roster.RosterMembershipService;
@@ -30,6 +31,7 @@ public class MypageServiceImpl implements MypageService {
     private final SchoolRepository schools;
     private final SchoolUserRepository schoolUsers;
     private final RosterMembershipService memberships;
+    private final PasskeyStore accounts;
 
     // ===== 헬퍼 =====
 
@@ -106,13 +108,14 @@ public class MypageServiceImpl implements MypageService {
     public AdminProfileResponse getAdminProfile(Long adminId) {
         SchoolUser su = resolveActiveMappingOrDefault(adminId);
         if (su.getPosition() != Position.ADMIN) {
-            throw new IllegalArgumentException("관리자(교감/교장) 권한이 필요한 요청입니다.");
+            throw new ForbiddenException("관리자(교감/교장) 권한이 필요한 요청입니다.");
         }
         User u = su.getUser();
         return AdminProfileResponse.builder()
                 .userId(u.getId())
                 .username(u.getUsername())
                 .email(u.getEmail())
+                .verifiedEmail(accounts.verifiedEmail(u.getId()).orElse(null))
                 .profileImageUrl(u.getProfileImageUrl())
                 .position(su.getPosition().name())
                 .employmentStatus(su.getEmploymentStatus().name())
@@ -120,14 +123,13 @@ public class MypageServiceImpl implements MypageService {
     }
 
     @Override
-    public AdminProfileResponse updateAdminProfile(Long adminId, AdminProfileUpdateRequest req) {
+    public AdminProfileResponse updateAdminProfile(Long adminId, AccountProfileUpdateRequest req) {
         SchoolUser su = resolveActiveMappingOrDefault(adminId);
         if (su.getPosition() != Position.ADMIN) {
-            throw new IllegalArgumentException("관리자(교감/교장) 권한이 필요한 요청입니다.");
+            throw new ForbiddenException("관리자(교감/교장) 권한이 필요한 요청입니다.");
         }
         User u = su.getUser();
-        if (req.getUsername() != null) u.setUsername(req.getUsername());
-        if (req.getEmail() != null) u.setEmail(req.getEmail());
+        u.setUsername(req.normalizedName());
         users.save(u);
         return getAdminProfile(adminId);
     }
@@ -225,7 +227,7 @@ public class MypageServiceImpl implements MypageService {
     public TeacherProfileResponse getTeacherProfile(Long teacherId) {
         SchoolUser su = resolveActiveMappingOrDefault(teacherId);
         if (su.getPosition() != Position.TEACHER) {
-            throw new IllegalArgumentException("교사 권한이 필요한 요청입니다.");
+            throw new ForbiddenException("교사 권한이 필요한 요청입니다.");
         }
         User u = su.getUser();
         School s = su.getSchool();
@@ -233,6 +235,7 @@ public class MypageServiceImpl implements MypageService {
                 .userId(u.getId())
                 .username(u.getUsername())
                 .email(u.getEmail())
+                .verifiedEmail(accounts.verifiedEmail(u.getId()).orElse(null))
                 .profileImageUrl(u.getProfileImageUrl())
                 .position(su.getPosition().name())
                 .employmentStatus(su.getEmploymentStatus().name())
@@ -245,14 +248,13 @@ public class MypageServiceImpl implements MypageService {
     }
 
     @Override
-    public TeacherProfileResponse updateTeacherProfile(Long teacherId, TeacherProfileUpdateRequest req) {
+    public TeacherProfileResponse updateTeacherProfile(Long teacherId, AccountProfileUpdateRequest req) {
         SchoolUser su = resolveActiveMappingOrDefault(teacherId);
         if (su.getPosition() != Position.TEACHER) {
-            throw new IllegalArgumentException("교사 권한이 필요한 요청입니다.");
+            throw new ForbiddenException("교사 권한이 필요한 요청입니다.");
         }
         User u = su.getUser();
-        if (req.getUsername() != null) u.setUsername(req.getUsername());
-        if (req.getEmail() != null) u.setEmail(req.getEmail());
+        u.setUsername(req.normalizedName());
         users.save(u);
         return getTeacherProfile(teacherId);
     }

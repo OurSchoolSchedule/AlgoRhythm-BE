@@ -12,7 +12,7 @@ public interface MypageService {
 
     // 교감/교장(Admin) 관련
     AdminProfileResponse getAdminProfile(Long adminId);
-    AdminProfileResponse updateAdminProfile(Long adminId, AdminProfileUpdateRequest request);
+    AdminProfileResponse updateAdminProfile(Long adminId, AccountProfileUpdateRequest request);
 
     AdminSchoolResponse getAdminActiveSchool(Long adminId);
     AdminSchoolResponse updateAdminActiveSchool(Long adminId, AdminSchoolUpdateRequest request);
@@ -23,7 +23,7 @@ public interface MypageService {
 
     // 교사(Teacher) 관련
     TeacherProfileResponse getTeacherProfile(Long teacherId);
-    TeacherProfileResponse updateTeacherProfile(Long teacherId, TeacherProfileUpdateRequest request);
+    TeacherProfileResponse updateTeacherProfile(Long teacherId, AccountProfileUpdateRequest request);
 
     List<SchoolSimpleResponse> listTeacherSchools(Long teacherId);
     SchoolSimpleResponse joinTeacherSchool(Long teacherId, TeacherJoinSchoolRequest request);

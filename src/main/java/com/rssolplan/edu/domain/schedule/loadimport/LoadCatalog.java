@@ -21,7 +21,7 @@ public record LoadCatalog(
                 throw new IllegalStateException(row.sourceCell() + "의 명부가 변경되었습니다. 다시 검증하세요.");
     }
 
-    record ClassKey(int grade, int number) {}
+    public record ClassKey(int grade, int number) {}
 
     record Name(long id, String label) {}
 
