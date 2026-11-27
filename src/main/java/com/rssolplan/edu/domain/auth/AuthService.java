@@ -1,5 +1,6 @@
 package com.rssolplan.edu.domain.auth;
 
+import com.rssolplan.edu.domain.auth.email.LoginEmail;
 import com.rssolplan.edu.domain.auth.passkey.PasskeyProblem;
 import com.rssolplan.edu.domain.auth.passkey.PasskeyStore;
 import com.rssolplan.edu.domain.auth.dto.LoginResponse;
@@ -50,6 +51,7 @@ public class AuthService {
             throw new UnauthorizedException("카카오 프로필 정보를 가져오는데 실패했습니다.");
         }
 
+        String address = LoginEmail.require(profile.getEmail());
         String kakaoId = profile.getProviderId();
         String kakaoProfileUrl = profile.getProfileImageUrl();
         String finalProfileImageUrl;
@@ -77,7 +79,7 @@ public class AuthService {
                     .provider("kakao")
                     .providerId(kakaoId)
                     .username(finalUsername)
-                    .email(profile.getEmail())
+                    .email(address)
                     .profileImageUrl(finalProfileImageUrl) // null 또는 실제 URL
                     .kakaoAccessToken(accessToken) // 신규 저장
                     .build());
@@ -85,7 +87,7 @@ public class AuthService {
         } else {
             user.setKakaoAccessToken(accessToken);
             user.setUsername(finalUsername);
-            user.setEmail(profile.getEmail());
+            user.setEmail(address);
             user.setProfileImageUrl(finalProfileImageUrl);
 
             users.save(user);
@@ -93,7 +95,7 @@ public class AuthService {
         }
 
         // 4) JWT 발급 & Refresh 저장
-        Long linkedUser = checkPasskeyEnrollment(user, profile.getEmail());
+        Long linkedUser = checkPasskeyEnrollment(user, address);
         String at = jwt.issueKakao(user.getId(), "access", linkedUser);
         String rt = jwt.issueKakao(user.getId(), "refresh", linkedUser);
 
@@ -113,8 +115,8 @@ public class AuthService {
     }
 
     private Long checkPasskeyEnrollment(User user, String providerEmail) {
+        passkeyStore.verifiedEmail(user.getId()).ifPresent(LoginEmail::require);
         if (jwt.enrolled(user.getId())) throw PasskeyProblem.required();
-        if (providerEmail == null) return null;
         Long linked = passkeyStore.verifiedUserId(providerEmail);
         if (linked == null || linked.equals(user.getId())) return null;
         if (jwt.enrolled(linked)) throw PasskeyProblem.required();
@@ -176,6 +178,7 @@ public class AuthService {
         }
 
         // 2) 사용자 정보 처리 (기존 로직과 동일하게 가공)
+        String address = LoginEmail.require(profile.getEmail());
         String kakaoId = profile.getProviderId();
         String finalUsername = (profile.getUsername() != null) ? profile.getUsername() : "사용자";
         String kakaoProfileUrl = profile.getProfileImageUrl();
@@ -191,7 +194,7 @@ public class AuthService {
                     .provider("kakao")
                     .providerId(kakaoId)
                     .username(finalUsername)
-                    .email(profile.getEmail())
+                    .email(address)
                     .profileImageUrl(finalProfileImageUrl)
                     .kakaoAccessToken(kakaoAccessToken)
                     .build());
@@ -199,14 +202,14 @@ public class AuthService {
         } else {
             user.setKakaoAccessToken(kakaoAccessToken);
             user.setUsername(finalUsername);
-            user.setEmail(profile.getEmail());
+            user.setEmail(address);
             user.setProfileImageUrl(finalProfileImageUrl);
             users.save(user);
             log.info("앱 로그인: 기존 유저 정보 갱신 id={}", user.getId());
         }
 
         // 4) JWT 발급 및 Refresh Token 저장 (기존 로직과 동일)
-        Long linkedUser = checkPasskeyEnrollment(user, profile.getEmail());
+        Long linkedUser = checkPasskeyEnrollment(user, address);
         String at = jwt.issueKakao(user.getId(), "access", linkedUser);
         String rt = jwt.issueKakao(user.getId(), "refresh", linkedUser);
 

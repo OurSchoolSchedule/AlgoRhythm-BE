@@ -36,6 +36,26 @@ public class OperationsController {
         return changes.list(user, term);
     }
 
+    @GetMapping("/lesson-changes/{id}/lessons")
+    public List<DatedLessons.Lesson> details(@AuthenticationPrincipal Long user,
+            @PathVariable long term, @PathVariable long id) {
+        return changes.details(user, term, id);
+    }
+
+    @GetMapping("/lesson-changes/{firstId}/candidates")
+    public List<Long> candidates(@AuthenticationPrincipal Long user, @PathVariable long term,
+            @PathVariable long firstId, @RequestParam long firstRev, @RequestParam ChangeService.Kind kind,
+            @RequestParam(required=false) LocalDate date) {
+        return changes.candidates(user, term, firstId, firstRev, kind, date);
+    }
+
+    @PostMapping("/lesson-changes/substitutes")
+    @ResponseStatus(HttpStatus.CREATED)
+    public List<ChangeService.Change> batch(@AuthenticationPrincipal Long user, @PathVariable long term,
+            @Valid @RequestBody ChangeService.CoverBatch request) {
+        return changes.createBatch(user, term, request);
+    }
+
     @PostMapping("/lesson-changes")
     @ResponseStatus(HttpStatus.CREATED)
     public ChangeService.Change create(

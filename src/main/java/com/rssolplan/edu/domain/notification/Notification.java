@@ -76,6 +76,7 @@ public class Notification {
     }
 
     public enum TargetType {
+        LESSON_CHANGE,
         TIMETABLE_SWAP_REQUEST,
         SUBSTITUTE_REQUEST,
         SUBSTITUTE_RESPONSE

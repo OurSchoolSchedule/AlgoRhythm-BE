@@ -52,10 +52,11 @@ public class DemoResetService {
             db.queryForObject(
                 """
                 select exists(select 1 from school_user m join users u on u.id=m.user_id and u.active_school_id=m.school_id
-                where u.id=? and m.position='ADMIN' and m.employment_status='HIRED')
+                join roster_verified_account a on a.user_id=u.id
+                where u.id=? and a.auth_email=? and m.position='ADMIN' and m.employment_status='HIRED')
                 """,
                 Boolean.class,
-                user))) {
+                user, operator))) {
       throw new SecurityException("지정된 시연 관리자만 School42 시간표를 초기화할 수 있습니다.");
     }
   }
@@ -69,6 +70,11 @@ public class DemoResetService {
     authorize(user);
     rehearsal.prepareTable();
     return rehearsal.prepare();
+  }
+
+  public TimetableScope preview(Long user, School42Round.Mode mode) {
+    authorize(user);
+    return rehearsal.timetableScope(mode);
   }
 
   @Transactional(readOnly = true)
@@ -89,6 +95,12 @@ public class DemoResetService {
     if (!BCrypt.checkpw(password, pinHash))
       throw new IllegalArgumentException("초기화 비밀번호가 일치하지 않습니다.");
     var after = rehearsal.resetTimetables(expected);
+    db.update("""
+        insert into school42_reset_audit(school_id, term_id, previous_round, next_round, actor_id,
+            reset_mode, jobs, versions, change_requests, created_at)
+        values (?,?,?,?,?,?,?,?,?,utc_timestamp(6))
+        """, expected.schoolId(), expected.termId(), expected.round(), after.round(), user,
+        expected.mode().name(), expected.jobs(), expected.versions(), expected.requests());
     log.info(
         "School42 timetable reset by user {}: round {} to {}, {} jobs, {} versions",
         user,

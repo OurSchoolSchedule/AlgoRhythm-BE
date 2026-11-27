@@ -9,5 +9,6 @@ public class TeacherJoinSchoolRequest {
     private String schoolCode;
     private LocalDate hireDate;
     private String nameConfirmation;
+    private String subjectHint;
     private String displayName;
 }

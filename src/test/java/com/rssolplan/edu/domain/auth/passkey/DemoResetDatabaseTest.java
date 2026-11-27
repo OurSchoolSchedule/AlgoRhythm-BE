@@ -103,6 +103,7 @@ class DemoResetDatabaseTest {
     long user =
         db.queryForObject(
             "select id from users where provider_id='presenter@example.invalid'", Long.class);
+    db.update("insert into roster_verified_account(user_id,auth_email) values(?,?)", user, "presenter@example.invalid");
     db.update(
         "insert into school_user(school_id,user_id,position,employment_status) values"
             + " (540001,?,'ADMIN','HIRED')",
@@ -140,7 +141,7 @@ class DemoResetDatabaseTest {
     for (int i = 0; i < 2; i++) {
       timetable(540001, 547001, 102 + i);
       var scope = service.preview(user);
-      assertThat(scope).isEqualTo(new TimetableScope(540001, 547001, i + 1, 1, 1));
+      assertThat(scope).isEqualTo(new TimetableScope(540001, 547001, i + 1, 1, 1, School42Round.Mode.TIMETABLE, 0, 1, 1, 0, 0, 1, null));
       assertThatThrownBy(() -> service.preview(541004L)).isInstanceOf(SecurityException.class);
       assertThatThrownBy(() -> service.preview(541000L)).isInstanceOf(SecurityException.class);
       assertThatThrownBy(() -> service.reset(user, scope, PIN, "invalid"))
@@ -148,7 +149,7 @@ class DemoResetDatabaseTest {
       if (i == 0) {
         assertThatThrownBy(() -> service.reset(user, scope, "wrong", grant(user)))
             .isInstanceOf(IllegalArgumentException.class);
-        var other = new TimetableScope(700001, 700002, scope.round(), 1, 1);
+        var other = new TimetableScope(700001, 700002, scope.round(), 1, 1, School42Round.Mode.TIMETABLE, 0, 1, 1, 0, 0, 1, null);
         assertThatThrownBy(() -> service.reset(user, other, PIN, grant(user)))
             .isInstanceOf(ScheduleConflict.class);
         db.execute(
@@ -165,7 +166,7 @@ class DemoResetDatabaseTest {
       }
       String approval = grant(user);
       assertThat(service.reset(user, scope, PIN, approval))
-          .isEqualTo(new TimetableScope(540001, 547001, i + 2, 0, 0));
+          .isEqualTo(new TimetableScope(540001, 547001, i + 2, 0, 0, School42Round.Mode.TIMETABLE, 0, 0, 0, 0, 0, 0, null));
       assertThatThrownBy(() -> service.reset(user, scope, PIN, approval))
           .isInstanceOf(PasskeyProblem.class);
       redis.delete("demo-reset:attempts:demo_reset_test:" + user);

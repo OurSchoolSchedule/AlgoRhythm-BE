@@ -17,7 +17,7 @@ Railway에서 `SPRING_SQL_INIT_SCHEMA_LOCATIONS`로 적용 파일을 지정하�
 
 API 키 또는 발신 주소가 비어 있으면 설정 검증으로 애플리케이션 시작이 실패한다. 두 환경변수를 배포 전에 설정해야 한다.
 
-`email.verification.allowed-domains`는 **수신자** 허용 도메인 목록으로, 발신 도메인과 별개다. 현재 `ewha.ac.kr`, `gmail.com`을 유지한다. `email.verification.expiration`은 인증 코드의 Redis TTL, 메일 본문, 발송 API 응답에 공통으로 적용된다(기본 5분).
+로그인 도메인 정책은 이메일 인증과 패스키·카카오 로그인에 공통 적용된다. 지원하는 주소는 `ewha.ac.kr`, `gmail.com`이며 Resend 발신 도메인 설정과 독립적이다. `email.verification.expiration`은 인증 코드의 Redis TTL, 메일 본문, 발송 API 응답에 공통으로 적용된다(기본 5분).
 
 ## 동작 및 확인
 

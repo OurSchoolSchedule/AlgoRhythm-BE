@@ -1,5 +1,6 @@
 package com.rssolplan.edu.domain.auth.provider;
 
+import com.rssolplan.edu.domain.auth.email.LoginEmail;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -102,7 +103,10 @@ public class KakaoProvider {
             if (profileImage == null || profileImage.isBlank()) {
                 profileImage = root.path("kakao_account").path("profile").path("profile_image_url").asText("");
             }
-            String email = root.path("kakao_account").path("email").asText("");
+            JsonNode account = root.path("kakao_account");
+            if (!account.path("is_email_valid").asBoolean(false)
+                    || !account.path("is_email_verified").asBoolean(false)) throw new LoginEmail.Denied();
+            String email = account.path("email").asText("");
 
             SocialProfile profile = SocialProfile.builder()
                     .provider("kakao")
@@ -115,6 +119,8 @@ public class KakaoProvider {
             log.info(" [KakaoProvider] 프로필 파싱 성공: id={}, email={}, nickname={}", id, email, nickname);
             return profile;
 
+        } catch (LoginEmail.Denied e) {
+            throw e;
         } catch (HttpClientErrorException e) {
             log.error(" [KakaoProvider] 프로필 요청 4xx 에러: status={}, body={}",
                     e.getStatusCode(), e.getResponseBodyAsString());

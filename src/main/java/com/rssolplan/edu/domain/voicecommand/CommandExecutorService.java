@@ -30,7 +30,7 @@ public class CommandExecutorService {
             case SUBSTITUTE_APPROVE -> executeSubstituteApprove(userId, intent);
             case AVAILABILITY_ADD -> executeAvailabilityAdd(userId, intent);
             case AVAILABILITY_REPLACE -> executeAvailabilityReplace(userId, intent);
-            case UNKNOWN -> throw new IntentParseException("실행 가능한 명령이 아닙니다.");
+            case MY_WEEK, COVER_OPTIONS, SWAP_OPTIONS, CHANGE_STATUS, UNKNOWN -> throw new IntentParseException("실행 가능한 명령이 아닙니다.");
         };
     }
 

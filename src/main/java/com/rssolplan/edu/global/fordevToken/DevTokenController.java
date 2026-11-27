@@ -1,5 +1,6 @@
 package com.rssolplan.edu.global.fordevToken;
 
+import com.rssolplan.edu.domain.auth.email.LoginEmail;
 import com.rssolplan.edu.domain.user.User;
 import com.rssolplan.edu.domain.user.UserRepository;
 import com.rssolplan.edu.global.config.JwtTokenProvider;
@@ -23,7 +24,7 @@ public class DevTokenController {
     // 개발용: 이메일만 보내면 Access Token 바로 발급
     @PostMapping(PATH)
     public ResponseEntity<String> generateDevToken(@RequestBody DevTokenRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
+        User user = userRepository.findByEmail(LoginEmail.require(request.getEmail()))
                 .orElseThrow(() -> new IllegalArgumentException("해당 이메일의 유저가 없습니다."));
 
         String accessToken = jwt.generateAccess(user.getId());

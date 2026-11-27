@@ -57,6 +57,14 @@ async function main() {
       await request('/api/mypage/teacher/schools',{method:'GET',token,status});
     }
 
+    for (const address of ['teacher@naver.com', 'teacher@mail.gmail.com']) {
+      for (const path of ['send', 'verify']) {
+        const denied = await request('/api/auth/email-verification/' + path, {
+          body: {email: address, code: '123456'}, status: 403
+        });
+        assert.equal(denied.error, 'EMAIL_DOMAIN_DENIED');
+      }
+    }
     const firstDevice = await device();
     const first = await otp(email, schoolCode);
     const rosterPath = '/api/schools/' + schoolId + '/roster/me';
@@ -225,8 +233,8 @@ async function main() {
     }
     assert.equal((await login()).userId,first.userId);
 
-    const newEmail = 'a2-' + randomUUID() + '@ewha.ac.kr';
-    const newOptions = await pk('/registration/options', {body:await otp(newEmail)});
+    const newEmail = 'a2-' + randomUUID() + '@gmail.com';
+    const newOptions = await pk('/registration/options', {body:await otp('  ' + newEmail.toUpperCase() + '  ')});
     assert.equal(newOptions.publicKey.user.name, newEmail);
     const newSession = await regFinish({...await response(newOptions,'create'), includeRecoveryCode:false});
     assert.equal(newSession.recoveryCode,null);

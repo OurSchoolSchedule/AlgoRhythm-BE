@@ -23,6 +23,7 @@ public class VoiceCommandService {
      * 1단계: 자연어 → Intent 파싱 → Preview 생성 → draftToken 발급
      */
     public CommandPreviewResponse preview(Long userId, VoiceCommandRequest request) {
+        previewService.requireActiveMember(userId);
         ParsedIntent intent = intentParserService.parse(request.text());
 
         // UNKNOWN이면 즉시 IntentParseException (GlobalExceptionHandler → 422)
@@ -32,6 +33,12 @@ public class VoiceCommandService {
         }
 
         Map<String, Object> preview = previewService.buildPreview(userId, intent);
+
+        // A lesson intent only opens a live picker. The v2 lesson endpoint authorizes the
+        // selected lessons and recipients again after the teacher reviews the request.
+        if (intent.resolvedType().isLessonAssistant())
+            return new CommandPreviewResponse(null, intent.intentType(), intent.confidence(),
+                    buildDescription(intent), preview, null);
 
         DraftData draft = new DraftData(userId, intent);
         String token = draftStore.save(draft);
@@ -77,6 +84,10 @@ public class VoiceCommandService {
             case AVAILABILITY_REPLACE ->
                     String.format("불가 교시를 %d개로 전체 교체합니다.",
                             intent.unavailabilitySlots() != null ? intent.unavailabilitySlots().size() : 0);
+            case MY_WEEK -> "조회할 주간의 개인 시간표를 확인하세요.";
+            case COVER_OPTIONS -> "본인 수업을 선택해 공강 교사를 확인하세요.";
+            case SWAP_OPTIONS -> "본인 수업과 상대 교사의 교환 가능 수업을 선택하세요.";
+            case CHANGE_STATUS -> "내가 보낸 요청의 현재 처리 상태입니다.";
             default -> "명령을 실행합니다.";
         };
     }

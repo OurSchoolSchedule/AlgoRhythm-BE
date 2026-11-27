@@ -62,7 +62,9 @@ class MilestoneThreeMySqlTest {
                         new ClassPathResource(
                                 "db/migration/V20261124_01__generation_and_lesson_operations.sql"),
                         new ClassPathResource("db/migration/V20261125_11__school_teacher_roster.sql"),
-                        new ClassPathResource("db/migration/V20261126_31__school_roster_names.sql"))
+                        new ClassPathResource("db/migration/V20261126_31__school_roster_names.sql"),
+                        new ClassPathResource("db/migration/V20261127_41__roster_teaching_link.sql"),
+                        new ClassPathResource("db/migration/V20261127_42__lesson_change_notification_target.sql"))
                 .execute(source);
         db.update("insert into school(id,name) values(?,'fixture')", school);
         for (int i = 0; i < 7; i++) {
@@ -330,9 +332,46 @@ class MilestoneThreeMySqlTest {
                 user, term, c.id(), new Approval(c.rev(), c.firstRev(), c.secondRev()), key);
     }
 
-    @Test
-    void coverAgainstCover() {
-        conflict("CC");
+    @RepeatedTest(3)
+    void teacherBatchChoosesOneWinnerAndAdministratorAppliesSeparateCoverAndSwap() {
+        var week = publish();
+        var first = week.get(0);
+        var b = week.get(1);
+        var c = week.get(2);
+        long owner = first.actual().teacherId();
+        long spareA = school + 5, spareB = school + 6;
+        var batch = new CoverBatch(first.id(), first.rev(), List.of(spareA, spareB));
+        assertThatThrownBy(() -> changes.createBatch(spareA, term, batch))
+                .isInstanceOf(com.rssolplan.edu.global.exception.ForbiddenException.class);
+        assertThat(changes.candidates(owner, term, first.id(), first.rev(), ChangeService.Kind.SUBSTITUTE, null))
+                .contains(spareA, spareB).doesNotContain(owner);
+        assertThatThrownBy(() -> changes.createBatch(owner, term,
+                new CoverBatch(first.id(), first.rev(), List.of(spareA, owner))))
+                .isInstanceOf(ScheduleConflict.class);
+        assertThat(changes.list(admin, term)).isEmpty();
+        var group = changes.createBatch(owner, term, batch);
+        assertThatThrownBy(() -> changes.createBatch(owner, term, batch))
+                .isInstanceOfSatisfying(ScheduleConflict.class, e -> assertThat(e.code).isEqualTo("DUPLICATE_REQUEST"));
+        var result = race(
+                () -> changes.respond(spareA, term, group.get(0).id(), true, 0),
+                () -> changes.respond(spareB, term, group.get(1).id(), true, 0));
+        assertThat(result).filteredOn(ScheduleConflict.class::isInstance).hasSize(1);
+        assertThat(changes.list(admin, term)).extracting(Change::state)
+                .containsExactlyInAnyOrder("WITHDRAWN", "ACCEPTED");
+        assertThat(lessons.get(term, first.id())).isEqualTo(first);
+        var winner = result.stream().filter(Change.class::isInstance).map(Change.class::cast).findFirst().orElseThrow();
+        assertThatThrownBy(() -> approve(owner, winner, UUID.randomUUID()))
+                .isInstanceOf(com.rssolplan.edu.global.exception.ForbiddenException.class);
+        var afterCover = approve(admin, winner, UUID.randomUUID()).lessons().get(0);
+        assertThat(afterCover.actual().teacherId()).isEqualTo(winner.responder());
+        assertThat(afterCover.planned()).isEqualTo(first.planned());
+        assertThat(changes.candidates(b.actual().teacherId(), term, b.id(), b.rev(), ChangeService.Kind.SWAP, c.date())).contains(c.id());
+        var exchange = swap(b, c);
+        var afterSwap = approve(admin, exchange, UUID.randomUUID()).lessons();
+        assertThat(afterSwap).hasSize(2);
+        assertThat(lessons.get(term, b.id()).actual().periodId()).isEqualTo(c.actual().periodId());
+        assertThat(lessons.get(term, c.id()).actual().periodId()).isEqualTo(b.actual().periodId());
+        assertThat(db.queryForObject("select count(*) from notifications where school_id=? and type='SUBSTITUTE_FILLED_BROADCAST' and target_type='LESSON_CHANGE'", Long.class, school)).isEqualTo(1);
     }
 
     @Test

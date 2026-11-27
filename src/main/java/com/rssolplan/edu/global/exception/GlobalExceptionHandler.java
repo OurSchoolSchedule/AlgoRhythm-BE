@@ -1,5 +1,6 @@
 package com.rssolplan.edu.global.exception;
 
+import com.rssolplan.edu.domain.auth.email.LoginEmail;
 import com.rssolplan.edu.domain.auth.dto.ApiResponse;
 
 import org.springframework.http.HttpStatus;
@@ -40,6 +41,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ApiResponse<Object> handleUnauthorized(UnauthorizedException ex) {
         return ApiResponse.error("UNAUTHORIZED", ex.getMessage());
+    }
+
+    @ExceptionHandler(LoginEmail.Denied.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ApiResponse<Object> handleLoginEmail(LoginEmail.Denied ex) {
+        return ApiResponse.error("EMAIL_DOMAIN_DENIED", ex.getMessage());
     }
 
     //403 Forbidden , 인가실패

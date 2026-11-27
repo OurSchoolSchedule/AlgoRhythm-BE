@@ -1,5 +1,6 @@
 package com.rssolplan.edu.domain.schedule.loadimport;
 
+import com.rssolplan.edu.domain.roster.RosterMatchingService;
 import com.rssolplan.edu.domain.schedule.generation.TimetableSetRepository;
 import com.rssolplan.edu.domain.school.*;
 import com.rssolplan.edu.global.exception.*;
@@ -21,6 +22,7 @@ public class LoadValidationService {
     private final SchoolUserRepository members;
     private final SubjectRepository subjects;
     private final SchoolClassRepository classes;
+    private final RosterMatchingService matches;
 
     @Transactional(readOnly = true)
     public LoadCatalog catalog(Long userId, Long termId, Integer year, Map<String, Long> aliases) {
@@ -41,11 +43,13 @@ public class LoadValidationService {
                     org.springframework.http.HttpStatus.BAD_REQUEST,
                     "INVALID_YEAR",
                     "학교의 학년도를 지정하세요.");
+        var aliasIds = new HashSet<>(matches.directoryLinks(schoolId).values());
         var teachers =
                 members
                         .findBySchool_IdAndEmploymentStatus(
                                 schoolId, SchoolUser.EmploymentStatus.HIRED)
                         .stream()
+                        .filter(m -> !aliasIds.contains(m.getId()))
                         .map(m -> new LoadCatalog.Name(m.getId(), m.getSchoolDisplayName()))
                         .toList();
         var schoolSubjects = subjects.findBySchool_Id(schoolId);

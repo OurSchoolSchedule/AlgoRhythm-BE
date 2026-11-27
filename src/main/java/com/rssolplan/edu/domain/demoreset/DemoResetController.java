@@ -45,8 +45,9 @@ public class DemoResetController {
   }
 
   @GetMapping
-  public TimetableScope preview(@AuthenticationPrincipal Long user) {
-    return service.preview(user);
+  public TimetableScope preview(@AuthenticationPrincipal Long user,
+      @RequestParam(defaultValue = "TIMETABLE") com.rssolplan.edu.domain.schedule.candidates.School42Round.Mode mode) {
+    return service.preview(user, mode);
   }
 
   @PostMapping

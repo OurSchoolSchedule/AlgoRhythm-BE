@@ -27,7 +27,9 @@ public record ParsedIntent(
         Long responseId,
 
         // AVAILABILITY_ADD, AVAILABILITY_REPLACE
-        List<UnavailabilitySlot> unavailabilitySlots
+        List<UnavailabilitySlot> unavailabilitySlots,
+        Integer periodNumber,
+        String teacherName
 ) {
     public IntentType resolvedType() {
         try {

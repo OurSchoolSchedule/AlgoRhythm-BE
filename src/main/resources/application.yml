@@ -46,9 +46,6 @@ email:
     read-timeout: 30s
   verification:
     expiration: '5'
-    allowed-domains:
-      - ewha.ac.kr
-      - gmail.com  # 테스트용
 
 # application.yml 예시
 springdoc:
@@ -78,7 +75,7 @@ logging:
     org.springframework.data.repository.config.RepositoryConfigurationExtensionSupport: WARN
 
 openai:
-  api-key: ${OPENAI_API_KEY}
+  api-key: ${OPENAI_API_KEY:}
   model: gpt-4o-mini
 
 management:

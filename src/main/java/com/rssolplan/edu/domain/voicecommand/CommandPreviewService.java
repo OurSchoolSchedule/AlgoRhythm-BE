@@ -32,6 +32,10 @@ public class CommandPreviewService {
     private final SchoolUserRepository schoolUserRepository;
     private final ScheduleAccess access;
 
+    public void requireActiveMember(long userId) {
+        access.member(userId, false);
+    }
+
     @Transactional(readOnly = true)
     public Map<String, Object> buildPreview(Long userId, ParsedIntent intent) {
         IntentType type = intent.resolvedType();
@@ -44,6 +48,24 @@ public class CommandPreviewService {
             case SUBSTITUTE_APPROVE   -> previewSubstituteApprove(schoolId, intent);
             case AVAILABILITY_ADD,
                  AVAILABILITY_REPLACE -> previewAvailability(intent);
+            case MY_WEEK, COVER_OPTIONS, SWAP_OPTIONS, CHANGE_STATUS -> {
+                if (member.getPosition() != SchoolUser.Position.TEACHER)
+                    throw new ForbiddenException("재직 교사 계정에서 내 수업을 선택하세요.");
+                Map<String, Object> filters = new HashMap<>();
+                if (intent.substituteDate() != null) {
+                    try { filters.put("date", java.time.LocalDate.parse(intent.substituteDate()).toString()); }
+                    catch (java.time.DateTimeException invalid) { throw new IntentParseException("날짜를 다시 입력하세요."); }
+                }
+                if (intent.periodNumber() != null) {
+                    if (intent.periodNumber() < 1 || intent.periodNumber() > 99)
+                        throw new IntentParseException("교시 번호를 다시 입력하세요.");
+                    filters.put("periodNumber", intent.periodNumber());
+                }
+                if (intent.teacherName() != null) filters.put("teacherName", intent.teacherName());
+                filters.put("schoolId", schoolId);
+                filters.put("userId", userId);
+                yield filters;
+            }
             case UNKNOWN              -> throw new IntentParseException("요청을 이해하지 못했습니다.");
         };
     }

@@ -1,5 +1,6 @@
 package com.rssolplan.edu.domain.school;
 
+import com.rssolplan.edu.domain.roster.RosterMatchingService;
 import com.rssolplan.edu.domain.roster.TeacherRosterService;
 import com.rssolplan.edu.domain.schedule.generation.TimetableRepository;
 import com.rssolplan.edu.domain.schedule.generation.TimetableSetRepository;
@@ -15,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -29,6 +31,7 @@ public class SchoolController {
     private final TimetableRepository timetableRepository;
     private final AuthorizationService authService;
     private final TeacherRosterService roster;
+    private final RosterMatchingService matching;
     private final TimetableSetRepository terms;
 
     /** 현재 활성 학교 요약 조회 */
@@ -39,7 +42,9 @@ public class SchoolController {
         School school = schoolRepository.findById(schoolId)
                 .orElseThrow(() -> new NotFoundException("학교를 찾을 수 없습니다."));
         List<SchoolUser> members = schoolUserRepository.findBySchool_Id(schoolId);
-        return ResponseEntity.ok(new SchoolSummaryResponse(school, members));
+        var aliases = new HashSet<>(matching.directoryLinks(schoolId).values());
+        return ResponseEntity.ok(new SchoolSummaryResponse(school,
+                members.stream().filter(m -> !aliases.contains(m.getId())).toList()));
     }
 
     /** 교사 목록 조회 (담당 과목, 담임 학급, 시수 포함) */
@@ -72,7 +77,12 @@ public class SchoolController {
         var classesByTeacher = classes.stream().filter(c -> c.getHomeroomTeacher() != null)
                 .collect(Collectors.groupingBy(c -> c.getHomeroomTeacher().getId()));
         var entries = roster.linkedByMembership(schoolId, termId);
-        return members.stream().map(member -> new TeacherSummaryResponse(member,
+        var links = matching.directoryLinks(schoolId);
+        var accountRows = members.stream().collect(Collectors.toMap(SchoolUser::getId, m -> m));
+        var aliasIds = new HashSet<>(links.values());
+        return members.stream().filter(member -> !aliasIds.contains(member.getId()))
+                .map(member -> new TeacherSummaryResponse(member,
+                accountRows.getOrDefault(links.get(member.getId()), member),
                 lessonsByTeacher.getOrDefault(member.getId(), List.of()),
                 classesByTeacher.getOrDefault(member.getId(), List.of()),
                 entries.get(member.getId()))).toList();
@@ -118,12 +128,12 @@ public class SchoolController {
         private final List<HomeroomClassInfo> homeroomClasses;
         private final int weeklyLessonCount;
 
-        public TeacherSummaryResponse(SchoolUser su,
+        public TeacherSummaryResponse(SchoolUser su, SchoolUser account,
                                       List<Timetable> timetables,
                                       List<SchoolClass> homeroomClasses,
                                       TeacherRosterService.Entry entry) {
             this.schoolUserId = su.getId();
-            this.userId = su.getUser().getId();
+            this.userId = account.getUser().getId();
             this.username = su.getSchoolDisplayName();
             this.displayName = entry == null ? username : entry.displayName();
             var rosterTerm = entry == null ? null : entry.term();

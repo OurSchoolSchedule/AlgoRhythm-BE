@@ -10,6 +10,7 @@ public class OnboardingRequest {
     private String schoolCode;  // TEACHER일 경우 참여할 학교 코드
     private String name;        // ADMIN일 경우 새 학교 이름
     private String nameConfirmation;
+    private String subjectHint;
     private String displayName;  // 명부가 없는 교사의 학교 표시 이름
     private String address;
     private String phoneNumber;

@@ -270,7 +270,7 @@ public class MypageServiceImpl implements MypageService {
     @Override
     public SchoolSimpleResponse joinTeacherSchool(Long teacherId, TeacherJoinSchoolRequest req) {
         return toSchoolSimple(memberships.requestSchool(teacherId, req.getSchoolCode(),
-                req.getDisplayName(), req.getHireDate(), req.getNameConfirmation()));
+                req.getDisplayName(), req.getHireDate(), req.getNameConfirmation(), req.getSubjectHint()));
     }
 
     private SchoolSimpleResponse toSchoolSimple(OnboardingResponse result) {

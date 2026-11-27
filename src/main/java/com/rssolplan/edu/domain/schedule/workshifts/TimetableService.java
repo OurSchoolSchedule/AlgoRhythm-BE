@@ -41,7 +41,7 @@ public class TimetableService {
     public List<TimetableDto> week(Long userId, boolean mine, Integer year, Integer semester,
                                    Long termId, LocalDate weekOf) {
         var member = scheduleAccess.member(userId, false);
-        return publishedWeek.read(member.getSchool().getId(), mine ? member.getId() : null,
+        return publishedWeek.read(member.getSchool().getId(), mine ? scheduleAccess.teachingId(member) : null,
                 year, semester, termId, weekOf);
     }
 

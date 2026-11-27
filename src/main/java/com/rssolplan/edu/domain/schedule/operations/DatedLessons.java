@@ -83,6 +83,51 @@ where v.id=(select av.id from schedule_version av where av.term_id=v.term_id and
                 .orElseThrow(() -> new NotFoundException("현재 버전의 날짜 수업이 없습니다."));
     }
 
+    // Read both sides of the proposed movement from the effective dated timetable.
+    public List<Long> candidates(long school, Lesson first, ChangeService.Kind kind, LocalDate targetDate) {
+        List<Long> teachers = db.queryForList("""
+                select m.id from school_user m where m.school_id=? and m.position='TEACHER'
+                  and m.employment_status='HIRED' and not exists (
+                    select 1 from school_teacher_roster r join roster_teaching_link l on l.roster_id=r.id
+                    where r.school_user_id=m.id and r.school_id=m.school_id)
+                order by m.id
+                """, Long.class, school);
+        SlotDay source = slots(school, first.termId, first.date);
+        if (kind == ChangeService.Kind.SUBSTITUTE)
+            return teachers.stream()
+                    .filter(t -> t != first.actual.teacherId && source.fits(first.actual.periodId, t, first.classId, first.id))
+                    .toList();
+        SlotDay target = first.date.equals(targetDate) ? source : slots(school, first.termId, targetDate);
+        return target.rows.stream().filter(second ->
+                    !second.actual.cancelled && second.versionId == first.versionId
+                    && second.actual.teacherId != first.actual.teacherId && teachers.contains(second.actual.teacherId)
+                    && !(second.date.equals(first.date) && second.actual.periodId == first.actual.periodId)
+                    && source.fits(first.actual.periodId, second.actual.teacherId, second.classId, first.id)
+                    && target.fits(second.actual.periodId, first.actual.teacherId, first.classId, second.id))
+                .map(Lesson::id).toList();
+    }
+
+    private record Unavailable(long teacher, long period) {}
+    private record SlotDay(List<Lesson> rows, Set<Unavailable> unavailable) {
+        boolean fits(long period, long teacher, long classId, long departingId) {
+            return !unavailable.contains(new Unavailable(teacher, period)) && rows.stream().noneMatch(row ->
+                    row.id != departingId && !row.actual.cancelled && row.actual.periodId == period
+                    && (row.actual.teacherId == teacher || row.classId == classId));
+        }
+    }
+
+    private SlotDay slots(long school, long term, LocalDate date) {
+        var unavailable = db.query("""
+                select a.school_user_id, ps.id from teacher_availability a
+                join school_user m on m.id=a.school_user_id
+                join school_setting ss on ss.school_id=m.school_id
+                join period_setting ps on ps.school_setting_id=ss.id and ps.period_number=a.period_number
+                where m.school_id=? and a.day_of_week=?
+                """, (r,n) -> new Unavailable(r.getLong(1),r.getLong(2)), school,
+                date.getDayOfWeek().name().substring(0, 3));
+        return new SlotDay(day(term, date), Set.copyOf(unavailable));
+    }
+
     // Caller holds the school guard inside the same READ COMMITTED transaction as request state and
     // notifications.
     public List<Edit> apply(

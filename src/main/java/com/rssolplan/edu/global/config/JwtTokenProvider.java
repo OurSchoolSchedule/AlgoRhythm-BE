@@ -1,5 +1,6 @@
 package com.rssolplan.edu.global.config;
 
+import com.rssolplan.edu.domain.auth.email.LoginEmail;
 import com.rssolplan.edu.domain.auth.passkey.PasskeyRealm;
 import com.rssolplan.edu.global.fordevToken.LocalDevLoginEnabled;
 
@@ -62,6 +63,7 @@ public class JwtTokenProvider {
                 .setId(UUID.randomUUID().toString())
                 .claim("use", use)
                 .claim("amr", method)
+                .claim("emailVerified", "kakao".equals(method) ? Boolean.TRUE : null)
                 .claim("credential", credentialId)
                 .claim("linkedUser", linkedUser == null ? null : linkedUser.toString())
                 .setIssuedAt(Date.from(now))
@@ -96,20 +98,21 @@ public class JwtTokenProvider {
         if ("dev".equals(method)) return LocalDevLoginEnabled.enabled(environment);
         if ("kakao".equals(method)) {
             String linkedUser = claims.get("linkedUser", String.class);
-            return Boolean.TRUE.equals(db.queryForObject("select exists(select 1 from users where id=? and provider='kakao')", Boolean.class, user))
-                    && !enrolled(user) && (linkedUser == null || !enrolled(Long.parseLong(linkedUser)));
+            if (!Boolean.TRUE.equals(claims.get("emailVerified", Boolean.class))) return false;
+            boolean allowed = db.query("""
+                    SELECT v.auth_email FROM users u LEFT JOIN roster_verified_account v ON v.user_id=u.id
+                    WHERE u.id=? AND u.provider='kakao'
+                    """, rs -> rs.next() && (rs.getString(1) == null || LoginEmail.allowed(rs.getString(1))), user);
+            return allowed && !enrolled(user) && (linkedUser == null || !enrolled(Long.parseLong(linkedUser)));
         }
         if (!"passkey".equals(method)) return false;
         String id = claims.get("credential", String.class);
-        return Boolean.TRUE.equals(
-                db.queryForObject(
-                        """
-SELECT EXISTS(SELECT 1 FROM passkey_credential WHERE rp_id=? AND user_id=? AND SHA2(credential_id,256)=?)
-""",
-                        Boolean.class,
-                        realm.id(),
-                        user,
-                        id));
+        return db.query("""
+                SELECT COALESCE(v.auth_email, CASE WHEN u.provider='email' THEN u.provider_id END)
+                FROM passkey_credential p JOIN users u ON u.id=p.user_id
+                LEFT JOIN roster_verified_account v ON v.user_id=u.id
+                WHERE p.rp_id=? AND p.user_id=? AND SHA2(p.credential_id,256)=?
+                """, rs -> rs.next() && LoginEmail.allowed(rs.getString(1)), realm.id(), user, id);
     }
 
     public boolean validate(String token) {
