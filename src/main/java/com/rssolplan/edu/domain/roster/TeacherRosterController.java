@@ -65,6 +65,15 @@ public class TeacherRosterController {
         return roster.replaceAssignment(userId, schoolId, rosterId, termId, assignment);
     }
 
+    public record RejectionInput(java.time.Instant requestedAt) {}
+
+    @PostMapping("/{rosterId}/reject")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reject(@AuthenticationPrincipal Long userId, @PathVariable Long schoolId,
+                       @PathVariable Long rosterId, @RequestBody RejectionInput input) {
+        memberships.reject(userId, schoolId, rosterId, input.requestedAt());
+    }
+
     @PostMapping("/{rosterId}/approve")
     public Entry approve(@AuthenticationPrincipal Long userId, @PathVariable Long schoolId,
                          @PathVariable Long rosterId, @RequestBody(required=false) ApprovalInput input) {

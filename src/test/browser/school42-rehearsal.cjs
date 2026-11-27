@@ -132,7 +132,7 @@ async function loginAgain(account) {
 }
 
 let step = 'initial registration'
-async function joinAndApprove(account, admin, schoolCode, capture) {
+async function joinAndApprove(account, admin, schoolCode, capture, rejectFirst = false) {
   const { page, teachingId } = account
   step = 'teacher joins existing school'
   assert.equal((await request(memberships, account.token)).some(m => m.schoolId === schoolId), false)
@@ -172,6 +172,20 @@ async function joinAndApprove(account, admin, schoolCode, capture) {
   assert.equal(selected?.linked, false, 'teaching identity is available')
   assert.equal(selected.displayName, account.name)
   if (selected.weeklyPeriods > 0) assert.ok(selected.subjects.includes(account.subject), 'subject hint matches published loads')
+  if (rejectFirst) {
+    const reject = admin.page.getByRole('button', { name: '가입 거절', exact: true })
+    admin.page.once('dialog', dialog => dialog.dismiss())
+    await reject.click()
+    assert.equal((await request(rosterPath + '/me', account.token)).status, 'PENDING')
+    admin.page.once('dialog', dialog => dialog.accept())
+    const result = admin.page.waitForResponse(r => r.url().endsWith('/' + entry.rosterId + '/reject'))
+    await reject.click()
+    assert.equal((await result).status(), 204)
+    await admin.page.getByText(account.name + ' 가입 거절 완료', { exact: true }).waitFor()
+    admin.page.off('response', onReviewResponse)
+    await loginAgain(account)
+    return joinAndApprove(account, admin, schoolCode, capture)
+  }
   step = 'select verified teaching candidate'
   await admin.page.getByRole('combobox', { name: /연결할 기존 교사 명부/ }).selectOption(String(teachingId))
   if (capture) await capture(admin.page, 'admin-roster-match')
@@ -271,7 +285,7 @@ async function main() {
     for (const account of accounts) await loginAgain(account)
     assert.equal((await request('/api/mypage/active-school', operator.token)).schoolId, 740002)
     assert.equal((await request('/api/mypage/active-school', admin.token)).schoolId, schoolId)
-    await joinAndApprove(responder, admin, schoolCode)
+    await joinAndApprove(responder, admin, schoolCode, null, true)
     const originalCredentials = await Promise.all(accounts.map(a => request('/api/auth/passkeys/credentials', a.token)))
     const initialRound = (await request('/api/demo-reset', operator.token)).round
     for (let i = 0; i < 3; i++) {

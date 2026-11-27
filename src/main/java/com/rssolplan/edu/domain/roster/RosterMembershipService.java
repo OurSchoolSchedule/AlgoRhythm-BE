@@ -108,7 +108,10 @@ public class RosterMembershipService {
                 db.update("UPDATE school_teacher_roster SET display_name=?,base_name=? WHERE id=?",
                         p.displayName(), p.baseName(), a.entry.id());
             if (member == null && a.entry.pendingUserId() == null) {
-                if (a.school.id() == RosterMatchingService.SCHOOL42)
+                // A previous application must still go through review on resubmission,
+                // even at schools where an admin-created roster entry can join directly.
+                int previousApplication = db.update("DELETE FROM roster_join_details WHERE roster_id=?", a.entry.id());
+                if (previousApplication != 0 || a.school.id() == RosterMatchingService.SCHOOL42)
                     db.update("UPDATE school_teacher_roster SET pending_user_id=? WHERE id=?", userId, a.entry.id());
                 else member = hire(a.school.id(), userId, hireDate);
             }
@@ -117,6 +120,23 @@ public class RosterMembershipService {
         if (member == null) matching.recordRequest(a.school.id(), userId, subjectHint);
         selectFirstSchool(a.user, a.school, member);
         return response(userId, a.school, member);
+    }
+
+    public void reject(long adminId, long schoolId, long rosterId, java.time.Instant requestedAt) {
+        lockSchool(schoolId);
+        roster.requireAdmin(adminId, schoolId);
+        int changed = db.update("""
+                UPDATE school_teacher_roster r LEFT JOIN roster_join_details j ON j.roster_id=r.id
+                SET r.pending_user_id=NULL
+                WHERE r.id=? AND r.school_id=? AND r.school_user_id IS NULL AND r.pending_user_id IS NOT NULL
+                  AND (j.requested_at <=> ?)
+                """, rosterId, schoolId, requestedAt == null ? null : java.sql.Timestamp.from(requestedAt));
+        if (changed != 1) throw new IllegalStateException("가입 신청이 변경되었습니다. 신청 목록을 새로고침해 주세요.");
+        // Older pending applications may predate the request-details table.
+        db.update("""
+                INSERT INTO roster_join_details(roster_id) VALUES(?)
+                ON DUPLICATE KEY UPDATE roster_id=VALUES(roster_id)
+                """, rosterId);
     }
 
     public void approve(Long adminUserId, Long schoolId, Long rosterId, Long teacher) {
