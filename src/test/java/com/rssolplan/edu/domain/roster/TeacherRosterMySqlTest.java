@@ -315,6 +315,30 @@ class TeacherRosterMySqlTest {
         http(get("/api/school/teachers").param("termId", "" + b), admin(teacher), null, 404);
     }
 
+    @Test
+    void partialTermAssignmentsKeepAnotherTeachersAnnualClassesAndHonorAnExplicitRelease() throws Exception {
+        long primary = a+4, deputy = a+5, legacy = a+6;
+        for (long teacher : List.of(primary, deputy, legacy)) {
+            db.update("insert into users(id,username,active_school_id) values(?,'담당교사',?)", teacher,a);
+            db.update("insert into school_user(id,user_id,school_id,position,employment_status) values(?,?,?,'TEACHER','HIRED')",
+                    teacher,teacher,a);
+        }
+        db.update("insert into school_class(id,school_id,academic_year,grade,class_number,homeroom_teacher_id)"
+                + " values(?,?,2026,1,2,?),(?,?,2026,1,3,?)", a+2,a,legacy,a+3,a,legacy);
+        db.update("insert into term_class_teacher_role(term_id,class_id,role_name,teacher_id)"
+                + " values(?,?,'HOMEROOM',?),(?,?,'DEPUTY',?)", a,a,primary,a,a,deputy);
+        var existing = directoryTeacher(legacy, a);
+        assertThat(existing.required("homeroomAssignmentTermId").asLong()).isEqualTo(a);
+        assertThat(existing.required("homeroomClasses").size()).isEqualTo(2);
+        assertThat(directoryTeacher(deputy, a).required("homeroomClasses")).isEmpty();
+        assertThat(directoryTeacher(deputy, a).at("/deputyHomeroomClasses/0/classId").longValue()).isEqualTo(a);
+        long roster = create(a, email, "학기 배정 교사");
+        db.update("update school_teacher_roster set school_user_id=? where id=?", legacy,roster);
+        http(put(base(a)+"/"+roster+"/terms/"+a), admin(a), Map.of("subjectIds", List.of()), 200);
+        assertThat(directoryTeacher(legacy, a).required("homeroomClasses")).isEmpty();
+        assertThat(directoryTeacher(legacy, a+1).required("homeroomClasses").size()).isEqualTo(2);
+    }
+
     private JsonNode directoryTeacher(long teacher, Long termId) throws Exception {
         JsonNode reference = null;
         for (String path : List.of("/api/school/teachers", "/api/school/members")) {

@@ -29,8 +29,22 @@ public record ParsedIntent(
         // AVAILABILITY_ADD, AVAILABILITY_REPLACE
         List<UnavailabilitySlot> unavailabilitySlots,
         Integer periodNumber,
-        String teacherName
+        String teacherName,
+        String targetDate,
+        String weekStart,
+        String targetWeekStart
 ) {
+    public ParsedIntent(String intentType, String confidence, Long timetableId, String substituteDate,
+                        String note, Long requestId, String action, Long responseId,
+                        List<UnavailabilitySlot> unavailabilitySlots, Integer periodNumber, String teacherName) {
+        this(intentType, confidence, timetableId, substituteDate, note, requestId, action, responseId,
+                unavailabilitySlots, periodNumber, teacherName, null, null, null);
+    }
+
+    public ParsedIntent withDates(String first, String second, String week, String targetWeek) {
+        return new ParsedIntent(intentType, confidence, timetableId, first, note, requestId, action,
+                responseId, unavailabilitySlots, periodNumber, teacherName, second, week, targetWeek);
+    }
     public IntentType resolvedType() {
         try {
             return IntentType.valueOf(intentType);

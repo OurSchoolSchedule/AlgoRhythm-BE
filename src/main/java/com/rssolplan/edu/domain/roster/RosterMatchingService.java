@@ -152,12 +152,12 @@ public class RosterMatchingService {
                 SELECT COALESCE(t.id,a.id), a.id, r.display_name
                 FROM school_teacher_roster r
                 JOIN school_user a ON a.id=r.school_user_id AND a.school_id=r.school_id
-                LEFT JOIN roster_teaching_link l ON l.roster_id=r.id AND r.school_id=?
+                LEFT JOIN roster_teaching_link l ON l.roster_id=r.id
                 LEFT JOIN school_user t ON t.id=l.teacher_school_user_id AND t.school_id=r.school_id
                     AND t.position='TEACHER' AND t.employment_status='HIRED'
                 WHERE r.school_id=? AND a.position='TEACHER' AND a.employment_status='HIRED'
                     AND (l.roster_id IS NULL OR t.id IS NOT NULL)
-                """, rs -> { links.put(rs.getLong(1), new LinkedAccount(rs.getLong(2), rs.getString(3))); }, SCHOOL42, school);
+                """, rs -> { links.put(rs.getLong(1), new LinkedAccount(rs.getLong(2), rs.getString(3))); }, school);
         return links;
     }
 

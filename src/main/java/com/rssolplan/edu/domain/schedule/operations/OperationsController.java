@@ -6,6 +6,7 @@ import jakarta.validation.constraints.*;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,6 +19,12 @@ import java.util.*;
 public class OperationsController {
     private final ChangeService changes;
     private final DatedLessons lessons;
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public java.util.Map<String, String> malformedBody() {
+        return java.util.Map.of("code", "BAD_REQUEST", "message", "수업과 날짜 형식을 확인하세요.");
+    }
 
     public record Decision(
             @NotNull Boolean accept, @NotNull @PositiveOrZero Long expectedRequestRev) {}

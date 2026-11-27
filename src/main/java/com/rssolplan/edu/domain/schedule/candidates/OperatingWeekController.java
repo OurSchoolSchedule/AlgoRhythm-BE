@@ -1,6 +1,5 @@
 package com.rssolplan.edu.domain.schedule.candidates;
 
-import com.rssolplan.edu.domain.schedule.DayOfWeek;
 import com.rssolplan.edu.domain.schedule.operations.ScheduleAccess;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -62,16 +61,8 @@ class OperatingWeekController {
     }
 
     static Day day(LocalDate date, long id, PublishedOperatingHours.Calendar calendar) {
-        var weekday = DayOfWeek.values()[date.getDayOfWeek().getValue() - 1];
-        var periods = calendar.teachingSlots().stream().filter(s -> s.day() == weekday)
-                .map(CandidateApi.Slot::period).distinct().sorted().toList();
-        var byGrade = new TreeMap<Integer, List<Integer>>();
-        if (calendar.gradeLastPeriods() != null) {
-            for (var grade : calendar.gradeLastPeriods()) {
-                int last = grade.lastPeriods().get(weekday);
-                byGrade.put(grade.grade(), periods.stream().filter(p -> p <= last).toList());
-            }
-        }
+        var periods = calendar.periodsOn(date);
+        var byGrade = calendar.gradePeriodsOn(date, periods);
         return new Day(date, "OPEN", id, periods, byGrade, calendar.classGrades() == null ? Map.of() : calendar.classGrades());
     }
 }

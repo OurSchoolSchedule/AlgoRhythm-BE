@@ -293,6 +293,93 @@ class MilestoneThreeMySqlTest {
                 .isInstanceOf(NotFoundException.class);
     }
 
+    @Test
+    void scopedClassWeekSeparatesPublicationFromAnEmptyOrExcludedDayAndUsesActualAssignments() {
+        long teacher = school + 2;
+        db.update("""
+                insert into timetable(school_id,academic_year,semester,school_class_id,period_setting_id,
+                        day_of_week,subject_id,teacher_id) values(?,2026,2,?,?,'MON',?,?)
+                """, school, school, school, school, teacher);
+        var draft = timetables.publishedWeek(teacher, term, monday, "class", school, null);
+        assertThat(draft.lessons()).isEmpty();
+        assertThat(draft.days()).hasSize(7).noneMatch(day -> day.published());
+        var limits = new GradeLastPeriod(1, Map.of(DayOfWeek.MON,3, DayOfWeek.TUE,0, DayOfWeek.WED,0,
+                DayOfWeek.THU,0, DayOfWeek.FRI,0));
+        request = new Request(request.validatedLoadId(), null, null, Objective.BALANCED, List.of(limits));
+        publication.editTerm(admin, term, new PublicationService.CalendarEdit(monday, monday.plusDays(8), List.of(monday.plusDays(3))));
+        var dated = publish();
+        var original = dated.get(0);
+        var invite = changes.createBatch(original.actual().teacherId(), term,
+                new CoverBatch(original.id(), original.rev(), List.of(school + 5))).get(0);
+        approve(admin, changes.respond(school + 5, term, invite.id(), true, 0), UUID.randomUUID());
+        var week = timetables.publishedWeek(teacher, term, monday, "class", school, null);
+        assertThat(week.classId()).isEqualTo(school);
+        assertThat(week.days().get(0).lastPeriodByGrade()).containsEntry(1,3);
+        assertThat(week.days().get(0).periods()).containsExactly(1,2,3);
+        assertThat(week.days().get(0).gradePeriods().get(1)).containsExactly(1,2,3);
+        assertThat(week.days().get(3).excluded()).isTrue();
+        assertThat(week.days().get(3).periods()).isEmpty();
+        assertThat(week.days().get(3).gradePeriods()).isEmpty();
+        assertThat(week.days().get(4).lastPeriodByGrade()).containsEntry(1,0);
+        assertThat(week.days().get(4).published()).isTrue();
+        assertThat(week.days().get(6).lastPeriod()).isZero();
+        assertThat(week.lessons()).allMatch(row -> row.getId() == null && row.getSchoolClassId() == school);
+        assertThat(week.lessons()).anyMatch(row -> row.getWeeklyLessonId() == original.originId()
+                && row.getTeacherId() == school + 5);
+        assertThat(timetables.publishedWeek(admin, term, monday, "class", school, null))
+                .usingRecursiveComparison().isEqualTo(week);
+        var own = timetables.publishedWeek(school+5, term, monday, "mine", null, null);
+        assertThat(own.teacherId()).isEqualTo(school+5);
+        assertThat(own.lessons()).allMatch(row -> row.getTeacherId() == school+5);
+        assertThat(timetables.publishedWeek(admin, term, monday, "teacher", null, school+5))
+                .usingRecursiveComparison().isEqualTo(own);
+    }
+
+    @Test
+    void swapsRespectBothClassesOperatingDaysEvenWhenTeachersAndRoomsAreFree() {
+        long secondRoom = school+1;
+        db.update("insert into school_class(id,school_id,academic_year,class_number,grade) values(?,?,2026,1,2)",
+                secondRoom,school);
+        var firstGrade = new GradeLastPeriod(1, Map.of(DayOfWeek.MON,1, DayOfWeek.TUE,0, DayOfWeek.WED,0,
+                DayOfWeek.THU,0, DayOfWeek.FRI,0));
+        var secondGrade = new GradeLastPeriod(2, Map.of(DayOfWeek.MON,0, DayOfWeek.TUE,1, DayOfWeek.WED,0,
+                DayOfWeek.THU,0, DayOfWeek.FRI,0));
+        var id = request.validatedLoadId();
+        var demands = List.of(new LoadWorkbookParser.Demand(""+(school+2), ""+school, ""+school, 1, "C2"),
+                new LoadWorkbookParser.Demand(""+(school+3), ""+school, ""+secondRoom, 1, "C3"));
+        when(previews.read(any(), any(), eq(id))).thenReturn(new LoadWorkbookParser.Result("수학", 2, 2, demands, id));
+        request = new Request(id, null, null, Objective.BALANCED, List.of(firstGrade, secondGrade));
+        var first = publish().get(0);
+        var second = lessons.date(admin, term, monday.plusDays(1)).get(0);
+        assertThat(changes.candidates(school+2, term, first.id(), first.rev(), ChangeService.Kind.SWAP, second.date()))
+                .doesNotContain(second.id());
+        assertThatThrownBy(() -> lessons.apply(school, term, first.id(), first.rev(), second.id(), second.rev(), 0))
+                .isInstanceOfSatisfying(ScheduleConflict.class, c -> assertThat(c.code).isEqualTo("SLOT_CONFLICT"));
+        assertThat(lessons.date(admin, term, monday)).containsExactly(first);
+    }
+
+    @Test
+    void publishedWeekRequiresTheSelectedSchoolsTermClassAndAdminForTeacherFiltering() {
+        long anotherSchool = school + 100;
+        db.update("insert into school(id,name) values(?,'other school')", anotherSchool);
+        db.update("insert into school_class(id,school_id,academic_year,class_number,grade) values(?,?,2026,1,1),(?,?,2025,1,1)",
+                anotherSchool, anotherSchool, school+1, school);
+        db.update("insert into timetable_set(school_id,academic_year,semester,start_date,end_date) values(?,2026,2,?,?)",
+                anotherSchool, monday, monday.plusWeeks(1));
+        long foreignTerm = db.queryForObject("select id from timetable_set where school_id=?", Long.class, anotherSchool);
+        assertThatThrownBy(() -> timetables.publishedWeek(school+2, foreignTerm, monday, "class", school, null))
+                .isInstanceOf(NotFoundException.class);
+        for (long missing : List.of(anotherSchool, school+1))
+            assertThatThrownBy(() -> timetables.publishedWeek(admin, term, monday, "class", missing, null))
+                    .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> timetables.publishedWeek(school+2, term, monday, "teacher", null, school+3))
+                .isInstanceOf(com.rssolplan.edu.global.exception.ForbiddenException.class);
+        assertThatThrownBy(() -> timetables.publishedWeek(admin, term, monday.minusDays(1), "mine", null, null))
+                .isInstanceOf(com.rssolplan.edu.global.exception.BadRequestException.class);
+        assertThatThrownBy(() -> timetables.publishedWeek(admin, term, monday, "class", null, school+3))
+                .isInstanceOf(com.rssolplan.edu.global.exception.BadRequestException.class);
+    }
+
     private long version(int revision, LocalDate from) {
         db.update("insert into schedule_version(term_id,version_no,effective_from) values(?,?,?)",
                 term, revision, from);
@@ -461,7 +548,10 @@ class MilestoneThreeMySqlTest {
         var c = week.get(2);
         long owner = first.actual().teacherId();
         long spareA = school + 5, spareB = school + 6;
-        var batch = new CoverBatch(first.id(), first.rev(), List.of(spareA, spareB));
+        var batch = new CoverBatch(first.id(), first.rev(), List.of(spareA, spareB), first.date());
+        assertThatThrownBy(() -> changes.createBatch(owner, term,
+                new CoverBatch(first.id(), first.rev(), List.of(spareA), first.date().plusDays(1))))
+                .isInstanceOfSatisfying(ScheduleConflict.class, e -> assertThat(e.code).isEqualTo("LESSON_DATE_CHANGED"));
         assertThatThrownBy(() -> changes.createBatch(spareA, term, batch))
                 .isInstanceOf(com.rssolplan.edu.global.exception.ForbiddenException.class);
         assertThat(changes.candidates(owner, term, first.id(), first.rev(), ChangeService.Kind.SUBSTITUTE, null))
@@ -548,7 +638,11 @@ class MilestoneThreeMySqlTest {
                 insert into teacher_availability(school_user_id,day_of_week,period_number)
                 select ?,'MON',period_number from period_setting where id=?
                 """;
-        var body = new NewChange(ChangeService.Kind.SWAP, first.id(), first.rev(), second.id(), second.rev(), null);
+        var body = new NewChange(ChangeService.Kind.SWAP, first.id(), first.rev(), second.id(), second.rev(), null,
+                first.date(), second.date());
+        assertThatThrownBy(() -> changes.create(owner, term, new NewChange(ChangeService.Kind.SWAP,
+                first.id(), first.rev(), second.id(), second.rev(), null, first.date(), second.date().plusDays(1))))
+                .isInstanceOfSatisfying(ScheduleConflict.class, e -> assertThat(e.code).isEqualTo("LESSON_DATE_CHANGED"));
         for (var teacherAndPeriod : List.of(
                 List.of(owner, second.actual().periodId()), List.of(login, first.actual().periodId()))) {
             long teacher = teacherAndPeriod.get(0);

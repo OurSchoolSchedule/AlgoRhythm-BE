@@ -21,6 +21,23 @@ public class PublishedOperatingHours {
 
     public record Calendar(List<Slot> teachingSlots, List<GradeLastPeriod> gradeLastPeriods,
                            Map<String, Integer> classGrades, Map<Integer, Long> periodIds) {
+        public List<Integer> periodsOn(LocalDate date) {
+            var day = DayOfWeek.values()[date.getDayOfWeek().getValue() - 1];
+            return teachingSlots.stream().filter(slot -> slot.day() == day)
+                    .map(Slot::period).distinct().sorted().toList();
+        }
+
+        public Map<Integer,List<Integer>> gradePeriodsOn(LocalDate date, List<Integer> periods) {
+            if (gradeLastPeriods == null) return Map.of();
+            var day = DayOfWeek.values()[date.getDayOfWeek().getValue() - 1];
+            var gradePeriods = new TreeMap<Integer,List<Integer>>();
+            for (var grade : gradeLastPeriods) {
+                int end = grade.lastPeriods().getOrDefault(day, 0);
+                gradePeriods.put(grade.grade(), periods.stream().filter(p -> p <= end).toList());
+            }
+            return gradePeriods;
+        }
+
         public boolean allows(long classId, LocalDate date, long periodId) {
             var day = DayOfWeek.values()[date.getDayOfWeek().getValue() - 1];
             var slot = teachingSlots.stream().filter(s -> s.day() == day

@@ -5,13 +5,16 @@ import com.rssolplan.edu.domain.schedule.substitute.SubstituteResponseRepository
 import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteRequest;
 import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteResponse;
 import com.rssolplan.edu.domain.schedule.generation.TimetableRepository;
+import com.rssolplan.edu.domain.schedule.generation.TimetableSetRepository;
 import com.rssolplan.edu.domain.schedule.generation.entity.Timetable;
+import com.rssolplan.edu.domain.schedule.generation.entity.TimetableSet;
 import com.rssolplan.edu.domain.schedule.operations.LegacyApprovalGuard;
 import com.rssolplan.edu.domain.schedule.operations.ScheduleAccess;
 import com.rssolplan.edu.domain.school.SchoolUser;
 import com.rssolplan.edu.domain.school.SchoolUserRepository;
 import com.rssolplan.edu.domain.voicecommand.dto.IntentType;
 import com.rssolplan.edu.domain.voicecommand.dto.ParsedIntent;
+import com.rssolplan.edu.domain.voicecommand.dto.VoiceCommandRequest;
 import com.rssolplan.edu.global.exception.IntentParseException;
 import com.rssolplan.edu.global.exception.NotFoundException;
 import com.rssolplan.edu.global.exception.ForbiddenException;
@@ -33,31 +36,42 @@ public class CommandPreviewService {
     private final SchoolUserRepository schoolUserRepository;
     private final ScheduleAccess access;
     private final LegacyApprovalGuard guard;
+    private final TimetableSetRepository terms;
 
-    public void requireActiveMember(long userId) {
-        access.member(userId, false);
+    public long requireActiveSchool(long userId, Long expectedSchool) {
+        long school = access.member(userId, false).getSchool().getId();
+        if (expectedSchool != null && school != expectedSchool)
+            throw new NotFoundException("현재 선택한 학교를 확인하세요.");
+        return school;
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> buildPreview(Long userId, ParsedIntent intent) {
+    public Map<String, Object> buildPreview(Long userId, ParsedIntent intent, long expectedSchool, VoiceCommandRequest request) {
         IntentType type = intent.resolvedType();
         boolean requiresAdmin = type == IntentType.SUBSTITUTE_CREATE || type == IntentType.SUBSTITUTE_APPROVE;
         SchoolUser member = access.member(userId, requiresAdmin);
         Long schoolId = member.getSchool().getId();
+        if (schoolId != expectedSchool) throw new NotFoundException("현재 선택한 학교를 확인하세요.");
+        TimetableSet term = request.termId() == null ? null : terms.findByIdAndSchool_Id(request.termId(), schoolId)
+                .orElseThrow(() -> new NotFoundException("학기를 찾을 수 없습니다."));
         return switch (type) {
-            case SUBSTITUTE_CREATE    -> previewSubstituteCreate(schoolId, intent);
-            case SUBSTITUTE_RESPOND   -> previewSubstituteRespond(member, intent);
-            case SUBSTITUTE_APPROVE   -> previewSubstituteApprove(schoolId, intent);
+            case SUBSTITUTE_CREATE    -> previewSubstituteCreate(schoolId, term, intent);
+            case SUBSTITUTE_RESPOND   -> previewSubstituteRespond(member, term, intent);
+            case SUBSTITUTE_APPROVE   -> previewSubstituteApprove(schoolId, term, intent);
             case AVAILABILITY_ADD,
                  AVAILABILITY_REPLACE -> previewAvailability(intent);
+            case GUIDE -> Map.of("schoolId", schoolId, "userId", userId);
             case MY_WEEK, COVER_OPTIONS, SWAP_OPTIONS, CHANGE_STATUS -> {
                 if (member.getPosition() != SchoolUser.Position.TEACHER)
                     throw new ForbiddenException("재직 교사 계정에서 내 수업을 선택하세요.");
                 Map<String, Object> filters = new HashMap<>();
-                if (intent.substituteDate() != null) {
-                    try { filters.put("date", java.time.LocalDate.parse(intent.substituteDate()).toString()); }
-                    catch (java.time.DateTimeException invalid) { throw new IntentParseException("날짜를 다시 입력하세요."); }
-                }
+                if (term != null) filters.put("termId", term.getId());
+                if (type != IntentType.CHANGE_STATUS)
+                    putDate(filters, false, intent.substituteDate(), intent.weekStart(), request.requestDate(), term);
+                if (type == IntentType.SWAP_OPTIONS)
+                    putDate(filters, true, intent.targetDate(), intent.targetWeekStart(), request.targetDate(), term);
+                if (type == IntentType.MY_WEEK)
+                    filters.put("range", LessonDates.isWeekQuery(request.text(), intent) ? "WEEK" : "DAY");
                 if (intent.periodNumber() != null) {
                     if (intent.periodNumber() < 1 || intent.periodNumber() > 99)
                         throw new IntentParseException("교시 번호를 다시 입력하세요.");
@@ -72,7 +86,40 @@ public class CommandPreviewService {
         };
     }
 
-    private Map<String, Object> previewSubstituteCreate(Long schoolId, ParsedIntent intent) {
+    private static void putDate(Map<String, Object> filters, boolean target, String mentioned, String weekStart,
+                                String selection, TimetableSet term) {
+        LocalDate selected = LessonDates.parse(selection);
+        LocalDate date = mentioned == null ? selected : LessonDates.parse(mentioned);
+        LocalDate week = LessonDates.parse(weekStart);
+        String field = target ? "targetDate" : "date";
+        if (week != null) filters.put(target ? "targetWeekStart" : "weekStart", weekStart);
+        if (date == null) return;
+        filters.put(field, date.toString());
+        if (mentioned != null) filters.put(field + "FromText", true);
+        if (selected != null && (week == null ? !date.equals(selected) :
+                selected.isBefore(week) || selected.isAfter(week.plusDays(6))))
+            filters.put(field + "Conflict", true);
+        if (term != null) {
+            if (date.isBefore(term.getStartDate()) || date.isAfter(term.getEndDate()))
+                filters.put(field + "Status", "OUTSIDE_TERM");
+            else if (term.getExcludedDates().contains(date)) filters.put(field + "Status", "EXCLUDED_DATE");
+        }
+    }
+
+    private static void checkTerm(TimetableSet term, Timetable lesson) {
+        if (term != null && (lesson.getAcademicYear() != term.getAcademicYear() || lesson.getSemester() != term.getSemester()))
+            throw new NotFoundException("선택한 업무 학기의 수업이 아닙니다.");
+    }
+
+    private static void checkTerm(TimetableSet term, SubstituteRequest cover) {
+        if (cover.getDatedLessonId() == null) {
+            checkTerm(term, cover.getTimetable());
+        } else if (term != null && !term.getId().equals(cover.getDatedTermId())) {
+            throw new NotFoundException("선택한 업무 학기의 수업이 아닙니다.");
+        }
+    }
+
+    private Map<String, Object> previewSubstituteCreate(Long schoolId, TimetableSet term, ParsedIntent intent) {
         if (intent.timetableId() == null) {
             throw new IntentParseException("시간표 ID를 인식하지 못했습니다. 다시 말씀해 주세요.");
         }
@@ -80,6 +127,7 @@ public class CommandPreviewService {
         Timetable timetable = timetableRepository.findById(intent.timetableId())
                 .filter(t -> schoolId.equals(t.getSchool().getId()))
                 .orElseThrow(() -> new NotFoundException("해당 시간표를 찾을 수 없습니다."));
+        checkTerm(term, timetable);
 
         LocalDate date;
         try {
@@ -87,6 +135,10 @@ public class CommandPreviewService {
         } catch (java.time.DateTimeException invalid) {
             throw new IntentParseException("보결 날짜를 다시 입력하세요.");
         }
+        if (term != null && (date.isBefore(term.getStartDate()) || date.isAfter(term.getEndDate())))
+            throw new IntentParseException("요청 날짜가 선택한 학기 기간 밖입니다.");
+        if (term != null && term.getExcludedDates().contains(date))
+            throw new IntentParseException("시험·휴업 등으로 정규 수업에서 제외한 날짜입니다.");
         var eligible = guard.coverCandidates(new LegacyApprovalGuard.Target(timetable, date), null);
         var candidates = schoolUserRepository.findAllById(eligible);
 
@@ -102,7 +154,7 @@ public class CommandPreviewService {
         return preview;
     }
 
-    private Map<String, Object> previewSubstituteRespond(SchoolUser member, ParsedIntent intent) {
+    private Map<String, Object> previewSubstituteRespond(SchoolUser member, TimetableSet term, ParsedIntent intent) {
         if (intent.requestId() == null) {
             throw new IntentParseException("보결 요청 ID를 인식하지 못했습니다.");
         }
@@ -113,6 +165,7 @@ public class CommandPreviewService {
         if (!req.includesCandidate(member.getId()) && !req.includesCandidate(access.teachingId(member))) {
             throw new ForbiddenException("해당 보결 요청에 응답할 권한이 없습니다.");
         }
+        checkTerm(term, req);
         return Map.of(
                 "requestId", req.getId(),
                 "timetableInfo", coverLessonInfo(req),
@@ -122,7 +175,7 @@ public class CommandPreviewService {
         );
     }
 
-    private Map<String, Object> previewSubstituteApprove(Long schoolId, ParsedIntent intent) {
+    private Map<String, Object> previewSubstituteApprove(Long schoolId, TimetableSet term, ParsedIntent intent) {
         if (intent.responseId() == null) {
             throw new IntentParseException("교사 응답 ID를 인식하지 못했습니다.");
         }
@@ -131,6 +184,7 @@ public class CommandPreviewService {
                 .orElseThrow(() -> new NotFoundException("교사 응답 데이터를 찾을 수 없습니다."));
 
         SubstituteRequest req = resp.getSubstituteRequest();
+        checkTerm(term, req);
         return Map.of(
                 "responseId", resp.getId(),
                 "teacherName", resp.getCandidate().getSchoolDisplayName(),

@@ -2,6 +2,9 @@ package com.rssolplan.edu.domain.schedule.workshifts;
 
 import com.rssolplan.edu.domain.schedule.DayOfWeek;
 import com.rssolplan.edu.domain.schedule.workshifts.dto.TimetableDto;
+import com.rssolplan.edu.domain.schedule.workshifts.dto.PublishedWeek;
+import com.rssolplan.edu.domain.schedule.candidates.PublishedOperatingHours;
+import com.rssolplan.edu.global.exception.BadRequestException;
 import com.rssolplan.edu.global.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -12,16 +15,21 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.TreeMap;
 
 @Repository
 @RequiredArgsConstructor
 class PublishedWeekReader {
     private final NamedParameterJdbcTemplate db;
+    private final PublishedOperatingHours operatingHours;
 
     // Select the revision separately for each teaching day, as DatedLessons does for origin_date.
     // Choosing the version before filtering the teacher also preserves genuinely empty days.
-    private static final String WEEK = """
+    private static final String EFFECTIVE = """
         with week_dates as (
             select day_no, date_add(:monday, interval (day_no - 1) day) as lesson_date
             from (select 1 day_no union all select 2 union all select 3 union all select 4
@@ -37,7 +45,11 @@ class PublishedWeekReader {
             from timetable_set t cross join week_dates d
             where t.school_id=:school and (:year is null or t.academic_year=:year)
               and (:semester is null or t.semester=:semester) and (:term is null or t.id=:term)
-        ), occurrences as (
+        )
+        """;
+
+    private static final String WEEK = EFFECTIVE + """
+        , occurrences as (
             select w.id weekly_id,e.academic_year,e.semester,e.day_no,w.class_id,w.subject_id,
                    cast(json_unquote(json_extract(o.actual,'$.teacherId')) as unsigned) teacher_id,
                    cast(json_unquote(json_extract(o.actual,'$.periodId')) as unsigned) period_id
@@ -64,7 +76,7 @@ class PublishedWeekReader {
                 on l.day_of_week=elt(d.day_no,'MON','TUE','WED','THU','FRI','SAT','SUN')
             left join effective e on e.academic_year=l.academic_year
                 and e.semester=l.semester and e.day_no=d.day_no
-            where l.school_id=:school and (:year is null or l.academic_year=:year)
+            where :includeLegacy and l.school_id=:school and (:year is null or l.academic_year=:year)
               and (:semester is null or l.semester=:semester) and (:term is null or e.term_id=:term)
               and (:teacher is null or l.teacher_id=:teacher) and e.version_id is null
               and (e.term_id is null or (e.in_term and e.teaching_day))
@@ -79,22 +91,71 @@ class PublishedWeekReader {
         left join school_teacher_roster claimed on claimed.id=l.roster_id and claimed.school_id=:school
              and exists(select 1 from school_user a where a.id=claimed.school_user_id and a.school_id=:school
                         and a.position='TEACHER' and a.employment_status='HIRED')
+        where (:classId is null or s.class_id=:classId)
         order by s.day_no, p.period_number, c.grade, c.class_number, s.teacher_id
         """;
 
     List<TimetableDto> read(long school, Long teacher, Integer year, Integer semester,
                             Long termId, LocalDate weekOf) {
         LocalDate anchor = weekOf == null ? LocalDate.now(ZoneId.of("Asia/Seoul")) : weekOf;
-        var params = new MapSqlParameterSource()
-                .addValue("school", school).addValue("teacher", teacher)
-                .addValue("term", termId).addValue("year", year).addValue("semester", semester)
-                .addValue("monday", anchor.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY)));
+        var params = parameters(school, teacher, year, semester, termId, anchor)
+                .addValue("includeLegacy", true).addValue("classId", null);
         if (termId != null && db.queryForList("""
                 select id from timetable_set where id=:term and school_id=:school
                   and (:year is null or academic_year=:year) and (:semester is null or semester=:semester)
                 """, params, Long.class).isEmpty()) {
             throw new NotFoundException("학기를 찾을 수 없습니다.");
         }
+        return rows(school, params);
+    }
+
+    PublishedWeek published(long school, long term, LocalDate date, Long teacher, Long classId) {
+        var params = parameters(school, teacher, null, null, term, date)
+                .addValue("includeLegacy", false).addValue("classId", classId);
+        record VersionDay(LocalDate date, boolean inTerm, boolean excluded, Long version) {}
+        var dates = db.query(EFFECTIVE + """
+                select lesson_date,in_term,teaching_day,version_id from effective order by day_no
+                """, params, (rs, i) -> new VersionDay(rs.getObject("lesson_date", LocalDate.class),
+                        rs.getBoolean("in_term"), !rs.getBoolean("teaching_day"), rs.getObject("version_id", Long.class)));
+        var calendars = new HashMap<Long, Optional<PublishedOperatingHours.Calendar>>();
+        var days = dates.stream().map(day -> {
+            boolean published = day.inTerm() && day.version() != null;
+            var calendar = !published ? Optional.<PublishedOperatingHours.Calendar>empty()
+                    : calendars.computeIfAbsent(day.version(), operatingHours::forVersion);
+            List<Integer> periods = calendar.map(value -> value.periodsOn(day.date())).orElse(null);
+            var grades = calendar.map(value -> value.gradePeriodsOn(day.date(), periods)).orElse(Map.of());
+            var lastByGrade = new TreeMap<Integer,Integer>();
+            grades.forEach((grade, allowed) -> lastByGrade.put(grade, lastPeriod(allowed)));
+            boolean closed = !day.inTerm() || day.excluded();
+            return new PublishedWeek.Day(day.date(), day.inTerm(), day.excluded(), published,
+                    lastByGrade, periods == null ? null : lastPeriod(periods),
+                    closed ? List.of() : periods, closed ? Map.of() : grades);
+        }).toList();
+        if (days.isEmpty()) throw new NotFoundException("현재 학교의 학기를 찾을 수 없습니다.");
+        if (!days.get(date.getDayOfWeek().getValue()-1).inTerm())
+            throw new BadRequestException("조회 날짜가 선택한 학기 기간 밖입니다.");
+        if (classId != null && db.queryForList("""
+                select c.id from school_class c join timetable_set t
+                  on t.school_id=c.school_id and t.academic_year=c.academic_year
+                where t.id=:term and c.school_id=:school and c.id=:classId
+                """, params, Long.class).isEmpty())
+            throw new NotFoundException("현재 학교·학기의 학급을 찾을 수 없습니다.");
+        return new PublishedWeek(term, days.get(0).date(), teacher, classId, days, rows(school, params));
+    }
+
+    private static int lastPeriod(List<Integer> periods) {
+        return periods.isEmpty() ? 0 : periods.get(periods.size() - 1);
+    }
+
+    private static MapSqlParameterSource parameters(long school, Long teacher, Integer year,
+                                                      Integer semester, Long term, LocalDate date) {
+        return new MapSqlParameterSource()
+                .addValue("school", school).addValue("teacher", teacher)
+                .addValue("term", term).addValue("year", year).addValue("semester", semester)
+                .addValue("monday", date.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY)));
+    }
+
+    private List<TimetableDto> rows(long school, MapSqlParameterSource params) {
         return db.query(WEEK, params, (r, i) -> new TimetableDto(
                 r.getObject("legacy_id", Long.class), r.getObject("weekly_id", Long.class), school,
                 r.getInt("academic_year"), r.getInt("semester"), r.getLong("class_id"), r.getInt("grade"),
