@@ -381,6 +381,30 @@ class TeacherRosterMySqlTest {
     }
 
     @Test
+    void rejectingOnlyTheReviewedRequestAllowsReapplicationWithoutGrantingAccess() throws Exception {
+        var account = verify(email, null);
+        String teacher = localSessionFor(account);
+        long user = account.required("userId").longValue();
+        http(post(ONBOARD), teacher, onboarding(a), 202);
+        long id = http(get(base(a) + "/me"), teacher, null, 200).required("rosterId").longValue();
+        String path = base(a) + "/" + id;
+        String timestamp = http(get(path + "/match-options"), admin(a), null, 200).required("requestedAt").asText();
+        var request = Map.of("requestedAt", timestamp);
+        http(post(path + "/reject"), teacher, request, 403);
+        http(post(path + "/reject"), admin(b), request, 403);
+        http(post(path + "/reject"), admin(a), request, 204);
+        http(post(path + "/reject"), admin(a), request, 409);
+        assertThat(http(get(ADD_SCHOOL), teacher, null, 200).size()).isZero();
+        assertThat(members(user, a)).isZero();
+
+        http(post(ONBOARD), teacher, onboarding(a), 202);
+        http(post(path + "/reject"), admin(a), request, 409);
+        http(post(path + "/approve"), admin(a), null, 200);
+        http(post(path + "/reject"), admin(a), request, 409);
+        assertThat(members(user, a)).isOne();
+    }
+
+    @Test
     void pendingRequestsAndApprovalRemainSingleAndSchoolScopedUnderConcurrentReplay() throws Exception {
         var session = verify(email, null);
         String token = localSessionFor(session);
