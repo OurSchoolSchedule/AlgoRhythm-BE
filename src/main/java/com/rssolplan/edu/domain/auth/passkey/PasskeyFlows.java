@@ -17,6 +17,7 @@ import java.util.Base64;
 class PasskeyFlows {
     enum Action {
         FIRST,
+        EMAIL_REGISTER,
         RECOVER,
         LOGIN,
         VERIFY,

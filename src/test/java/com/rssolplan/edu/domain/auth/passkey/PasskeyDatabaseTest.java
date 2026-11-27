@@ -35,6 +35,7 @@ class PasskeyDatabaseTest {
     @Autowired PasskeyService passkeys;
     @Autowired PasskeyStore store;
     @Autowired PasskeyRealm realm;
+    @Autowired PasskeyFlows flows;
     @Autowired EmailService email;
     @Autowired JdbcTemplate db;
     @Autowired StringRedisTemplate redis;
@@ -109,6 +110,7 @@ class PasskeyDatabaseTest {
 
     @Test
     void onlyOneConcurrentStartCanConsumeAnEmailGrant() throws Exception {
+        enrollFixture();
         var grant = passkeys.afterVerifiedEmail(user.getId()).flowToken();
         var start = new CountDownLatch(1);
         var pool = Executors.newFixedThreadPool(2);
@@ -131,6 +133,62 @@ class PasskeyDatabaseTest {
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    @Test
+    void existingAccountCanEnrollFromEmailWithoutRecoveryCodeOrChangingIdentity() {
+        enrollFixture();
+        var handle = store.getUserHandleForUsername(user.getProviderId()).orElseThrow();
+        var emailStep = email.issueTokensForVerifiedEmail(user.getProviderId(), null, "UNKNOWN", "다른 이름");
+        assertThat(emailStep.getNextStep()).isEqualTo("AUTHENTICATE");
+        assertThat(emailStep.getUserId()).isEqualTo(user.getId());
+        assertThat(emailStep.getSchoolMembership()).isNull();
+        var options = passkeys.initialRegistration(emailStep.getFlowToken()).publicKey();
+        assertThat(options.path("user").path("id").asText()).isEqualTo(handle.getBase64Url());
+        assertThat(options.path("user").path("name").asText()).isEqualTo(user.getProviderId());
+        assertThat(options.path("excludeCredentials").get(0).path("id").asText())
+                .isEqualTo(id.getBase64Url());
+        assertThat(passkeys.devices(user.getId())).extracting(PasskeyStore.Device::id)
+                .containsExactly(id.getBase64Url());
+        assertThat(users.findById(user.getId()).orElseThrow().getUsername()).isEqualTo("기존 교사");
+        assertThatThrownBy(() -> passkeys.initialRegistration(emailStep.getFlowToken()))
+                .isInstanceOf(PasskeyProblem.class);
+    }
+
+    @Test
+    void expiredEmailGrantCannotEnrollAnotherKey() {
+        enrollFixture();
+        var grant = passkeys.afterVerifiedEmail(user.getId()).flowToken();
+        String key = "passkey:" + realm.id() + ":email:" + grant;
+        assertThat(redis.getExpire(key)).isBetween(295L, 300L);
+        redis.expire(key, Duration.ofMillis(5));
+        await().atMost(Duration.ofSeconds(2)).until(() -> !Boolean.TRUE.equals(redis.hasKey(key)));
+        assertThatThrownBy(() -> passkeys.initialRegistration(grant))
+                .isInstanceOf(PasskeyProblem.class);
+        assertThat(passkeys.devices(user.getId())).hasSize(1);
+    }
+
+    @Test
+    void legacyRecoveryEmailGrantBecomesAdditiveEnrollment() {
+        enrollFixture();
+        var account = tx.execute(s -> store.lock(user.getId()));
+        String grant = flows.put("email", new PasskeyFlows.State(
+                PasskeyFlows.Action.RECOVER, user.getId(), account.revision(), null, null));
+        var options = passkeys.initialRegistration(grant);
+        var ceremony = flows.take("register", options.ceremonyId());
+        assertThat(ceremony.action()).isEqualTo(PasskeyFlows.Action.EMAIL_REGISTER);
+        assertThat(ceremony.user()).isEqualTo(user.getId());
+        assertThat(ceremony.target()).isNull();
+        assertThat(passkeys.devices(user.getId())).hasSize(1);
+    }
+
+    @Test
+    void loginChallengeCannotBeUsedAsAnEmailEnrollmentGrant() {
+        enrollFixture();
+        var login = passkeys.login();
+        assertThatThrownBy(() -> passkeys.initialRegistration(login.ceremonyId()))
+                .isInstanceOf(PasskeyProblem.class);
+        assertThat(passkeys.devices(user.getId())).hasSize(1);
     }
 
     @Test

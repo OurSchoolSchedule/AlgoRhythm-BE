@@ -132,7 +132,8 @@ public class EmailVerificationController {
             return ResponseEntity.badRequest()
                     .body(EmailVerificationAuthResponse.builder()
                             .success(false)
-                            .message("인증 코드가 일치하지 않거나 만료되었습니다.")
+                            .message("인증 코드가 일치하지 않거나 만료되었습니다. "
+                                    + "여러 번 잘못 입력했다면 잠시 기다린 뒤 새 인증 코드를 받아 주세요.")
                             .build()
                     );
         }

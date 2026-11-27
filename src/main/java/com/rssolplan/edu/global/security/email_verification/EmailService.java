@@ -43,10 +43,21 @@ public class EmailService {
     private final DemoRound round;
 
     private static final String AUTH_PREFIX = "EMAIL_AUTH:";
+    private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final SecureRandom CODE_RANDOM = new SecureRandom();
     private static final RedisScript<Long> DELETE_MATCHING_CODE = new DefaultRedisScript<>(
             "if redis.call('get', KEYS[1]) == ARGV[1] then "
                     + "return redis.call('del', KEYS[1]) else return 0 end", Long.class);
+    private static final RedisScript<Long> VERIFY_LIMITED_CODE = new DefaultRedisScript<>(
+            "local failures = tonumber(redis.call('get', KEYS[2]) or '0'); "
+                    + "if failures >= tonumber(ARGV[2]) then return 0 end; "
+                    + "local code = redis.call('get', KEYS[1]); "
+                    + "if not code then return 0 end; "
+                    + "if code == ARGV[1] then redis.call('del', KEYS[1], KEYS[2]); return 1 end; "
+                    + "failures = redis.call('incr', KEYS[2]); "
+                    + "if failures == 1 then redis.call('pexpire', KEYS[2], ARGV[3]) end; "
+                    + "if failures >= tonumber(ARGV[2]) then redis.call('del', KEYS[1]) end; "
+                    + "return 0", Long.class);
 
     public void sendVerificationEmail(String email) {
         email = TeacherRosterService.normalizeEmail(email);
@@ -105,7 +116,12 @@ public class EmailService {
     public boolean verifyCode(String email, String code) {
         round.lockForVerification();
         email = TeacherRosterService.normalizeEmail(email);
-        Long consumed = redisTemplate.execute(DELETE_MATCHING_CODE, List.of(round.prefix() + AUTH_PREFIX + email), code);
+        String key = round.prefix() + AUTH_PREFIX + email;
+        // The failed-attempt budget survives resends so requesting another code cannot reset it.
+        // Redis checks, counts and consumes atomically, including concurrent verification requests.
+        Long consumed = redisTemplate.execute(VERIFY_LIMITED_CODE, List.of(key, key + ":attempts"),
+                code, String.valueOf(MAX_FAILED_ATTEMPTS),
+                String.valueOf(Duration.ofMinutes(verificationProperties.getExpiration()).toMillis()));
         if (Long.valueOf(1L).equals(consumed)) {
             // DB에 인증 성공 기록 저장
             EmailVerificationHistory successHistory = EmailVerificationHistory.builder()
@@ -150,7 +166,7 @@ public class EmailService {
     @Transactional
     public EmailVerificationToken issueTokensForVerifiedEmail(String email, Long authenticatedUserId,
                                                                String schoolCode, String displayName) {
-        // A repeat email proof for an enrolled account may start recovery; it cannot change school membership.
+        // A repeat email proof may enroll a new device; it cannot change school membership.
         Long existing = passkeyStore.verifiedUserId(email);
         if (authenticatedUserId == null && existing != null && passkeys.requiresPasskey(existing)) {
             var step = passkeys.afterVerifiedEmail(existing);

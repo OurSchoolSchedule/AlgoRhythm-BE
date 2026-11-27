@@ -73,20 +73,25 @@ public class PasskeyService {
 
     public EmailStep afterVerifiedEmail(long user) {
         var account = store.lock(user);
-        boolean registered = !store.devices(user).isEmpty();
-        var state = new State(registered ? RECOVER : FIRST, user, account.revision(), null, null);
-        return new EmailStep(registered ? "AUTHENTICATE" : "REGISTER", flows.put("email", state));
+        var state = new State(EMAIL_REGISTER, user, account.revision(), null, null);
+        // Preserve the onboarding signal; both branches authorize enrollment on a new device.
+        String nextStep = store.devices(user).isEmpty() ? "REGISTER" : "AUTHENTICATE";
+        return new EmailStep(nextStep, flows.put("email", state));
     }
 
     public Options initialRegistration(String token) {
         State state = flows.take("email", token);
-        if (state.action() != FIRST) throw PasskeyProblem.required();
-        return registration(state);
+        if (state.action() != EMAIL_REGISTER && state.action() != FIRST && state.action() != RECOVER)
+            throw PasskeyProblem.required();
+        // FIRST/RECOVER email grants issued before deployment carry the same verified-email
+        // proof. Convert them to additive enrollment, never the legacy destructive recovery flow.
+        return registration(new State(EMAIL_REGISTER, state.user(), state.revision(), null, null));
     }
 
     public Options recover(String emailToken, String recoveryCode) {
         State email = flows.take("email", emailToken);
-        if (email.action() != RECOVER) throw PasskeyProblem.invalid();
+        if (email.action() != RECOVER && email.action() != EMAIL_REGISTER)
+            throw PasskeyProblem.invalid();
         byte[] hash = codeHash(recoveryCode);
         if (!store.validRecovery(email.user(), hash)) throw PasskeyProblem.invalid();
         // Recheck the hash, expiry and account revision at commit, before replacing any
