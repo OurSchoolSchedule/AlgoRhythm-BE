@@ -1,5 +1,6 @@
 package com.rssolplan.edu.domain.schedule.operations;
 
+import com.rssolplan.edu.domain.school.SchoolUser;
 import com.rssolplan.edu.global.exception.*;
 
 import jakarta.validation.constraints.*;
@@ -79,7 +80,7 @@ public class ChangeService {
     public List<Change> list(long user, long term) {
         access.schoolOfTerm(user, term, false);
         var me = access.member(user, false);
-        if (me.getPosition() == com.rssolplan.edu.domain.school.SchoolUser.Position.ADMIN)
+        if (me.getPosition() == SchoolUser.Position.ADMIN)
             return db.query(
                     "select * from lesson_change where term_id=? order by id desc", MAPPER, term);
         return db.query(
@@ -97,6 +98,8 @@ public class ChangeService {
         long school = access.schoolOfTerm(user, term, cover);
         access.lockSchool(school);
         var me = access.member(user, cover);
+        if (!cover && me.getPosition() != SchoolUser.Position.TEACHER)
+            throw new ForbiddenException("재직 교사만 수업 교환을 신청할 수 있습니다.");
         var a = lessons.get(term, q.firstId);
         DatedLessons.check(a, q.firstRev);
         long responder;
@@ -116,12 +119,15 @@ public class ChangeService {
                 throw new ForbiddenException("내 수업만 교환 신청할 수 있습니다.");
             var b = lessons.get(term, q.secondId);
             DatedLessons.check(b, q.secondRev);
+            if (a.versionId() != b.versionId()
+                    || a.date().equals(b.date()) && a.actual().periodId() == b.actual().periodId())
+                throw new BadRequestException("같은 시간표 버전의 서로 다른 교시를 선택하세요.");
             responder = b.actual().teacherId();
             if (responder == me.getId()) throw new BadRequestException("다른 담당자의 수업을 선택하세요.");
         }
         if (db.queryForList(
                         "select id from school_user where school_id=? and id=? and"
-                            + " employment_status='HIRED'",
+                            + " employment_status='HIRED' and position='TEACHER'",
                         Long.class,
                         school,
                         responder)
@@ -148,9 +154,14 @@ public class ChangeService {
         long school = access.schoolOfTerm(user, term, false);
         access.lockSchool(school);
         var c = get(term, id);
-        if (c.responder != access.member(user, false).getId())
+        var me = access.member(user, false);
+        if (me.getPosition() != SchoolUser.Position.TEACHER || c.responder != me.getId())
             throw new ForbiddenException("지정된 교사만 응답할 수 있습니다.");
         transition(c, "PENDING", expected, accept ? "ACCEPTED" : "REJECTED");
+        if (accept) {
+            DatedLessons.check(lessons.get(term, c.firstId), c.firstRev);
+            if (c.secondId != null) DatedLessons.check(lessons.get(term, c.secondId), c.secondRev);
+        }
         return get(term, id);
     }
 

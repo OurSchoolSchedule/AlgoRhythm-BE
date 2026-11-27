@@ -1,5 +1,6 @@
 package com.rssolplan.edu.domain.schedule.operations;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.rssolplan.edu.global.exception.*;
 
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,13 @@ public class DatedLessons {
     private final ScheduleAccess access;
     private final ScheduleJson json;
 
-    public record Assignment(long teacherId, long periodId) {}
+    public record Assignment(
+            long teacherId, long periodId,
+            @JsonInclude(JsonInclude.Include.NON_DEFAULT) boolean cancelled) {
+        public Assignment(long teacherId, long periodId) {
+            this(teacherId, periodId, false);
+        }
+    }
 
     public record Lesson(
             long id,
@@ -120,7 +127,7 @@ where v.id=(select av.id from schedule_version av where av.term_id=v.term_id and
                             date ->
                                     new ArrayList<>(
                                             day(term, date).stream()
-                                                    .filter(l -> !changed.contains(l.id))
+                                                    .filter(l -> !changed.contains(l.id) && !l.actual.cancelled)
                                                     .toList()));
             validateSlot(school, next, others);
             others.add(next);
@@ -192,6 +199,8 @@ select not exists(select 1 from school_user where id=? and school_id=? and emplo
     }
 
     public static void check(Lesson actual, long expected) {
+        if (actual.actual.cancelled)
+            throw new ScheduleConflict("LESSON_CANCELLED", actual.rev, "휴강이 확정된 날짜 수업입니다.");
         if (actual.rev != expected) throw stale(actual.rev);
     }
 
