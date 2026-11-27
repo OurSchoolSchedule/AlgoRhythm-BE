@@ -124,11 +124,11 @@ class EmailServiceTest {
 
     @Test
     void verifyingACorrectCodeStillConsumesItAndRecordsVerification() {
-        when(redis.execute(any(RedisScript.class), eq(List.of("EMAIL_AUTH:teacher@ewha.ac.kr")), eq("123456"))).thenReturn(1L);
+        when(redis.execute(any(RedisScript.class), eq(List.of("EMAIL_AUTH:teacher@ewha.ac.kr", "EMAIL_AUTH:teacher@ewha.ac.kr:attempts")), eq("123456"), eq("5"), eq("420000"))).thenReturn(1L);
 
         assertTrue(service.verifyCode("teacher@ewha.ac.kr", "123456"));
 
-        verify(redis).execute(any(RedisScript.class), eq(List.of("EMAIL_AUTH:teacher@ewha.ac.kr")), eq("123456"));
+        verify(redis).execute(any(RedisScript.class), eq(List.of("EMAIL_AUTH:teacher@ewha.ac.kr", "EMAIL_AUTH:teacher@ewha.ac.kr:attempts")), eq("123456"), eq("5"), eq("420000"));
         ArgumentCaptor<EmailVerificationHistory> history = ArgumentCaptor.forClass(EmailVerificationHistory.class);
         verify(historyRepository).save(history.capture());
         assertEquals(EmailVerificationHistory.VerificationStatus.VERIFIED, history.getValue().getStatus());

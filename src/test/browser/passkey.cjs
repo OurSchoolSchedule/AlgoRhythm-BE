@@ -106,7 +106,11 @@ async function main() {
     const repeat = await otp(email,'A2-UNKNOWN');
     assert.equal(repeat.nextStep,'AUTHENTICATE');
     assert.ok(!repeat.schoolMembership && !repeat.accessToken);
-    await pk('/registration/options',{body:await otp(),status:403});
+    const abandoned = await pk('/registration/options',{body:repeat});
+    assert.deepEqual(abandoned.publicKey.user,pending.publicKey.user);
+    assert.ok(abandoned.publicKey.excludeCredentials.some(key => key.id === key1));
+    await regFinish({ceremonyId:abandoned.ceremonyId,credential:{}},undefined,400);
+    await usable(token);
     await pk('/credentials',{method:'GET',status:403});
     assert.equal((await pk('/credentials',{method:'GET',token})).length,1);
     const del = await approval(token,'DELETE',key1);
@@ -167,13 +171,59 @@ async function main() {
     const recovery = async (code,status=200) => pk('/recovery/options',{body:{flowToken:(await otp()).flowToken,recoveryCode:code},status});
     await recovery(session.recoveryCode,400);
     await removeDevice(secondDevice);
-    await device();
+    const legacyRecoveryDevice = await device();
     const replacement = await regFinish({...await response(await recovery(recoveryCode),'create'), includeRecoveryCode:false});
     assert.equal(replacement.recoveryCode,null);
     await usable(replacement.accessToken);
     await usable(second.accessToken,403);
     await recovery(recoveryCode,400);
     assert.equal((await pk('/credentials',{method:'GET',token:replacement.accessToken})).length,1);
+
+    // A browser with no saved key can recover access from email alone. No old authenticator,
+    // recovery code or signed-in session is available to the enrollment endpoints.
+    const previousCredentials = (await cdp.send('WebAuthn.getCredentials',{
+      authenticatorId:legacyRecoveryDevice
+    })).credentials;
+    await removeDevice(legacyRecoveryDevice);
+    const emailRecoveryDevice = await device();
+    const emailProof = await otp();
+    assert.equal(emailProof.nextStep,'AUTHENTICATE');
+    assert.equal(emailProof.userId,first.userId);
+    assert.ok(!emailProof.accessToken && !emailProof.refreshToken);
+    await usable(emailProof.flowToken,403);
+    const emailOptions = await pk('/registration/options',{body:emailProof});
+    assert.deepEqual(emailOptions.publicKey.user,pending.publicKey.user);
+    assert.equal(emailOptions.publicKey.excludeCredentials.length,1);
+    await pk('/registration/options',{body:emailProof,status:409});
+    const staleOptions = await pk('/registration/options',{body:await otp()});
+    const staleResponse = await response(staleOptions,'create');
+    const recoveredResponse = await response(emailOptions,'create');
+    const recovered = await regFinish({...recoveredResponse,includeRecoveryCode:false});
+    assert.equal(recovered.userId,first.userId);
+    assert.equal(recovered.recoveryCode,null);
+    await regFinish({...recoveredResponse,includeRecoveryCode:false},undefined,409);
+    await regFinish({...staleResponse,includeRecoveryCode:false},undefined,409);
+    const staleId = Buffer.from(staleResponse.credential.id,'base64url').toString('base64');
+    const storedCredentials = (await cdp.send('WebAuthn.getCredentials',{
+      authenticatorId:emailRecoveryDevice
+    })).credentials;
+    if (storedCredentials.some(credential => credential.credentialId === staleId)) {
+      await cdp.send('WebAuthn.removeCredential',{
+        authenticatorId:emailRecoveryDevice,credentialId:staleId
+      });
+    }
+    await usable(recovered.accessToken);
+    assert.equal((await pk('/credentials',{method:'GET',token:recovered.accessToken})).length,2);
+    assert.equal((await request(rosterPath,{method:'GET',token:recovered.accessToken})).displayName,'명부 교사');
+    await usable((await login()).accessToken);
+    // Email enrollment does not silently revoke the old key or its sessions.
+    await usable(replacement.accessToken);
+    await removeDevice(emailRecoveryDevice);
+    const retainedDevice = await device();
+    for (const credential of previousCredentials) {
+      await cdp.send('WebAuthn.addCredential',{authenticatorId:retainedDevice,credential});
+    }
+    assert.equal((await login()).userId,first.userId);
 
     const newEmail = 'a2-' + randomUUID() + '@ewha.ac.kr';
     const newOptions = await pk('/registration/options', {body:await otp(newEmail)});
