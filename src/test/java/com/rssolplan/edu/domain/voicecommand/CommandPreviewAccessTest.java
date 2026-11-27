@@ -13,6 +13,7 @@ import com.rssolplan.edu.domain.school.*;
 import com.rssolplan.edu.domain.school.setting.PeriodSetting;
 import com.rssolplan.edu.domain.user.User;
 import com.rssolplan.edu.domain.voicecommand.dto.ParsedIntent;
+import com.rssolplan.edu.domain.voicecommand.dto.VoiceCommandRequest;
 import com.rssolplan.edu.global.exception.ForbiddenException;
 import com.rssolplan.edu.global.exception.NotFoundException;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,8 @@ class CommandPreviewAccessTest {
     private final TimetableRepository timetables = mock(TimetableRepository.class);
     private final SubstituteResponseRepository responses = mock(SubstituteResponseRepository.class);
     private final CommandPreviewService previews = new CommandPreviewService(timetables, requests, responses,
-            mock(SchoolUserRepository.class), access, mock(LegacyApprovalGuard.class));
+            mock(SchoolUserRepository.class), access, mock(LegacyApprovalGuard.class), null);
+    private final VoiceCommandRequest requestContext = new VoiceCommandRequest("test", "ko");
     private final School school = School.builder().id(1L).build();
     private final School foreignSchool = School.builder().id(2L).build();
     private final SchoolUser member = SchoolUser.builder().id(80L).school(school).build();
@@ -49,12 +51,12 @@ class CommandPreviewAccessTest {
         when(requests.findById(50L)).thenReturn(Optional.of(request));
         var intent = new ParsedIntent("SUBSTITUTE_RESPOND", "HIGH", null, null, null, 50L, "ACCEPT", null, null, null, null);
 
-        assertThat(previews.buildPreview(10L, intent)).containsEntry("requestId", 50L);
+        assertThat(previews.buildPreview(10L, intent, 1L, requestContext)).containsEntry("requestId", 50L);
         request.setReceiverUserIds("8, 180");
-        assertThatThrownBy(() -> previews.buildPreview(10L, intent)).isInstanceOf(ForbiddenException.class);
+        assertThatThrownBy(() -> previews.buildPreview(10L, intent, 1L, requestContext)).isInstanceOf(ForbiddenException.class);
         request.setReceiverUserIds("80");
         request.setSchool(foreignSchool);
-        assertThatThrownBy(() -> previews.buildPreview(10L, intent)).isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> previews.buildPreview(10L, intent, 1L, requestContext)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -63,13 +65,13 @@ class CommandPreviewAccessTest {
         when(access.member(11L, true)).thenReturn(member);
         var create = new ParsedIntent("SUBSTITUTE_CREATE", "HIGH", 30L, "2026-11-25", null, null, null, null, null, null, null);
         when(timetables.findById(30L)).thenReturn(Optional.of(Timetable.builder().school(foreignSchool).build()));
-        assertThatThrownBy(() -> previews.buildPreview(10L, create)).isInstanceOf(ForbiddenException.class);
-        assertThatThrownBy(() -> previews.buildPreview(11L, create)).isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> previews.buildPreview(10L, create, 1L, requestContext)).isInstanceOf(ForbiddenException.class);
+        assertThatThrownBy(() -> previews.buildPreview(11L, create, 1L, requestContext)).isInstanceOf(NotFoundException.class);
 
         var approve = new ParsedIntent("SUBSTITUTE_APPROVE", "HIGH", null, null, null, null, "APPROVE", 60L, null, null, null);
         var request = SubstituteRequest.builder().school(foreignSchool).build();
         when(responses.findById(60L)).thenReturn(Optional.of(SubstituteResponse.builder().substituteRequest(request).build()));
-        assertThatThrownBy(() -> previews.buildPreview(10L, approve)).isInstanceOf(ForbiddenException.class);
-        assertThatThrownBy(() -> previews.buildPreview(11L, approve)).isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> previews.buildPreview(10L, approve, 1L, requestContext)).isInstanceOf(ForbiddenException.class);
+        assertThatThrownBy(() -> previews.buildPreview(11L, approve, 1L, requestContext)).isInstanceOf(NotFoundException.class);
     }
 }

@@ -7,6 +7,8 @@ import com.rssolplan.edu.domain.voicecommand.dto.VoiceCommandRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,6 +18,11 @@ import org.springframework.web.bind.annotation.*;
 public class VoiceCommandController {
 
     private final VoiceCommandService voiceCommandService;
+
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentNotValidException.class})
+    public ResponseEntity<ApiResponse<Object>> invalidRequest() {
+        return ResponseEntity.badRequest().body(ApiResponse.error("BAD_REQUEST", "요청 내용과 학교·학기 및 날짜 형식을 확인하세요."));
+    }
 
     /**
      * 1단계: 자연어 입력 → AI 파싱 → 미리보기 + draftToken 발급

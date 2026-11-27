@@ -1,6 +1,8 @@
 package com.rssolplan.edu.domain.schedule.operations;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.rssolplan.edu.domain.schedule.DayOfWeek;
 import com.rssolplan.edu.global.exception.*;
 
 import lombok.RequiredArgsConstructor;
@@ -116,9 +118,16 @@ and v.id=(select av.id from schedule_version av where av.term_id=v.term_id and a
     }
 
     record Unavailable(long teacher, long period) {}
-    private record SlotDay(List<Lesson> rows, Set<Unavailable> unavailable) {
+    private record GradeSlots(Map<Long,Integer> lastByClass, Map<Long,Integer> periodNumbers) {
+        boolean permits(long classId, long periodId) {
+            Integer last = lastByClass.get(classId);
+            return last == null || periodNumbers.getOrDefault(periodId, Integer.MAX_VALUE) <= last;
+        }
+    }
+
+    private record SlotDay(List<Lesson> rows, Set<Unavailable> unavailable, GradeSlots hours) {
         boolean fits(long period, long teacher, long classId, Set<Long> departing) {
-            return !unavailable.contains(new Unavailable(teacher, period)) && rows.stream().noneMatch(row ->
+            return hours.permits(classId, period) && !unavailable.contains(new Unavailable(teacher, period)) && rows.stream().noneMatch(row ->
                     !departing.contains(row.id) && !row.actual.cancelled && row.actual.periodId == period
                     && (row.actual.teacherId == teacher || row.classId == classId));
         }
@@ -141,7 +150,33 @@ and v.id=(select av.id from schedule_version av where av.term_id=v.term_id and a
     }
 
     private SlotDay slots(long school, long term, LocalDate date) {
-        return new SlotDay(day(term, date), unavailable(school, date));
+        return new SlotDay(day(term, date), unavailable(school, date), gradeSlots(term, date));
+    }
+
+    private GradeSlots gradeSlots(long term, LocalDate date) {
+        return db.query("""
+                select json_extract(j.snapshot,'$.request.gradeLastPeriods') as grade_ends,
+                       json_extract(j.snapshot,'$.classGrades') as class_grades,
+                       json_extract(j.snapshot,'$.bells') as bells
+                from publication_receipt p join generation_job j on j.id=p.job_id
+                where p.version_id=(select id from schedule_version where term_id=? and effective_from<=?
+                                     order by version_no desc limit 1)
+                  and json_type(json_extract(j.snapshot,'$.request.gradeLastPeriods'))='ARRAY'
+                  and json_type(json_extract(j.snapshot,'$.classGrades'))='OBJECT'
+                  and json_type(json_extract(j.snapshot,'$.bells'))='OBJECT'
+                """, (rs, i) -> {
+            var day = DayOfWeek.values()[date.getDayOfWeek().getValue()-1];
+            var ends = PublishedHours.forDay(json, day, rs.getString("grade_ends"), null).lastPeriodByGrade();
+            var lastByClass = new HashMap<Long,Integer>();
+            json.read(rs.getString("class_grades"), JsonNode.class).fields().forEachRemaining(room -> {
+                var last = ends.get(room.getValue().intValue());
+                if (last != null) lastByClass.put(Long.valueOf(room.getKey()), last);
+            });
+            var numbers = new HashMap<Long,Integer>();
+            json.read(rs.getString("bells"), JsonNode.class).fields().forEachRemaining(bell ->
+                    numbers.put(bell.getValue().get("id").longValue(), Integer.valueOf(bell.getKey())));
+            return new GradeSlots(lastByClass, numbers);
+        }, term, date).stream().findFirst().orElseGet(() -> new GradeSlots(Map.of(), Map.of()));
     }
 
     // Caller holds the school guard inside the same READ COMMITTED transaction as request state and
@@ -189,7 +224,7 @@ and v.id=(select av.id from schedule_version av where av.term_id=v.term_id and a
             if (!Boolean.TRUE.equals(hired)
                     || !destination.fits(next.actual.periodId, next.actual.teacherId, next.classId, changed))
                 throw new ScheduleConflict("SLOT_CONFLICT", edit.before.rev,
-                        "담당 교사·학급의 해당 교시에 수업 또는 불가 조건이 있습니다.");
+                        "담당 교사·학급의 수업, 불가 시간, 학년별 운영 교시를 확인하세요.");
         }
         edits.sort(Comparator.comparingLong(e -> e.before.id));
         for (var edit : edits) {

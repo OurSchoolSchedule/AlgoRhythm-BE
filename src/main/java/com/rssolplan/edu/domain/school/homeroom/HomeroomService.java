@@ -89,34 +89,51 @@ public class HomeroomService {
                 .stream().findFirst().orElseThrow(() -> new NotFoundException("현재 학교의 학기를 찾을 수 없습니다."));
     }
 
-    private List<RoomAssignment> listFor(long school, long term, int year) {
-        // Until an explicit term import exists, preserve the R2 term homeroom, then the annual class entry.
+    /** Caller has matched the requested term and school. Keep one authority per class and teacher. */
+    public List<RoomAssignment> listFor(long school, long term, int year) {
         return db.query("""
-                SELECT c.id,c.grade,c.class_number,
-                       CASE WHEN h.teacher_id IS NOT NULL THEN h.teacher_id
-                            WHEN r.id IS NOT NULL THEN COALESCE(l.teacher_school_user_id,r.school_user_id)
-                            ELSE c.homeroom_teacher_id END AS primary_id,
-                       CASE WHEN h.teacher_id IS NOT NULL THEN COALESCE(pr.display_name,pu.username)
-                            WHEN r.id IS NOT NULL THEN r.display_name ELSE COALESCE(ar.display_name,au.username) END AS primary_name,
-                       d.teacher_id,COALESCE(dr.display_name,du.username)
-                FROM school_class c
-                LEFT JOIN term_class_teacher_role h ON h.class_id=c.id AND h.term_id=? AND h.role_name='HOMEROOM'
-                LEFT JOIN term_class_teacher_role d ON d.class_id=c.id AND d.term_id=h.term_id AND d.role_name='DEPUTY'
-                LEFT JOIN roster_term t ON t.homeroom_class_id=c.id AND t.term_id=?
-                LEFT JOIN school_teacher_roster r ON r.id=t.roster_id AND r.school_id=c.school_id
-                LEFT JOIN roster_teaching_link l ON l.roster_id=r.id
-                LEFT JOIN school_user p ON p.id=h.teacher_id LEFT JOIN users pu ON pu.id=p.user_id
+                WITH explicit_roles AS (
+                    SELECT teacher_id,class_id,role_name FROM term_class_teacher_role WHERE term_id=?
+                ), roster_assignments AS (
+                    SELECT t.homeroom_class_id AS class_id,r.display_name,
+                           coalesce(l.teacher_school_user_id,r.school_user_id) AS teacher_id
+                    FROM roster_term t JOIN school_teacher_roster r ON r.id=t.roster_id
+                    LEFT JOIN roster_teaching_link l ON l.roster_id=r.id
+                    WHERE t.term_id=? AND r.school_id=?
+                ), annual_classes AS (
+                    SELECT c.id,c.grade,c.class_number,
+                           coalesce(l.teacher_school_user_id,c.homeroom_teacher_id) AS annual_teacher
+                    FROM school_class c LEFT JOIN school_teacher_roster r ON r.school_user_id=c.homeroom_teacher_id
+                    LEFT JOIN roster_teaching_link l ON l.roster_id=r.id
+                    WHERE c.school_id=? AND c.academic_year=?
+                ), assignments AS (
+                    SELECT c.id,c.grade,c.class_number,
+                           CASE WHEN h.teacher_id IS NOT NULL THEN h.teacher_id
+                                WHEN r.class_id IS NOT NULL THEN r.teacher_id
+                                WHEN NOT EXISTS(SELECT 1 FROM explicit_roles f WHERE f.teacher_id=c.annual_teacher)
+                                 AND NOT EXISTS(SELECT 1 FROM roster_assignments k WHERE k.teacher_id=c.annual_teacher)
+                                THEN c.annual_teacher END AS primary_id,
+                           CASE WHEN h.teacher_id IS NULL THEN r.display_name END AS roster_name,
+                           d.teacher_id AS deputy_id
+                    FROM annual_classes c
+                    LEFT JOIN explicit_roles h ON h.class_id=c.id AND h.role_name='HOMEROOM'
+                    LEFT JOIN explicit_roles d ON d.class_id=c.id AND d.role_name='DEPUTY'
+                    LEFT JOIN roster_assignments r ON r.class_id=c.id AND NOT EXISTS(
+                        SELECT 1 FROM explicit_roles f WHERE f.teacher_id=r.teacher_id)
+                )
+                SELECT a.id,a.grade,a.class_number,a.primary_id,coalesce(a.roster_name,pr.display_name,pu.username),
+                       a.deputy_id,coalesce(dr.display_name,du.username)
+                FROM assignments a
+                LEFT JOIN school_user p ON p.id=a.primary_id LEFT JOIN users pu ON pu.id=p.user_id
                 LEFT JOIN school_teacher_roster pr ON pr.school_user_id=p.id AND pr.base_name IS NOT NULL
-                LEFT JOIN school_user a ON a.id=c.homeroom_teacher_id LEFT JOIN users au ON au.id=a.user_id
-                LEFT JOIN school_teacher_roster ar ON ar.school_user_id=a.id AND ar.base_name IS NOT NULL
-                LEFT JOIN school_user v ON v.id=d.teacher_id LEFT JOIN users du ON du.id=v.user_id
-                LEFT JOIN school_teacher_roster dr ON dr.school_user_id=v.id AND dr.base_name IS NOT NULL
-                WHERE c.school_id=? AND c.academic_year=? ORDER BY c.grade,c.class_number
+                LEFT JOIN school_user d ON d.id=a.deputy_id LEFT JOIN users du ON du.id=d.user_id
+                LEFT JOIN school_teacher_roster dr ON dr.school_user_id=d.id AND dr.base_name IS NOT NULL
+                ORDER BY a.grade,a.class_number
                 """, (rs,i) -> {
             Long primaryId = rs.getObject(4, Long.class), deputyId = rs.getObject(6, Long.class);
             return new RoomAssignment(rs.getLong(1),year,rs.getInt(2),rs.getInt(3),
                     primaryId == null && rs.getString(5) == null ? null : new Teacher(primaryId,rs.getString(5)),
                     deputyId == null ? null : new Teacher(deputyId,rs.getString(7)));
-        }, term,term,school,year);
+        }, term,term,school,school,year);
     }
 }

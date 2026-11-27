@@ -137,7 +137,6 @@ public class RosterMatchingService {
     }
 
     public Map<Long, Long> directoryLinks(long school) {
-        if (school != SCHOOL42) return Map.of();
         Map<Long, Long> links = new LinkedHashMap<>();
         db.query("""
                 SELECT l.teacher_school_user_id,r.school_user_id
@@ -145,6 +144,7 @@ public class RosterMatchingService {
                 JOIN school_user a ON a.id=r.school_user_id AND a.school_id=r.school_id
                 JOIN school_user t ON t.id=l.teacher_school_user_id AND t.school_id=r.school_id
                 WHERE r.school_id=? AND a.position='TEACHER' AND a.employment_status='HIRED'
+                  AND t.position='TEACHER' AND t.employment_status='HIRED'
                 """, rs -> { links.put(rs.getLong(1),rs.getLong(2)); }, school);
         return links;
     }

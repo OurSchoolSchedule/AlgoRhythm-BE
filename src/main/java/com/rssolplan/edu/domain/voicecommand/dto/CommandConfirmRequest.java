@@ -2,4 +2,5 @@ package com.rssolplan.edu.domain.voicecommand.dto;
 
 import jakarta.validation.constraints.NotBlank;
 
-public record CommandConfirmRequest(@NotBlank String draftToken) {}
+public record CommandConfirmRequest(@NotBlank String draftToken, Long schoolId, Long termId,
+                                    String requestDate, String targetDate) {}

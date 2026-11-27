@@ -28,10 +28,20 @@ public class ChangeService {
             @NotNull @PositiveOrZero Long firstRev,
             @Positive Long secondId,
             @PositiveOrZero Long secondRev,
-            @Positive Long substituteTeacherId) {}
+            @Positive Long substituteTeacherId,
+            LocalDate firstDate,
+            LocalDate secondDate) {
+        public NewChange(Kind kind, long firstId, Long firstRev, Long secondId, Long secondRev, Long substituteTeacherId) {
+            this(kind, firstId, firstRev, secondId, secondRev, substituteTeacherId, null, null);
+        }
+    }
 
     public record CoverBatch(@Positive long firstId, @NotNull @PositiveOrZero Long firstRev,
-            @NotEmpty List<@NotNull @Positive Long> substituteTeacherIds) {}
+            @NotEmpty List<@NotNull @Positive Long> substituteTeacherIds, LocalDate firstDate) {
+        public CoverBatch(long firstId, Long firstRev, List<Long> substituteTeacherIds) {
+            this(firstId, firstRev, substituteTeacherIds, null);
+        }
+    }
 
     public record Change(
             long id,
@@ -129,6 +139,11 @@ public class ChangeService {
         DatedLessons.check(first, rev);
     }
 
+    private static void checkReviewedDate(DatedLessons.Lesson lesson, LocalDate reviewedDate) {
+        if (reviewedDate != null && !reviewedDate.equals(lesson.date()))
+            throw new ScheduleConflict("LESSON_DATE_CHANGED", lesson.rev(), "확인한 날짜와 실제 수업 날짜가 다릅니다. 수업을 다시 선택하세요.");
+    }
+
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public List<Change> createBatch(long user, long term, CoverBatch q) {
         long school = access.schoolOfTerm(user, term, false);
@@ -136,6 +151,7 @@ public class ChangeService {
         var first = lessons.get(term, q.firstId);
         var me = access.member(user, false);
         checkSource(me, first, q.firstRev, Kind.SUBSTITUTE);
+        checkReviewedDate(first, q.firstDate);
         var targets = new LinkedHashSet<>(q.substituteTeacherIds);
         if (targets.isEmpty() || targets.size() != q.substituteTeacherIds.size())
             throw new BadRequestException("중복되지 않은 보결 교사를 선택하세요.");
@@ -158,9 +174,9 @@ public class ChangeService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public Change create(long user, long term, NewChange q) {
         if (q.kind == Kind.SUBSTITUTE) {
-            if (q.secondId != null || q.secondRev != null || q.substituteTeacherId == null)
+            if (q.secondId != null || q.secondRev != null || q.secondDate != null || q.substituteTeacherId == null)
                 throw new BadRequestException("다른 보결 교사를 지정하세요.");
-            return createBatch(user, term, new CoverBatch(q.firstId, q.firstRev, List.of(q.substituteTeacherId))).get(0);
+            return createBatch(user, term, new CoverBatch(q.firstId, q.firstRev, List.of(q.substituteTeacherId), q.firstDate)).get(0);
         }
         if (q.secondId == null || q.secondRev == null || q.substituteTeacherId != null || q.firstId == q.secondId)
             throw new BadRequestException("두 날짜 수업을 지정하세요.");
@@ -169,8 +185,10 @@ public class ChangeService {
         var me = access.member(user, false);
         var first = lessons.get(term, q.firstId);
         checkSource(me, first, q.firstRev, Kind.SWAP);
+        checkReviewedDate(first, q.firstDate);
         var second = lessons.get(term, q.secondId);
         DatedLessons.check(second, q.secondRev);
+        checkReviewedDate(second, q.secondDate);
         if (first.versionId() != second.versionId()
                 || first.date().equals(second.date()) && first.actual().periodId() == second.actual().periodId())
             throw new BadRequestException("같은 시간표 버전의 서로 다른 교시를 선택하세요.");

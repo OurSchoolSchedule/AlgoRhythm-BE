@@ -5,6 +5,9 @@ import com.rssolplan.edu.domain.schedule.operations.ScheduleAccess;
 import com.rssolplan.edu.domain.schedule.generation.entity.Timetable;
 import com.rssolplan.edu.domain.schedule.workshifts.dto.TimetableCreateDto;
 import com.rssolplan.edu.domain.schedule.workshifts.dto.TimetableDto;
+import com.rssolplan.edu.domain.schedule.workshifts.dto.PublishedWeek;
+import com.rssolplan.edu.domain.school.SchoolUser;
+import com.rssolplan.edu.global.exception.BadRequestException;
 import com.rssolplan.edu.domain.school.SchoolClass;
 import com.rssolplan.edu.domain.school.SchoolClassRepository;
 import com.rssolplan.edu.domain.school.SchoolRepository;
@@ -43,6 +46,29 @@ public class TimetableService {
         var member = scheduleAccess.member(userId, false);
         return publishedWeek.read(member.getSchool().getId(), mine ? scheduleAccess.teachingId(member) : null,
                 year, semester, termId, weekOf);
+    }
+
+    @Transactional(readOnly = true)
+    public PublishedWeek publishedWeek(long user, long term, LocalDate date, String view,
+                                       Long classId, Long teacherId) {
+        var member = scheduleAccess.member(user, "teacher".equals(view));
+        if (date == null || view == null ||
+                "class".equals(view) != (classId != null) || "teacher".equals(view) != (teacherId != null))
+            throw new BadRequestException("조회 날짜와 보기 유형에 맞는 대상을 선택하세요.");
+        long school = member.getSchool().getId();
+        Long teacher = switch (view) {
+            case "mine" -> scheduleAccess.teachingId(member);
+            case "teacher" -> {
+                var target = schoolUserRepository.findById(teacherId)
+                        .filter(t -> t.getSchool().getId().equals(school) && t.getPosition() == SchoolUser.Position.TEACHER
+                                && t.getEmploymentStatus() == SchoolUser.EmploymentStatus.HIRED)
+                        .orElseThrow(() -> new NotFoundException("현재 학교의 재직 교사를 찾을 수 없습니다."));
+                yield scheduleAccess.teachingId(target);
+            }
+            case "class", "school" -> null;
+            default -> throw new BadRequestException("시간표 보기 유형을 확인하세요.");
+        };
+        return publishedWeek.published(school, term, date, teacher, classId);
     }
 
     @Transactional
