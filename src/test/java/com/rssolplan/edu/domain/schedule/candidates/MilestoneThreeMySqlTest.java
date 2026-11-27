@@ -67,7 +67,8 @@ class MilestoneThreeMySqlTest {
                         new ClassPathResource("db/migration/V20261127_41__roster_teaching_link.sql"),
                         new ClassPathResource("db/migration/V20261127_42__lesson_change_notification_target.sql"),
                         new ClassPathResource("db/migration/V20261127_44__public_cover_recipients.sql"),
-                        new ClassPathResource("db/migration/V20261127_45__term_excluded_date.sql"))
+                        new ClassPathResource("db/migration/V20261127_45__term_excluded_date.sql"),
+                        new ClassPathResource("db/migration/V20261127_46__dated_public_cover.sql"))
                 .execute(source);
         db.update("insert into school(id,name) values(?,'fixture')", school);
         for (int i = 0; i < 7; i++) {
@@ -222,7 +223,14 @@ class MilestoneThreeMySqlTest {
         assertThatThrownBy(() -> publication.editTerm(admin, term,
                 new PublicationService.CalendarEdit(start, end.plusWeeks(1), List.of(exam))))
                 .isInstanceOfSatisfying(ScheduleConflict.class, c -> assertThat(c.code).isEqualTo("DATED_CHANGES_EXIST"));
-        var acceptance = changes.respond(school + 5, term, invite.id(), true, 0);
+        var rejected = changes.respond(school + 5, term, invite.id(), false, 0);
+        publication.editTerm(admin, term, new PublicationService.CalendarEdit(start, end.plusWeeks(1), List.of(exam)));
+        assertThat(lessons.date(admin, term, exam)).isEmpty();
+        assertThat(db.queryForObject("select state from lesson_change where id=?", String.class, rejected.id()))
+                .isEqualTo("REJECTED");
+        publication.editTerm(admin, term, new PublicationService.CalendarEdit(start, end.plusWeeks(1), List.of()));
+        var replacement = changes.createBatch(admin, term, new CoverBatch(covered.id(), covered.rev(), List.of(school + 5))).get(0);
+        var acceptance = changes.respond(school + 5, term, replacement.id(), true, 0);
         approve(admin, acceptance, UUID.randomUUID());
         assertThat(timetables.week(school + 5, true, 2026, 2, term, exam)).hasSize(1)
                 .allMatch(row -> row.getWeeklyLessonId() == covered.originId() && row.getTeacherId() == school + 5);
@@ -307,7 +315,11 @@ class MilestoneThreeMySqlTest {
         var week = timetables.publishedWeek(teacher, term, monday, "class", school, null);
         assertThat(week.classId()).isEqualTo(school);
         assertThat(week.days().get(0).lastPeriodByGrade()).containsEntry(1,3);
+        assertThat(week.days().get(0).periods()).containsExactly(1,2,3);
+        assertThat(week.days().get(0).gradePeriods().get(1)).containsExactly(1,2,3);
         assertThat(week.days().get(3).excluded()).isTrue();
+        assertThat(week.days().get(3).periods()).isEmpty();
+        assertThat(week.days().get(3).gradePeriods()).isEmpty();
         assertThat(week.days().get(4).lastPeriodByGrade()).containsEntry(1,0);
         assertThat(week.days().get(4).published()).isTrue();
         assertThat(week.days().get(6).lastPeriod()).isZero();
@@ -455,6 +467,14 @@ class MilestoneThreeMySqlTest {
     }
 
     @Test
+    void anUnassignedTeachersNewBlockDoesNotInvalidateTheChosenCandidate() {
+        var result = generate();
+        db.update("insert into teacher_availability(school_user_id,day_of_week,period_number) values(?,'MON',1)",
+                school + 5);
+        assertThat(publication.publish(admin, term, choose(result)).weeklyLessons()).isEqualTo(3);
+    }
+
+    @Test
     void wrongCandidateAndChangedHardConstraintCannotPublish() {
         var result = generate();
         assertThatThrownBy(
@@ -465,12 +485,11 @@ class MilestoneThreeMySqlTest {
                                         new PublicationService.Publish(
                                                 result.jobId(), "0".repeat(64), monday, 0L)))
                 .isInstanceOf(NotFoundException.class);
-        db.update(
-                "insert into teacher_availability(school_user_id,day_of_week,period_number)"
-                    + " values(?,'MON',1)",
-                school + 2);
+        var assigned = result.candidates().get(0).placements().get(0);
+        db.update("insert into teacher_availability(school_user_id,day_of_week,period_number) values(?,?,?)",
+                Long.parseLong(assigned.teacherId()), assigned.slot().day().name(), assigned.slot().period());
         assertThatThrownBy(() -> publication.publish(admin, term, choose(result)))
-                .isInstanceOf(ScheduleConflict.class);
+                .isInstanceOfSatisfying(ScheduleConflict.class, c -> assertThat(c.code).isEqualTo("STALE_INPUT"));
         assertThat(lessons.date(admin, term, monday)).isEmpty();
     }
 
@@ -848,6 +867,35 @@ class MilestoneThreeMySqlTest {
         var parallel = legacy.create(admin, new SubstituteCreateRequest(school + 1, monday, "다른 학급"));
         assertThat(legacy.getRequests(owner, "OPEN")).extracting("id").contains(parallel.id());
         assertThat(legacy.getRequests(login, "OPEN")).isEmpty();
+    }
+
+    @Test
+    void publicRecruitmentBindsPublishedOccurrenceAndLetsAdminChooseAmongVolunteers() {
+        var row = publish().get(0);
+        var candidates = changes.candidates(admin, term, row.id(), row.rev(), ChangeService.Kind.SUBSTITUTE, null);
+        long first = candidates.get(0), second = candidates.get(1);
+        var input = new SubstituteCreateRequest(null, row.date(), "공개 모집", term, row.id(), row.rev());
+        var request = legacy.create(admin, input);
+        assertThat(request.datedLessonId()).isEqualTo(row.id());
+        assertThat(request.timetableId()).isNull();
+        assertThatThrownBy(() -> legacy.create(admin, input)).isInstanceOf(ScheduleConflict.class);
+        var accept = new SubstituteRespondRequest("ACCEPT");
+        legacy.respond(first, request.id(), accept);
+        var selected = legacy.respond(second, request.id(), accept);
+        assertThat(legacy.getRequests(admin, "OPEN").get(0).responses()).hasSize(2);
+        assertThat(legacy.getRequests(first, "OPEN").get(0).responses()).hasSize(1);
+        assertThat(lessons.get(term, row.id()).actual()).isEqualTo(row.actual());
+        var key = UUID.randomUUID();
+        var approved = new SubstituteApprovalRequest("APPROVE");
+        var outcome = legacy.approve(admin, selected.responseId(), approved, key);
+        assertThat(legacy.approve(admin, selected.responseId(), approved, key)).isEqualTo(outcome);
+        assertThat(outcome.requestStatus()).isEqualTo("FILLED");
+        assertThat(lessons.get(term, row.id()).actual().teacherId()).isEqualTo(second);
+        assertThat(lessons.get(term, row.id()).rev()).isEqualTo(row.rev()+1);
+        assertThatThrownBy(() -> legacy.create(admin, input)).isInstanceOf(ScheduleConflict.class);
+        var updated = legacy.create(admin, new SubstituteCreateRequest(null, row.date(), "", term, row.id(), row.rev()+1));
+        assertThat(legacy.withdraw(admin, updated.id()).status()).isEqualTo("CANCELLED");
+        assertThatThrownBy(() -> legacy.respond(first, updated.id(), accept)).isInstanceOf(IllegalStateException.class);
     }
 
     @Test

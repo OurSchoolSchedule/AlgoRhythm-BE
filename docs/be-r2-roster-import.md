@@ -116,6 +116,10 @@ BE_A1_AUTH_TEST=1 R1_MYSQL_TEST=1 R2_MYSQL_TEST=1 M3_MYSQL_TEST=1 M2_FULL_BENCHM
 
 조회 응답은 `[{classId,academicYear,grade,classNumber,homeroomTeacher,deputyTeacher}]`이다. 각 교사는 `{schoolUserId,displayName}`이며 미배정은 `null`이다. 해당 학기에 학급 담당을 올린 적이 없으면 기존 학기 명부의 담임을 우선하고, 없는 학급은 학년도 담임을 표시한다. 구 명부의 미연결 교사는 표시 이름을 반환하고 소속 ID는 `null`이다. 신규 학기 배정은 계정, 패스키, 학교별 표시 이름, 가입 연결, 과목 및 다른 학기의 역할을 변경하지 않는다.
 
+수업 연결에는 D/F열의 편성용 교사 ID를 사용한다. E/G열 이름은 그 ID의 현재 학교 명부 표시 이름과 대조한다. 별도 로그인 계정이 기존 편성 소속에 연결된 경우 그 편성 소속의 기존 이름도 같은 ID에 한해 허용한다. 대소문자, 공백, 유니코드 표기는 시수표와 같은 기준으로 정규화한다. 이름이 다르면 422 `TEACHER_NAME_MISMATCH`와 오류 행·셀, 입력값 및 현재 명부 이름을 반환한다. 명부에 기록되지 않은 과거 이름은 해당 셀을 현재 이름으로 바꾼다. 이름만 입력하는 시수표는 한 이름이 여러 ID에 일치하면 `AMBIGUOUS_TEACHER`를 반환한다.
+
+선택한 학기의 교사 목록과 프로필은 `homeroomAssignmentTermId`에 해당하는 `homeroomClasses`와 `deputyHomeroomClasses`를 사용한다. 담임은 학급별로 명시한 학기 역할, 학기 명부 담당, 학년도 담임 순으로 결정한다. 파일 적용 후 추가된 반도 같은 기준으로 조회한다. 같은 파일을 다시 적용해도 담당 소속 ID와 로그인 연결은 유지된다.
+
 다른 학교의 학기는 404, 권한 부족은 403이다. 다른 학교의 교사 ID, 학년·반 불일치, 누락/중복 학급 또는 교사 중복은 422이며 `fieldErrors`의 시트·셀·메시지를 확인한다. 어떤 행이라도 실패하면 기존 배정을 보존한다.
 
 기존 M1·M3·R1 및 교사 연결 스키마 이후 [V20261127_43__term_class_teacher_role.sql](../src/main/resources/db/migration/V20261127_43__term_class_teacher_role.sql)을 앱과 동일한 DB에 적용한다. 신규 테이블을 생성하며 데이터 이관은 필요하지 않다. 격리 시연 설정은 이 파일을 포함한다. 운영에서 시작 시 실행할 스키마 경로를 명시하는 경우 기존 경로와 순서를 유지하고 마지막에 이 파일을 추가한다.

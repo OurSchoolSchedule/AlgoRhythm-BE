@@ -124,8 +124,10 @@ and ? between t.start_date and t.end_date and exists(select 1 from schedule_vers
     }
 
     public void capture(String kind, long request, Target... targets) {
+        var bindings = Arrays.stream(targets).map(this::current).toList();
+        if ("SWAP".equals(kind)) requireSwap(bindings.get(0), bindings.get(1), targets[0].timetable.getSchool().getId());
         for (int i = 0; i < targets.length; i++) {
-            var b = current(targets[i]);
+            var b = bindings.get(i);
             db.update(
                     "insert into"
                         + " legacy_approval_input(kind,request_id,side_no,dated_id,expected_rev)"
@@ -136,6 +138,22 @@ and ? between t.start_date and t.end_date and exists(select 1 from schedule_vers
                     b.id,
                     b.rev);
         }
+    }
+
+    public void checkSwapResponse(long request, Target first, Target second) {
+        requireSwap(checked("SWAP", request, 0, first), checked("SWAP", request, 1, second),
+                first.timetable.getSchool().getId());
+    }
+
+    private void requireSwap(Binding a, Binding b, long school) {
+        if (a.term != b.term) throw new BadRequestException("두 수업의 게시 범위가 다릅니다.");
+        if (a.id == null) return;
+        var first = lessons.get(a.term, a.id);
+        var second = lessons.get(b.term, b.id);
+        DatedLessons.check(first, a.rev);
+        DatedLessons.check(second, b.rev);
+        if (!lessons.candidates(school, first, ChangeService.Kind.SWAP, second.date()).contains(second.id()))
+            throw new ScheduleConflict("SLOT_CONFLICT", a.rev, "두 학급과 교사가 모두 교환 가능한 교시를 선택하세요.");
     }
 
     private Binding checked(String kind, long request, int side, Target target) {

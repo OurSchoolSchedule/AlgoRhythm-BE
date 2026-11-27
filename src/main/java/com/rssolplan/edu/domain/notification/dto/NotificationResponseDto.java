@@ -2,6 +2,7 @@ package com.rssolplan.edu.domain.notification.dto;
 
 import com.rssolplan.edu.domain.notification.Notification;
 import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteRequest;
+import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteResponse;
 import com.rssolplan.edu.domain.schedule.shiftswap.TimetableSwapRequest;
 import lombok.*;
 
@@ -31,6 +32,8 @@ public class NotificationResponseDto {
     private TimetableSwapRequest.SwapStatus timetableSwapStatus;
     private TimetableSwapRequest.ManagerApprovalStatus timetableSwapManagerApprovalStatus;
     private SubstituteRequest.SubstituteStatus substituteStatus;
+    private SubstituteResponse.WorkerAction substituteWorkerAction;
+    private SubstituteResponse.ManagerApproval substituteManagerApproval;
 
     private boolean isRead;
 }

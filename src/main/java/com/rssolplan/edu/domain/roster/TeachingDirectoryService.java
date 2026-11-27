@@ -40,10 +40,11 @@ public class TeachingDirectoryService {
         var entries = roster.list(userId, school, termId);
         var teachers = new ArrayList<Teacher>();
         var byMembership = new HashMap<Long, Teacher>();
-        var aliasedMembers = new java.util.HashSet<>(matching.directoryLinks(school).values());
+        var teacherByAccount = new HashMap<Long, Long>();
+        matching.directoryLinks(school).forEach((teacher, account) -> teacherByAccount.put(account, teacher));
         for (var entry : entries) {
-            if (entry.schoolUserId() != null && aliasedMembers.contains(entry.schoolUserId())) continue;
-            var teacher = new Teacher(entry.rosterId(), entry.schoolUserId(), entry.displayName());
+            Long memberId = teacherByAccount.getOrDefault(entry.schoolUserId(), entry.schoolUserId());
+            var teacher = new Teacher(entry.rosterId(), memberId, entry.displayName());
             entry.term().subjects().forEach(subject -> teacher.subjectIds().add(subject.subjectId()));
             teachers.add(teacher);
             if (teacher.schoolUserId() != null) byMembership.put(teacher.schoolUserId(), teacher);
@@ -72,7 +73,7 @@ public class TeachingDirectoryService {
                                           OR a.subject_id IS NOT NULL)
                 """, rs -> {
             long memberId = rs.getLong("id");
-            if (aliasedMembers.contains(memberId)) return;
+            if (teacherByAccount.containsKey(memberId)) return;
             var teacher = byMembership.get(memberId);
             if (teacher == null) {
                 teacher = new Teacher(null, memberId, rs.getString("legacy_name"));

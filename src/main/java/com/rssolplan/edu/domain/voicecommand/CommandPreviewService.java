@@ -111,6 +111,14 @@ public class CommandPreviewService {
             throw new NotFoundException("선택한 업무 학기의 수업이 아닙니다.");
     }
 
+    private static void checkTerm(TimetableSet term, SubstituteRequest cover) {
+        if (cover.getDatedLessonId() == null) {
+            checkTerm(term, cover.getTimetable());
+        } else if (term != null && !term.getId().equals(cover.getDatedTermId())) {
+            throw new NotFoundException("선택한 업무 학기의 수업이 아닙니다.");
+        }
+    }
+
     private Map<String, Object> previewSubstituteCreate(Long schoolId, TimetableSet term, ParsedIntent intent) {
         if (intent.timetableId() == null) {
             throw new IntentParseException("시간표 ID를 인식하지 못했습니다. 다시 말씀해 주세요.");
@@ -157,10 +165,10 @@ public class CommandPreviewService {
         if (!req.includesCandidate(member.getId()) && !req.includesCandidate(access.teachingId(member))) {
             throw new ForbiddenException("해당 보결 요청에 응답할 권한이 없습니다.");
         }
-        checkTerm(term, req.getTimetable());
+        checkTerm(term, req);
         return Map.of(
                 "requestId", req.getId(),
-                "timetableInfo", buildTimetableInfo(req.getTimetable()),
+                "timetableInfo", coverLessonInfo(req),
                 "substituteDate", req.getSubstituteDate(),
                 "currentStatus", req.getStatus().name(),
                 "action", intent.action() != null ? intent.action() : "(미확인)"
@@ -176,12 +184,12 @@ public class CommandPreviewService {
                 .orElseThrow(() -> new NotFoundException("교사 응답 데이터를 찾을 수 없습니다."));
 
         SubstituteRequest req = resp.getSubstituteRequest();
-        checkTerm(term, req.getTimetable());
+        checkTerm(term, req);
         return Map.of(
                 "responseId", resp.getId(),
                 "teacherName", resp.getCandidate().getSchoolDisplayName(),
                 "teacherAction", resp.getWorkerAction().name(),
-                "timetableInfo", buildTimetableInfo(req.getTimetable()),
+                "timetableInfo", coverLessonInfo(req),
                 "substituteDate", req.getSubstituteDate(),
                 "action", intent.action() != null ? intent.action() : "(미확인)"
         );
@@ -200,6 +208,11 @@ public class CommandPreviewService {
                         "reason", slot.reason() != null ? slot.reason() : ""
                 )).toList()
         );
+    }
+
+    private String coverLessonInfo(SubstituteRequest request) {
+        return request.getDatedLessonId() == null ? buildTimetableInfo(request.getTimetable())
+                : String.format("%s %d교시 · 날짜 수업 #%d", request.getSubstituteDate(), request.periodNumber(), request.getDatedLessonId());
     }
 
     private String buildTimetableInfo(Timetable t) {

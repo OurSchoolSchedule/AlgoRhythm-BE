@@ -30,7 +30,7 @@ public record LoadCatalog(
 
     record Name(long id, String label) {}
 
-    static String key(String text) {
+    public static String key(String text) {
         if (text == null) return "";
         return Normalizer.normalize(text, Normalizer.Form.NFKC)
                 .replaceAll("(?U)\\s+", "")

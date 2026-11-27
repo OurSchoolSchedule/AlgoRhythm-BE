@@ -1,6 +1,7 @@
 package com.rssolplan.edu.domain.school.homeroom;
 
 import com.rssolplan.edu.domain.schedule.loadimport.LoadProblem.Issue;
+import static com.rssolplan.edu.domain.schedule.loadimport.LoadCatalog.key;
 import com.rssolplan.edu.domain.schedule.loadimport.LoadSheet;
 
 import java.math.BigDecimal;
@@ -11,6 +12,13 @@ final class HomeroomWorkbook {
     static final List<String> HEADER = List.of("학년", "반", "학급 ID", "담임 교사 ID", "담임 이름", "부담임 교사 ID", "부담임 이름");
     record Room(long id, int grade, int number) {}
     record Pair(long homeroom, long deputy) {}
+    record TeacherNames(String current, String legacy) {
+        boolean matches(String input) {
+            String normalized = key(input);
+            return normalized.equals(key(current))
+                    || normalized.equals(key(legacy));
+        }
+    }
     static final class Invalid extends RuntimeException {
         final List<Issue> issues;
         Invalid(List<Issue> issues) {
@@ -19,7 +27,7 @@ final class HomeroomWorkbook {
         }
     }
 
-    static Map<Long, Pair> parse(byte[] bytes, Map<Long, Room> rooms, Map<Long,String> teachers) {
+    static Map<Long, Pair> parse(byte[] bytes, Map<Long, Room> rooms, Map<Long,TeacherNames> teachers) {
         var table = LoadSheet.readTable(bytes, SHEET);
         var errors = new ArrayList<Issue>();
         var header = table.getOrDefault(0, Map.of());
@@ -54,15 +62,21 @@ final class HomeroomWorkbook {
         return pairs;
     }
 
-    private static long teacher(Map<Integer,LoadSheet.Value> cells, int row, int col, Map<Long,String> teachers,
+    private static long teacher(Map<Integer,LoadSheet.Value> cells, int row, int col, Map<Long,TeacherNames> teachers,
                                 Set<Long> assigned, List<Issue> errors) {
         long id = number(cells, col);
         if (!teachers.containsKey(id))
             error(errors, row, col, "UNKNOWN_TEACHER", "현재 학교의 재직 교사 편성용 소속 ID를 입력하세요.");
         else if (!assigned.add(id))
             error(errors, row, col, "DUPLICATE_TEACHER", "한 교사는 이 학기에 하나의 학급 역할만 맡을 수 있습니다.");
-        if (value(cells, col + 1).isBlank())
+        String supplied = value(cells, col + 1);
+        var names = teachers.get(id);
+        if (supplied.isBlank()) {
             error(errors, row, col + 1, "MISSING_NAME", "파일에서 확인할 교사 이름을 입력하세요.");
+        } else if (names != null && !names.matches(supplied)) {
+            error(errors, row, col + 1, "TEACHER_NAME_MISMATCH",
+                    "교사 ID " + id + "의 학교 명부 이름은 ‘" + names.current() + "’입니다. 입력한 이름은 ‘" + supplied + "’입니다.");
+        }
         return id;
     }
 

@@ -3,8 +3,7 @@ package com.rssolplan.edu.domain.schedule.workshifts;
 import com.rssolplan.edu.domain.schedule.DayOfWeek;
 import com.rssolplan.edu.domain.schedule.workshifts.dto.TimetableDto;
 import com.rssolplan.edu.domain.schedule.workshifts.dto.PublishedWeek;
-import com.rssolplan.edu.domain.schedule.operations.ScheduleJson;
-import com.rssolplan.edu.domain.schedule.operations.PublishedHours;
+import com.rssolplan.edu.domain.schedule.candidates.PublishedOperatingHours;
 import com.rssolplan.edu.global.exception.BadRequestException;
 import com.rssolplan.edu.global.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -16,13 +15,17 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.TreeMap;
 
 @Repository
 @RequiredArgsConstructor
 class PublishedWeekReader {
     private final NamedParameterJdbcTemplate db;
-    private final ScheduleJson json;
+    private final PublishedOperatingHours operatingHours;
 
     // Select the revision separately for each teaching day, as DatedLessons does for origin_date.
     // Choosing the version before filtering the teacher also preserves genuinely empty days.
@@ -79,11 +82,15 @@ class PublishedWeekReader {
               and (e.term_id is null or (e.in_term and e.teaching_day))
         )
         select s.*, c.grade, c.class_number, p.period_number, p.start_time, p.end_time,
-               sub.name as subject_name, coalesce(r.display_name,u.username) as teacher_name
+               sub.name as subject_name, coalesce(claimed.display_name,r.display_name,u.username) as teacher_name
         from slots s join school_class c on c.id=s.class_id join period_setting p on p.id=s.period_id
         join subject sub on sub.id=s.subject_id join school_user su on su.id=s.teacher_id
         join users u on u.id=su.user_id
         left join school_teacher_roster r on r.school_id=:school and r.school_user_id=su.id and r.base_name is not null
+        left join roster_teaching_link l on l.teacher_school_user_id=su.id
+        left join school_teacher_roster claimed on claimed.id=l.roster_id and claimed.school_id=:school
+             and exists(select 1 from school_user a where a.id=claimed.school_user_id and a.school_id=:school
+                        and a.position='TEACHER' and a.employment_status='HIRED')
         where (:classId is null or s.class_id=:classId)
         order by s.day_no, p.period_number, c.grade, c.class_number, s.teacher_id
         """;
@@ -105,20 +112,25 @@ class PublishedWeekReader {
     PublishedWeek published(long school, long term, LocalDate date, Long teacher, Long classId) {
         var params = parameters(school, teacher, null, null, term, date)
                 .addValue("includeLegacy", false).addValue("classId", classId);
-        var days = db.query(EFFECTIVE + """
-                select e.lesson_date,e.day_no,e.in_term,e.teaching_day,e.version_id,
-                       json_extract(j.snapshot,'$.request.gradeLastPeriods') as grade_ends,
-                       json_extract(j.snapshot,'$.slots') as common_slots
-                from effective e left join publication_receipt p on p.version_id=e.version_id
-                left join generation_job j on j.id=p.job_id order by e.day_no
-                """, params, (rs, i) -> {
-            var weekday = DayOfWeek.values()[rs.getInt("day_no") - 1];
-            var hours = PublishedHours.forDay(json, weekday, rs.getString("grade_ends"), rs.getString("common_slots"));
-            boolean inTerm = rs.getBoolean("in_term");
-            return new PublishedWeek.Day(rs.getObject("lesson_date", LocalDate.class), inTerm,
-                    !rs.getBoolean("teaching_day"), inTerm && rs.getObject("version_id") != null,
-                    hours.lastPeriodByGrade(), hours.lastPeriod());
-        });
+        record VersionDay(LocalDate date, boolean inTerm, boolean excluded, Long version) {}
+        var dates = db.query(EFFECTIVE + """
+                select lesson_date,in_term,teaching_day,version_id from effective order by day_no
+                """, params, (rs, i) -> new VersionDay(rs.getObject("lesson_date", LocalDate.class),
+                        rs.getBoolean("in_term"), !rs.getBoolean("teaching_day"), rs.getObject("version_id", Long.class)));
+        var calendars = new HashMap<Long, Optional<PublishedOperatingHours.Calendar>>();
+        var days = dates.stream().map(day -> {
+            boolean published = day.inTerm() && day.version() != null;
+            var calendar = !published ? Optional.<PublishedOperatingHours.Calendar>empty()
+                    : calendars.computeIfAbsent(day.version(), operatingHours::forVersion);
+            List<Integer> periods = calendar.map(value -> value.periodsOn(day.date())).orElse(null);
+            var grades = calendar.map(value -> value.gradePeriodsOn(day.date(), periods)).orElse(Map.of());
+            var lastByGrade = new TreeMap<Integer,Integer>();
+            grades.forEach((grade, allowed) -> lastByGrade.put(grade, lastPeriod(allowed)));
+            boolean closed = !day.inTerm() || day.excluded();
+            return new PublishedWeek.Day(day.date(), day.inTerm(), day.excluded(), published,
+                    lastByGrade, periods == null ? null : lastPeriod(periods),
+                    closed ? List.of() : periods, closed ? Map.of() : grades);
+        }).toList();
         if (days.isEmpty()) throw new NotFoundException("현재 학교의 학기를 찾을 수 없습니다.");
         if (!days.get(date.getDayOfWeek().getValue()-1).inTerm())
             throw new BadRequestException("조회 날짜가 선택한 학기 기간 밖입니다.");
@@ -129,6 +141,10 @@ class PublishedWeekReader {
                 """, params, Long.class).isEmpty())
             throw new NotFoundException("현재 학교·학기의 학급을 찾을 수 없습니다.");
         return new PublishedWeek(term, days.get(0).date(), teacher, classId, days, rows(school, params));
+    }
+
+    private static int lastPeriod(List<Integer> periods) {
+        return periods.isEmpty() ? 0 : periods.get(periods.size() - 1);
     }
 
     private static MapSqlParameterSource parameters(long school, Long teacher, Integer year,

@@ -2,6 +2,8 @@ package com.rssolplan.edu.domain.voicecommand;
 
 import com.rssolplan.edu.domain.schedule.DayOfWeek;
 import com.rssolplan.edu.domain.schedule.generation.TimetableRepository;
+import com.rssolplan.edu.domain.schedule.generation.TimetableSetRepository;
+import com.rssolplan.edu.domain.schedule.generation.entity.TimetableSet;
 import com.rssolplan.edu.domain.schedule.generation.entity.Timetable;
 import com.rssolplan.edu.domain.schedule.operations.LegacyApprovalGuard;
 import com.rssolplan.edu.domain.schedule.operations.ScheduleAccess;
@@ -31,8 +33,9 @@ class CommandPreviewAccessTest {
     private final SubstituteRequestRepository requests = mock(SubstituteRequestRepository.class);
     private final TimetableRepository timetables = mock(TimetableRepository.class);
     private final SubstituteResponseRepository responses = mock(SubstituteResponseRepository.class);
+    private final TimetableSetRepository terms = mock(TimetableSetRepository.class);
     private final CommandPreviewService previews = new CommandPreviewService(timetables, requests, responses,
-            mock(SchoolUserRepository.class), access, mock(LegacyApprovalGuard.class), null);
+            mock(SchoolUserRepository.class), access, mock(LegacyApprovalGuard.class), terms);
     private final VoiceCommandRequest requestContext = new VoiceCommandRequest("test", "ko");
     private final School school = School.builder().id(1L).build();
     private final School foreignSchool = School.builder().id(2L).build();
@@ -57,6 +60,33 @@ class CommandPreviewAccessTest {
         request.setReceiverUserIds("80");
         request.setSchool(foreignSchool);
         assertThatThrownBy(() -> previews.buildPreview(10L, intent, 1L, requestContext)).isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void datedPublicCoverUsesItsTermAndLinkedTeachingRecipientForRespondAndApprovePreviews() {
+        var date = LocalDate.of(2026,11,25);
+        var term = TimetableSet.builder().id(70L).build();
+        var selected = new VoiceCommandRequest("확인", "ko", 1L, 70L, null, null);
+        when(terms.findByIdAndSchool_Id(70L, 1L)).thenReturn(Optional.of(term));
+        when(access.member(10L, false)).thenReturn(member);
+        when(access.teachingId(member)).thenReturn(81L);
+        when(access.member(11L, true)).thenReturn(member);
+        var cover = SubstituteRequest.builder().id(50L).datedTermId(70L).datedLessonId(300L)
+                .datedPeriodNumber(2).substituteDate(date).school(school).receiverUserIds("81").build();
+        when(requests.findById(50L)).thenReturn(Optional.of(cover));
+        var reply = new ParsedIntent("SUBSTITUTE_RESPOND", "HIGH", null, null, null, 50L,
+                "ACCEPT", null, null, null, null);
+        var approve = new ParsedIntent("SUBSTITUTE_APPROVE", "HIGH", null, null, null, null,
+                "APPROVE", 60L, null, null, null);
+        var candidate = SchoolUser.builder().user(User.builder().username("응답 교사").build()).build();
+        var response = SubstituteResponse.builder().id(60L).substituteRequest(cover).candidate(candidate)
+                .workerAction(SubstituteResponse.WorkerAction.ACCEPT).build();
+        when(responses.findById(60L)).thenReturn(Optional.of(response));
+        assertThat(previews.buildPreview(10L, reply, 1L, selected)).containsEntry("substituteDate", date);
+        assertThat(previews.buildPreview(11L, approve, 1L, selected)).containsEntry("responseId", 60L);
+        cover.setDatedTermId(71L);
+        assertThatThrownBy(() -> previews.buildPreview(10L, reply, 1L, selected)).isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> previews.buildPreview(11L, approve, 1L, selected)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
