@@ -45,6 +45,32 @@ public class School42Round {
         verifyIdentity();
     }
 
+    public record Setup(TimetableScope scope, String schoolCode) {}
+
+    @Transactional(readOnly = true)
+    public Setup setupStatus() {
+        if (count("select count(*) from information_schema.tables where table_schema=database() and table_name='school42_rehearsal'") == 0 ||
+                count("select count(*) from school42_rehearsal where school_id=540001 and round_no>0") == 0)
+            return new Setup(null, null);
+        return new Setup(timetableScope(), schoolCode());
+    }
+
+    private String schoolCode() {
+        return db.queryForObject("select school_code from school where id=?", String.class, SCHOOL);
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public Setup prepare() {
+        open();
+        db.queryForObject("select id from school where id=? for update", Long.class, SCHOOL);
+        String code = schoolCode();
+        if (code == null || code.isBlank()) {
+            code = com.rssolplan.edu.global.fordevToken.SchoolCodeGenerator.generate();
+            db.update("update school set school_code=? where id=?", code, SCHOOL);
+        }
+        return new Setup(scope(round(false)), code);
+    }
+
     long round(boolean lock) {
         return db.queryForObject("select round_no from school42_rehearsal where school_id=?" +
                 (lock ? " for update" : ""), Long.class, SCHOOL);

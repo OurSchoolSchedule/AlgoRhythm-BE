@@ -60,6 +60,17 @@ public class DemoResetService {
     }
   }
 
+  public School42Round.Setup setupStatus(Long user) {
+    authorize(user);
+    return rehearsal.setupStatus();
+  }
+
+  public School42Round.Setup prepare(Long user) {
+    authorize(user);
+    rehearsal.prepareTable();
+    return rehearsal.prepare();
+  }
+
   @Transactional(readOnly = true)
   public TimetableScope preview(Long user) {
     authorize(user);

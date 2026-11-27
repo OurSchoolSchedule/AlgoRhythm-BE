@@ -32,6 +32,18 @@ public class DemoResetController {
     return java.util.Map.of("message", "초기화 요청을 확인하세요.");
   }
 
+  @GetMapping("/setup")
+  public com.rssolplan.edu.domain.schedule.candidates.School42Round.Setup setupStatus(
+      @AuthenticationPrincipal Long user) {
+    return service.setupStatus(user);
+  }
+
+  @PostMapping("/setup")
+  public com.rssolplan.edu.domain.schedule.candidates.School42Round.Setup prepare(
+      @AuthenticationPrincipal Long user) {
+    return service.prepare(user);
+  }
+
   @GetMapping
   public TimetableScope preview(@AuthenticationPrincipal Long user) {
     return service.preview(user);
