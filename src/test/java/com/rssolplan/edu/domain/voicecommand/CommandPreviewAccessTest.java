@@ -3,6 +3,7 @@ package com.rssolplan.edu.domain.voicecommand;
 import com.rssolplan.edu.domain.schedule.DayOfWeek;
 import com.rssolplan.edu.domain.schedule.generation.TimetableRepository;
 import com.rssolplan.edu.domain.schedule.generation.entity.Timetable;
+import com.rssolplan.edu.domain.schedule.operations.LegacyApprovalGuard;
 import com.rssolplan.edu.domain.schedule.operations.ScheduleAccess;
 import com.rssolplan.edu.domain.schedule.substitute.SubstituteRequestRepository;
 import com.rssolplan.edu.domain.schedule.substitute.SubstituteResponseRepository;
@@ -30,7 +31,7 @@ class CommandPreviewAccessTest {
     private final TimetableRepository timetables = mock(TimetableRepository.class);
     private final SubstituteResponseRepository responses = mock(SubstituteResponseRepository.class);
     private final CommandPreviewService previews = new CommandPreviewService(timetables, requests, responses,
-            mock(SchoolUserRepository.class), access);
+            mock(SchoolUserRepository.class), access, mock(LegacyApprovalGuard.class));
     private final School school = School.builder().id(1L).build();
     private final School foreignSchool = School.builder().id(2L).build();
     private final SchoolUser member = SchoolUser.builder().id(80L).school(school).build();

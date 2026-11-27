@@ -222,7 +222,7 @@ CREATE TABLE substitute_requests (
   owner_id            BIGINT       NOT NULL,   -- 공고를 올린 관리자 교사 (school_user.id)
   timetable_id        BIGINT       NOT NULL,   -- 보결이 필요한 원래 시간표 고유 ID
   substitute_date     DATE         NOT NULL,   -- 대강이 필요한 실제 날짜
-  receiver_user_ids   VARCHAR(255) NULL,       -- 푸시 알림 대상 교사 ID 목록 (, 로 구분)
+  receiver_user_ids   TEXT NULL,       -- 푸시 알림 대상 교사 ID 목록 (, 로 구분)
   status              ENUM('OPEN','FILLED','CANCELLED','EXPIRED') NOT NULL DEFAULT 'OPEN' COMMENT '모집 상태',
   note                TEXT         NULL COMMENT '전달 사항 (수업 진도 등)',
   created_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,

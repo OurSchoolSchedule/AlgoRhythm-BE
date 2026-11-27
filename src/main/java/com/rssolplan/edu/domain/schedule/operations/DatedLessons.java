@@ -83,49 +83,62 @@ where v.id=(select av.id from schedule_version av where av.term_id=v.term_id and
                 .orElseThrow(() -> new NotFoundException("현재 버전의 날짜 수업이 없습니다."));
     }
 
-    // Read both sides of the proposed movement from the effective dated timetable.
-    public List<Long> candidates(long school, Lesson first, ChangeService.Kind kind, LocalDate targetDate) {
-        List<Long> teachers = db.queryForList("""
+    List<Long> teachingMembers(long school) {
+        return db.queryForList("""
                 select m.id from school_user m where m.school_id=? and m.position='TEACHER'
                   and m.employment_status='HIRED' and not exists (
                     select 1 from school_teacher_roster r join roster_teaching_link l on l.roster_id=r.id
                     where r.school_user_id=m.id and r.school_id=m.school_id)
                 order by m.id
                 """, Long.class, school);
+    }
+
+    // Read both sides of the proposed movement from the effective dated timetable.
+    public List<Long> candidates(long school, Lesson first, ChangeService.Kind kind, LocalDate targetDate) {
+        List<Long> teachers = teachingMembers(school);
         SlotDay source = slots(school, first.termId, first.date);
+        Set<Long> departing = Set.of(first.id);
         if (kind == ChangeService.Kind.SUBSTITUTE)
             return teachers.stream()
-                    .filter(t -> t != first.actual.teacherId && source.fits(first.actual.periodId, t, first.classId, first.id))
+                    .filter(t -> t != first.actual.teacherId && source.fits(first.actual.periodId, t, first.classId, departing))
                     .toList();
         SlotDay target = first.date.equals(targetDate) ? source : slots(school, first.termId, targetDate);
         return target.rows.stream().filter(second ->
                     !second.actual.cancelled && second.versionId == first.versionId
                     && second.actual.teacherId != first.actual.teacherId && teachers.contains(second.actual.teacherId)
                     && !(second.date.equals(first.date) && second.actual.periodId == first.actual.periodId)
-                    && source.fits(first.actual.periodId, second.actual.teacherId, second.classId, first.id)
-                    && target.fits(second.actual.periodId, first.actual.teacherId, first.classId, second.id))
+                    && source.fits(first.actual.periodId, second.actual.teacherId, second.classId, departing)
+                    && target.fits(second.actual.periodId, first.actual.teacherId, first.classId, Set.of(second.id)))
                 .map(Lesson::id).toList();
     }
 
-    private record Unavailable(long teacher, long period) {}
+    record Unavailable(long teacher, long period) {}
     private record SlotDay(List<Lesson> rows, Set<Unavailable> unavailable) {
-        boolean fits(long period, long teacher, long classId, long departingId) {
+        boolean fits(long period, long teacher, long classId, Set<Long> departing) {
             return !unavailable.contains(new Unavailable(teacher, period)) && rows.stream().noneMatch(row ->
-                    row.id != departingId && !row.actual.cancelled && row.actual.periodId == period
+                    !departing.contains(row.id) && !row.actual.cancelled && row.actual.periodId == period
                     && (row.actual.teacherId == teacher || row.classId == classId));
         }
     }
 
-    private SlotDay slots(long school, long term, LocalDate date) {
-        var unavailable = db.query("""
-                select a.school_user_id, ps.id from teacher_availability a
+    Set<Unavailable> unavailable(long school, LocalDate date) {
+        return Set.copyOf(db.query("""
+                select coalesce(t.id, m.id), ps.id from teacher_availability a
                 join school_user m on m.id=a.school_user_id
                 join school_setting ss on ss.school_id=m.school_id
                 join period_setting ps on ps.school_setting_id=ss.id and ps.period_number=a.period_number
+                left join school_teacher_roster r on r.school_user_id=m.id and r.school_id=m.school_id
+                    and m.position='TEACHER' and m.employment_status='HIRED'
+                left join roster_teaching_link l on l.roster_id=r.id
+                left join school_user t on t.id=l.teacher_school_user_id and t.school_id=m.school_id
+                    and t.position='TEACHER' and t.employment_status='HIRED'
                 where m.school_id=? and a.day_of_week=?
                 """, (r,n) -> new Unavailable(r.getLong(1),r.getLong(2)), school,
-                date.getDayOfWeek().name().substring(0, 3));
-        return new SlotDay(day(term, date), Set.copyOf(unavailable));
+                date.getDayOfWeek().name().substring(0, 3)));
+    }
+
+    private SlotDay slots(long school, long term, LocalDate date) {
+        return new SlotDay(day(term, date), unavailable(school, date));
     }
 
     // Caller holds the school guard inside the same READ COMMITTED transaction as request state and
@@ -163,19 +176,17 @@ where v.id=(select av.id from schedule_version av where av.term_id=v.term_id and
         }
         Set<Long> changed = new HashSet<>();
         edits.forEach(e -> changed.add(e.before.id));
-        Map<LocalDate, List<Lesson>> days = new HashMap<>();
+        Map<LocalDate, SlotDay> days = new HashMap<>();
         for (var edit : edits) {
             var next = edit.after;
-            var others =
-                    days.computeIfAbsent(
-                            next.date,
-                            date ->
-                                    new ArrayList<>(
-                                            day(term, date).stream()
-                                                    .filter(l -> !changed.contains(l.id) && !l.actual.cancelled)
-                                                    .toList()));
-            validateSlot(school, next, others);
-            others.add(next);
+            var destination = days.computeIfAbsent(next.date, date -> slots(school, term, date));
+            var hired = db.queryForObject(
+                    "select exists(select 1 from school_user where id=? and school_id=? and employment_status='HIRED')",
+                    Boolean.class, next.actual.teacherId, school);
+            if (!Boolean.TRUE.equals(hired)
+                    || !destination.fits(next.actual.periodId, next.actual.teacherId, next.classId, changed))
+                throw new ScheduleConflict("SLOT_CONFLICT", edit.before.rev,
+                        "담당 교사·학급의 해당 교시에 수업 또는 불가 조건이 있습니다.");
         }
         edits.sort(Comparator.comparingLong(e -> e.before.id));
         for (var edit : edits) {
@@ -192,32 +203,6 @@ where v.id=(select av.id from schedule_version av where av.term_id=v.term_id and
                     != 1) throw stale(get(term, before.id).rev);
         }
         return edits;
-    }
-
-    private void validateSlot(long school, Lesson next, List<Lesson> others) {
-        long t = next.actual.teacherId, p = next.actual.periodId;
-        boolean unavailable =
-                db.queryForObject(
-                        """
-select not exists(select 1 from school_user where id=? and school_id=? and employment_status='HIRED')
-    or exists(select 1 from teacher_availability a join period_setting ps on ps.period_number=a.period_number
-             where ps.id=? and a.school_user_id=? and a.day_of_week=?)
-""",
-                        Boolean.class,
-                        t,
-                        school,
-                        p,
-                        t,
-                        next.date.getDayOfWeek().name().substring(0, 3));
-        if (unavailable
-                || others.stream()
-                        .anyMatch(
-                                l ->
-                                        l.actual.periodId == p
-                                                && (l.actual.teacherId == t
-                                                        || l.classId == next.classId)))
-            throw new ScheduleConflict(
-                    "SLOT_CONFLICT", next.rev - 1, "담당 교사·학급의 해당 교시에 수업 또는 불가 조건이 있습니다.");
     }
 
     private static Lesson move(Lesson a, Lesson target) {

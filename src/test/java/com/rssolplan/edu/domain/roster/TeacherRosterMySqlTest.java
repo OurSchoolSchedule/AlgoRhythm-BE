@@ -238,6 +238,28 @@ class TeacherRosterMySqlTest {
     }
 
     @Test
+    void bothDirectoriesReadDistinctSubjectsFromTheSelectedTermsLatestPublication() throws Exception {
+        long teacher = a + 6;
+        db.update("insert into users(id,username,active_school_id) values(?,'교사',?)", teacher, a);
+        db.update("insert into school_user(id,user_id,school_id,position,employment_status) values(?,?,?,'TEACHER','HIRED')",
+                teacher, teacher, a);
+        db.update("insert into school_setting(id,school_id,break_duration,period_duration) values(?,?,10,50)", a, a);
+        db.update("insert into period_setting(id,school_setting_id,period_number,start_time,end_time) values(?,?,1,'09:00','09:50')", a, a);
+        db.update("insert into schedule_version(id,term_id,version_no,effective_from) values(?,?,1,'2026-03-02'),(?,?,2,'2026-03-09')",
+                a, a, a + 1, a);
+        db.update("""
+                insert into weekly_lesson(version_id,lesson_key,class_id,subject_id,teacher_id,weekday,period_id)
+                values(?,'old',?,?,?,1,?),(?,'current-mon',?,?,?,1,?),(?,'current-tue',?,?,?,2,?)
+                """, a, a, a + 1, teacher, a, a + 1, a, a, teacher, a, a + 1, a, a, teacher, a);
+
+        var row = directoryTeacher(teacher, a);
+        assertThat(row.required("subjects")).hasSize(1);
+        assertThat(row.at("/subjects/0/subjectName").asText()).isEqualTo("수학");
+        assertThat(row.required("weeklyLessonCount").intValue()).isEqualTo(2);
+        assertThat(directoryTeacher(teacher, a + 1).required("subjects")).isEmpty();
+    }
+
+    @Test
     void bothDirectoriesDistinguishLegacyMissingTermAndExplicitAssignments() throws Exception {
         long teacher = a + 6;
         db.update("insert into users(id,username,active_school_id) values(?,'기존 교사',?)", teacher, a);

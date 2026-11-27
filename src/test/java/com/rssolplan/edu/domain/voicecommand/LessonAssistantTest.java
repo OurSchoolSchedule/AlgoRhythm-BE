@@ -24,7 +24,7 @@ class LessonAssistantTest {
     private final ScheduleAccess access = mock(ScheduleAccess.class);
     private final CommandDraftStore drafts = mock(CommandDraftStore.class);
     private final CommandExecutorService writer = mock(CommandExecutorService.class);
-    private final CommandPreviewService preview = new CommandPreviewService(null, null, null, null, access);
+    private final CommandPreviewService preview = new CommandPreviewService(null, null, null, null, access, null);
 
     @Test
     void recognizedOfflinePhrasesCanOnlyOpenReadOnlyPickers() {

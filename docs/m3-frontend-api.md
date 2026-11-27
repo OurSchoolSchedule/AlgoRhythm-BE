@@ -100,6 +100,12 @@
 
 planned는 교환 후 예정 배정, actual은 보결까지 반영한 배정이다. periodId는 DB 교시 ID다. 생성 요청의 slot.period에는 화면에 보이는 교시 번호를 사용한다. 교환은 두 수업의 날짜·교시를 교환한다. 교사·학급·과목과 원래 날짜는 해당 수업에 남는다.
 
+`GET T/lesson-changes/{첫 날짜 수업 ID}/candidates?firstRev=0&kind=SUBSTITUTE`는 해당 날짜와 교시에 공강인 재직 교사의 `schoolUserId` 배열을 반환한다. 교사명과 과목은 `GET /api/school/teachers?termId={학기 ID}`에서 같은 ID로 조회한다. 실제 수업 담당자가 바뀌었으면 승인된 담당자를 기준으로 하고, 휴강 수업은 점유 시간을 만들지 않는다. 교사 본인이 로그인 계정으로 등록한 불가 교시는 연결된 명부 교사에게도 적용한다.
+
+`GET /api/school/teachers`와 관리자용 `GET /api/school/members`에 `termId`를 지정하면 최신 게시 주간표에서 교사별 과목 목록 `subjects[]`와 주간 수업 수 `weeklyLessonCount`를 계산한다. 해당 학기에 게시된 주간표가 없으면 기존 시간표를 사용한다. 보결 표에는 이 과목명과 명부의 담당 과목 `rosterSubjects[]`를 중복 없이 표시한다.
+
+`kind=SWAP&date=2026-11-24`로 조회하면 상대 날짜에서 서로 교환 가능한 **날짜 수업 ID** 배열을 반환한다. 양쪽 교사와 학급의 해당 교시에 수업 충돌이 없어야 한다. 클라이언트는 선택 날짜의 `T/lessons?date=...`에서 이 ID들이 가리키는 수업과 실제 담당 교사를 표시한다. 서버는 신청, 수락 및 최종 승인 시 현재 배정을 다시 검사한다.
+
 | 액션 | 요청 본문 | 응답 |
 | --- | --- | --- |
 | POST T/lesson-changes · 관리자 보결 신청 | `{"kind":"SUBSTITUTE","firstId":51,"firstRev":0,"substituteTeacherId":19}` | 201 신청 객체 |
@@ -131,3 +137,11 @@ planned는 교환 후 예정 배정, actual은 보결까지 반영한 배정이�
 M1 마이그레이션 다음에 [M3 추가 SQL](../src/main/resources/db/migration/V20261124_01__generation_and_lesson_operations.sql)을 적용한 뒤 API를 배포한다. 마이그레이션은 수동 적용한다. 적용 순서와 기존 테이블 대조는 [M1 운영 안내](../sql/m1-load-import.md)를 따른다.
 
 실제 MySQL 경합 테스트는 테스트 전용 MySQL 8 DB와 기존 Spring 테스트 환경 변수에서 `M3_MYSQL_TEST=1 bash gradlew test --tests '*MilestoneThreeMySqlTest'`로 실행한다. 테스트는 합성 학교·학기를 만들고 두 DB 트랜잭션을 동시에 시작한다. 시수 미리보기 캐시는 테스트 대역을 사용하고 게시·승인·알림·이력은 MySQL에 기록한다.
+
+### 기존 공개 보결 모집
+
+관리자의 `POST /api/substitutes/requests`에는 기존 `timetableId`, `substituteDate`, `note`를 보낸다. 서버는 해당 학교에서 그 날짜와 교시에 수업 및 불가 교시가 없는 재직 교사에게만 초대를 보낸다. 게시된 날짜 수업이 있으면 승인된 실제 배정을 사용한다. 게시 전에는 같은 학년도·학기의 주간 수업에 해당 날짜에 최종 승인된 보결 및 교환을 적용한다. 공강 교사가 없으면 409 `SLOT_CONFLICT`를 반환한다.
+
+초대의 수신자 ID는 수업 명부의 `school_user.id`이고 알림은 연결된 로그인 사용자가 받는다. 교사는 받은 초대를, 관리자는 학교의 모집 내역을 조회한다. 기존 초대의 로그인 소속 ID도 읽을 수 있다. 수락·최종 승인 직전에 공강과 신청 당시 수업 버전을 다시 확인한다. 초대받지 않은 계정의 응답은 403이고, 초대 후 수업이 생기면 409다. 거절 시에는 공강 여부를 요구하지 않는다.
+
+기존 앱 DB에는 [공개 보결 수신자 마이그레이션](../src/main/resources/db/migration/V20261127_44__public_cover_recipients.sql)을 적용한다. 기존 쉼표 구분 ID와 NULL을 유지하면서 `substitute_requests.receiver_user_ids`를 TEXT로 넓힌다. 시작 시 SQL 목록을 지정한 환경에서는 기존 목록에 이 파일을 추가한다. 같은 앱 DB에서 `SHOW COLUMNS FROM substitute_requests LIKE 'receiver_user_ids'`의 Type이 `text`인지 확인한다.
