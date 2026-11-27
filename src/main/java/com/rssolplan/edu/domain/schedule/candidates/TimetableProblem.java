@@ -81,19 +81,35 @@ final class TimetableProblem {
                     }
                     blocked[index] = bits;
                 });
+        BitSet[] openByClass = new BitSet[classClosed.length];
+        for (int i = 0; i < classClosed.length; i++) {
+            openByClass[i] = (BitSet) classClosed[i].clone();
+            openByClass[i].flip(0, slots.size());
+        }
+        BitSet[] reachable = CandidateRanking.emptySets(teachers.size());
         int sum = 0;
-        String failure = null;
         for (var row : rows) {
             var d = row.demand();
             sum += d.weeklyPeriods();
             teacherHours[row.teacher()] += d.weeklyPeriods();
             classHours[row.group()] += d.weeklyPeriods();
-            if (failure != null) continue;
-            if (teacherHours[row.teacher()] > slots.size() - blocked[row.teacher()].cardinality())
-                failure =
-                        d.sourceCell() + " · 교사 " + d.teacherId() + "의 주당 시수가 배정 가능한 교시 수를 초과합니다.";
-            else if (classHours[row.group()] > slots.size() - classClosed[row.group()].cardinality())
+            reachable[row.teacher()].or(openByClass[row.group()]);
+        }
+        for (int t = 0; t < reachable.length; t++) reachable[t].andNot(blocked[t]);
+        String failure = null;
+        for (var row : rows) {
+            var d = row.demand();
+            int required = teacherHours[row.teacher()];
+            int available = reachable[row.teacher()].cardinality();
+            if (required > available) {
+                failure = "%s · 교사 %s의 수업은 %d차시가 필요하지만 담당 학급에 배정 가능한 교시는 %d칸으로 %d차시 초과합니다."
+                        .formatted(d.sourceCell(), d.teacherId(), required, available, required - available);
+                break;
+            }
+            if (classHours[row.group()] > openByClass[row.group()].cardinality()) {
                 failure = d.sourceCell() + " · 학급 " + d.classId() + "의 주당 시수가 편성 교시 수를 초과합니다.";
+                break;
+            }
         }
         if (failure == null && sum > 8192)
             throw new BadRequestException("1회 편성은 주간 8,192차시까지 지원합니다.");

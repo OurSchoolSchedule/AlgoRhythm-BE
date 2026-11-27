@@ -1,6 +1,7 @@
 package com.rssolplan.edu.domain.schedule.operations;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.rssolplan.edu.domain.schedule.candidates.PublishedOperatingHours;
 import com.rssolplan.edu.global.exception.*;
 
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ public class DatedLessons {
     private final JdbcTemplate db;
     private final ScheduleAccess access;
     private final ScheduleJson json;
+    private final PublishedOperatingHours operatingHours;
 
     public record Assignment(
             long teacherId, long periodId,
@@ -106,13 +108,21 @@ and v.id=(select av.id from schedule_version av where av.term_id=v.term_id and a
                     .filter(t -> t != first.actual.teacherId && source.fits(first.actual.periodId, t, first.classId, departing))
                     .toList();
         SlotDay target = first.date.equals(targetDate) ? source : slots(school, first.termId, targetDate);
+        var hours = operatingHours.forVersion(first.versionId);
         return target.rows.stream().filter(second ->
                     !second.actual.cancelled && second.versionId == first.versionId
                     && second.actual.teacherId != first.actual.teacherId && teachers.contains(second.actual.teacherId)
                     && !(second.date.equals(first.date) && second.actual.periodId == first.actual.periodId)
+                    && withinTeachingHours(hours, first, second)
                     && source.fits(first.actual.periodId, second.actual.teacherId, second.classId, departing)
                     && target.fits(second.actual.periodId, first.actual.teacherId, first.classId, Set.of(second.id)))
                 .map(Lesson::id).toList();
+    }
+
+    private static boolean withinTeachingHours(Optional<PublishedOperatingHours.Calendar> hours,
+                                                Lesson first, Lesson second) {
+        return hours.isEmpty() || (hours.get().allows(first.classId, second.date, second.actual.periodId)
+                && hours.get().allows(second.classId, first.date, first.actual.periodId));
     }
 
     record Unavailable(long teacher, long period) {}
@@ -174,6 +184,8 @@ and v.id=(select av.id from schedule_version av where av.term_id=v.term_id and a
                     || a.versionId != b.versionId
                     || a.date.equals(b.date) && a.actual.periodId == b.actual.periodId)
                 throw new BadRequestException("같은 시간표 버전의 서로 다른 교시를 선택하세요.");
+            if (!withinTeachingHours(operatingHours.forVersion(a.versionId), a, b))
+                throw new ScheduleConflict("SLOT_CONFLICT", a.rev, "두 학급의 학년별 운영 교시 안에서 교환하세요.");
             edits.add(new Edit(a, move(a, b)));
             edits.add(new Edit(b, move(b, a)));
         }

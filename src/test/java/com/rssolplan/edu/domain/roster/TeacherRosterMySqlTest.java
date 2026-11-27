@@ -210,17 +210,42 @@ class TeacherRosterMySqlTest {
         long accountMember = approved.required("schoolUserId").asLong();
         assertThat(accountMember).isNotEqualTo(dummy);
         assertThat(http(post(path+"/approve"),administrator,bind,200)).isEqualTo(approved);
+        http(put(path), administrator, Map.of("authEmail", email, "displayName", "국어 담당"), 200);
         var teachers = http(get("/api/school/teachers"),requester,null,200);
         assertThat(teachers.size()).isOne();
         assertThat(teachers.at("/0/schoolUserId").asLong()).isEqualTo(dummy);
         assertThat(teachers.at("/0/username").asText()).isEqualTo("최도현");
         assertThat(teachers.at("/0/userId").asLong()).isEqualTo(db.queryForObject("SELECT user_id FROM school_user WHERE id=?",Long.class,accountMember));
+        assertThat(teachers.at("/0/displayName").asText()).isEqualTo("국어 담당");
+        var teachingDirectory = http(get("/api/v2/terms/" + term + "/teaching-directory"), administrator, null, 200);
+        assertThat(teachingDirectory.at("/teachers/0/schoolUserId").asLong()).isEqualTo(dummy);
+        assertThat(teachingDirectory.at("/teachers/0/displayName").asText()).isEqualTo("국어 담당");
+        for (String name : List.of("국어 담당", "최도현")) {
+            try (var book = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+                 var bytes = new java.io.ByteArrayOutputStream()) {
+                var sheet = book.createSheet("시수표");
+                var header = sheet.createRow(0);
+                var labels = List.of("교사명", "과목명", "1-1", "계");
+                for (int j=0; j<labels.size(); j++) header.createCell(j).setCellValue(labels.get(j));
+                var data = sheet.createRow(1);
+                data.createCell(0).setCellValue(name);
+                data.createCell(1).setCellValue("공통국어2");
+                data.createCell(2).setCellValue(1);
+                data.createCell(3).setCellValue(1);
+                book.write(bytes);
+                var validated = http(multipart("/api/v2/terms/" + term + "/load-imports/validate").file(
+                        new org.springframework.mock.web.MockMultipartFile("file","시수표.xlsx",
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes.toByteArray())),
+                        administrator, null, 200);
+                assertThat(validated.at("/demands/0/teacherId").asText()).isEqualTo(Long.toString(dummy));
+            }
+        }
         var personalWeek = http(get("/api/timetable/me").param("termId",""+term)
                 .param("weekOf","2026-11-23"),requester,null,200);
         assertThat(personalWeek.size()).isOne();
+        assertThat(personalWeek.at("/0/teacherName").asText()).isEqualTo("국어 담당");
         assertThat(personalWeek.at("/0/subjectName").asText()).isEqualTo("공통국어2");
         assertThat(personalWeek.at("/0/teacherId").asLong()).isEqualTo(dummy);
-        assertThat(personalWeek.at("/0/teacherName").asText()).isEqualTo("최도현");
         // An already employed teacher from an older release may still need a teaching link.
         db.update("DELETE FROM roster_teaching_link WHERE roster_id=?", applicant);
         db.update("INSERT INTO teacher_availability(school_user_id,day_of_week,period_number) VALUES(?,'THU',2)", accountMember);

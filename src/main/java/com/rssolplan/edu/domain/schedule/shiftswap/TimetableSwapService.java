@@ -39,7 +39,7 @@ public class TimetableSwapService {
     private final ChangeService approvals;
 
     // 1. 교시 교환 요청 생성
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public TimetableSwapRequest create(Long requesterUserId,
                                        Long requesterTimetableId, LocalDate requesterDate,
                                        Long receiverTimetableId, LocalDate receiverDate,
@@ -47,7 +47,7 @@ public class TimetableSwapService {
         User reqUser = userRepository.findById(requesterUserId)
                 .orElseThrow(() -> new NotFoundException("요청자 유저를 찾을 수 없습니다."));
 
-        Long schoolId = authService.getActiveSchoolIdOrThrow(requesterUserId);
+        Long schoolId = guard.lockMember(requesterUserId, false);
         School school = schoolRepo.findById(schoolId)
                 .orElseThrow(() -> new NotFoundException("학교를 찾을 수 없습니다."));
         SchoolUser requester = authService.getSchoolUserOrThrow(requesterUserId, schoolId);
@@ -143,6 +143,9 @@ public class TimetableSwapService {
                         "교환 요청이 상대 교사에게 거절되었습니다.");
             }
             case "ACCEPT" -> {
+                guard.checkSwapResponse(request.getId(),
+                        new Target(request.getRequesterTimetable(), request.getRequesterDate()),
+                        new Target(request.getReceiverTimetable(), request.getReceiverDate()));
                 request.setStatus(TimetableSwapRequest.SwapStatus.ACCEPTED);
                 request.setManagerApprovalStatus(TimetableSwapRequest.ManagerApprovalStatus.PENDING);
 

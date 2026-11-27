@@ -198,7 +198,7 @@ class CandidateApiTest {
     @Test
     void linkedLoginUnavailabilityBlocksTheTeacherFromTheUploadedRoster() throws Exception {
         var login = SchoolUser.builder().id(90L).user(User.builder().username("로그인 교사").build()).build();
-        when(matches.directoryLinks(1L)).thenReturn(Map.of(10L, 90L));
+        when(matches.linkedAccounts(1L)).thenReturn(Map.of(10L, new RosterMatchingService.LinkedAccount(90L, "학교명")));
         when(blocks.findBySchoolUser_School_Id(1L)).thenReturn(List.of(
                 TeacherAvailability.builder().schoolUser(login).dayOfWeek(DayOfWeek.MON).periodNumber(1).build()));
         String id = preview("/api/v2/terms/7/load-imports/validate");

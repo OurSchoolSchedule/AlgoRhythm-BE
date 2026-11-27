@@ -8,6 +8,7 @@ import java.util.List;
 
 public interface SubstituteResponseRepository extends JpaRepository<SubstituteResponse, Long> {
 
+    List<SubstituteResponse> findBySubstituteRequest_IdIn(List<Long> ids);
     List<SubstituteResponse> findBySubstituteRequest_Id(Long substituteRequestId);
 
     boolean existsBySubstituteRequest_IdAndCandidate_IdIn(Long substituteRequestId, List<Long> candidateIds);

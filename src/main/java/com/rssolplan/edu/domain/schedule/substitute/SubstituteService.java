@@ -16,7 +16,9 @@ import com.rssolplan.edu.domain.school.SchoolUser;
 import com.rssolplan.edu.domain.school.SchoolUserRepository;
 import com.rssolplan.edu.domain.user.User;
 import com.rssolplan.edu.domain.user.UserRepository;
+import com.rssolplan.edu.global.exception.BadRequestException;
 import com.rssolplan.edu.global.exception.ForbiddenException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import com.rssolplan.edu.global.exception.NotFoundException;
 import com.rssolplan.edu.global.security.AuthorizationService;
 
@@ -45,6 +47,8 @@ public class SubstituteService {
     private final AuthorizationService authService;
     private final LegacyApprovalGuard guard;
     private final ChangeService approvals;
+    private final DatedLessons dated;
+    private final JdbcTemplate db;
 
     // 교감/교장: 보결 요청 생성
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
@@ -62,35 +66,39 @@ public class SubstituteService {
         School school = schoolRepo.findById(schoolId)
                 .orElseThrow(() -> new NotFoundException("학교를 찾을 수 없습니다."));
 
-        Timetable timetable = timetableRepo.findById(req.timetableId())
-                .orElseThrow(() -> new NotFoundException("시간표를 찾을 수 없습니다."));
-
-        if (!timetable.getSchool().getId().equals(schoolId)) {
-            throw new ForbiddenException("해당 학교의 시간표가 아닙니다.");
-        }
-
-        var target = new Target(timetable, req.substituteDate());
-        var candidates = guard.coverCandidates(target, null);
-        if (candidates.isEmpty()) throw new ScheduleConflict("SLOT_CONFLICT", null, "이 교시에 보결이 가능한 교사가 없습니다.");
-        String receiverCsv = candidates.stream().map(String::valueOf).collect(Collectors.joining(","));
-
+        if (!req.isTargetValid()) throw new BadRequestException("보결 모집할 수업을 하나 선택하세요.");
         SubstituteRequest request = SubstituteRequest.builder()
-                .school(school)
-                .owner(admin)
-                .timetable(timetable)
-                .substituteDate(req.substituteDate())
-                .receiverUserIds(receiverCsv)
-                .status(SubstituteStatus.OPEN)
-                .note(req.note())
-                .build();
-        request = requestRepo.save(request);
-        guard.capture("COVER", request.getId(), target);
+                .school(school).owner(admin).substituteDate(req.substituteDate())
+                .status(SubstituteStatus.OPEN).note(req.note()).build();
 
-        String msg = String.format("%s(%s %s교시) %s 보결 교사를 요청합니다.",
-                school.getName(),
-                timetable.getDayOfWeek().name(),
-                timetable.getPeriodSetting().getPeriodNumber(),
-                req.substituteDate());
+        List<Long> candidates;
+        if (req.datedLessonId() != null) {
+            access.schoolOfTerm(adminUserId, req.termId(), true);
+            request.setDatedTermId(req.termId());
+            request.setDatedLessonId(req.datedLessonId());
+            request.setExpectedLessonRev(req.expectedLessonRev());
+            var lesson = boundLesson(request);
+            if (requestRepo.existsByDatedLessonIdAndExpectedLessonRevAndStatus(lesson.id(), lesson.rev(), SubstituteStatus.OPEN))
+                throw new ScheduleConflict("DUPLICATE_REQUEST", lesson.rev(), "이 날짜 수업은 이미 보결을 모집하고 있습니다.");
+            request.setDatedPeriodNumber(db.queryForObject("select period_number from period_setting where id=?",
+                    Integer.class, lesson.actual().periodId()));
+            candidates = dated.candidates(schoolId, lesson, ChangeService.Kind.SUBSTITUTE, lesson.date());
+        } else {
+            Timetable timetable = timetableRepo.findById(req.timetableId())
+                    .orElseThrow(() -> new NotFoundException("시간표를 찾을 수 없습니다."));
+            if (!timetable.getSchool().getId().equals(schoolId))
+                throw new ForbiddenException("해당 학교의 시간표가 아닙니다.");
+            request.setTimetable(timetable);
+            candidates = guard.coverCandidates(new Target(timetable, req.substituteDate()), null);
+        }
+        if (candidates.isEmpty()) throw new ScheduleConflict("SLOT_CONFLICT", null, "이 교시에 보결이 가능한 교사가 없습니다.");
+        request.setReceiverUserIds(candidates.stream().map(String::valueOf).collect(Collectors.joining(",")));
+        request = requestRepo.save(request);
+        if (request.getTimetable() != null)
+            guard.capture("COVER", request.getId(), new Target(request.getTimetable(), request.getSubstituteDate()));
+
+        String msg = String.format("%s(%s %d교시) %s 보결 교사를 요청합니다.",
+                school.getName(), request.weekday(), request.periodNumber(), req.substituteDate());
 
         for (long candidate : candidates) {
             notificationRepo.save(Notification.builder()
@@ -151,7 +159,11 @@ public class SubstituteService {
                 .workerAction(workerAction)
                 .managerApproval(SubstituteResponse.ManagerApproval.PENDING)
                 .build();
-        responseRepo.save(response);
+        response = responseRepo.save(response);
+        db.update("""
+                update notifications set substitute_response_id=? where school_id=? and user_id=?
+                and substitute_request_id=? and type='SUBSTITUTE_REQUEST_INVITE'
+                """, response.getId(), schoolId, teacherUserId, requestId);
 
         String msg = String.format("%s 교사가 보결 요청에 %s했습니다.",
                 candidate.getSchoolDisplayName(),
@@ -227,15 +239,14 @@ public class SubstituteService {
 
         long teachingId = access.teachingId(response.getCandidate());
         if (approved) requireAvailable(request, teachingId);
-        List<?> edits =
-                approved
-                        ? guard.approve(
-                                school,
-                                "COVER",
-                                request.getId(),
-                                teachingId,
-                                new Target(request.getTimetable(), request.getSubstituteDate()))
-                        : List.of();
+        List<?> edits = List.of();
+        if (approved) {
+            edits = request.getDatedLessonId() != null
+                    ? dated.apply(school, request.getDatedTermId(), request.getDatedLessonId(),
+                                  request.getExpectedLessonRev(), null, null, teachingId)
+                    : guard.approve(school, "COVER", request.getId(), teachingId,
+                                  new Target(request.getTimetable(), request.getSubstituteDate()));
+        }
         response.setManagerApproval(approved
                 ? SubstituteResponse.ManagerApproval.APPROVED
                 : SubstituteResponse.ManagerApproval.REJECTED);
@@ -270,6 +281,20 @@ public class SubstituteService {
     }
 
     // 교사: 현재 학교 보결 요청 목록 조회
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public SubstituteRequestDetail withdraw(long user, long requestId) {
+        long school = guard.lockMember(user, true);
+        var request = requestRepo.findById(requestId).orElseThrow(() -> new NotFoundException("보결 모집을 찾을 수 없습니다."));
+        if (!request.getSchool().getId().equals(school) || !request.getOwner().getUser().getId().equals(user))
+            throw new ForbiddenException("모집을 시작한 관리자만 마감할 수 있습니다.");
+        if (request.getDatedLessonId() == null) throw new BadRequestException("게시 수업 모집을 선택하세요.");
+        if (request.getStatus() == SubstituteStatus.CANCELLED) return SubstituteRequestDetail.from(request);
+        if (request.getStatus() != SubstituteStatus.OPEN)
+            throw new ScheduleConflict("STALE_REQUEST", null, "이미 마감된 모집입니다.");
+        request.setStatus(SubstituteStatus.CANCELLED);
+        return SubstituteRequestDetail.from(request);
+    }
+
     @Transactional(readOnly = true)
     public List<SubstituteRequestDetail> getRequests(Long userId, String status) {
         Long schoolId = authService.getActiveSchoolIdOrThrow(userId);
@@ -278,10 +303,18 @@ public class SubstituteService {
         boolean admin = member.getPosition() == SchoolUser.Position.ADMIN;
         long teachingId = access.teachingId(member);
         if (!admin && access.recipientUserId(schoolId, teachingId) != userId.longValue()) return List.of();
-        return requestRepo.findBySchool_IdAndStatus(schoolId, substituteStatus).stream()
+        var visible = requestRepo.findBySchool_IdAndStatus(schoolId, substituteStatus).stream()
                 .filter(request -> admin || invited(request, member, teachingId))
-                .map(SubstituteRequestDetail::from)
                 .toList();
+        if (visible.isEmpty()) return List.of();
+        var responses = responseRepo.findBySubstituteRequest_IdIn(visible.stream().map(SubstituteRequest::getId).toList())
+                .stream().filter(r -> admin ? r.getSubstituteRequest().getOwner().getId().equals(member.getId())
+                        : r.getCandidate().getId().equals(teachingId) || r.getCandidate().getId().equals(member.getId()))
+                .collect(Collectors.groupingBy(r -> r.getSubstituteRequest().getId(),
+                        Collectors.mapping(SubstituteResponseDetail::from, Collectors.toList())));
+        return visible.stream().map(r -> SubstituteRequestDetail.from(r, responses.getOrDefault(r.getId(), List.of()),
+                admin && r.getOwner().getId().equals(member.getId()) && r.getDatedLessonId() != null
+                        && r.getStatus() == SubstituteStatus.OPEN)).toList();
     }
 
     private boolean invited(SubstituteRequest request, SchoolUser member, long teachingId) {
@@ -289,9 +322,23 @@ public class SubstituteService {
     }
 
     private void requireAvailable(SubstituteRequest request, long teacher) {
-        var target = new Target(request.getTimetable(), request.getSubstituteDate());
-        if (!guard.coverCandidates(target, request.getId()).contains(teacher))
+        List<Long> candidates;
+        if (request.getDatedLessonId() != null) {
+            var lesson = boundLesson(request);
+            candidates = dated.candidates(request.getSchool().getId(), lesson, ChangeService.Kind.SUBSTITUTE, lesson.date());
+        } else {
+            candidates = guard.coverCandidates(new Target(request.getTimetable(), request.getSubstituteDate()), request.getId());
+        }
+        if (!candidates.contains(teacher))
             throw new ScheduleConflict("SLOT_CONFLICT", null, "해당 교시의 담당 수업 또는 불가 교시를 확인하세요.");
+    }
+
+    private DatedLessons.Lesson boundLesson(SubstituteRequest request) {
+        var lesson = dated.get(request.getDatedTermId(), request.getDatedLessonId());
+        DatedLessons.check(lesson, request.getExpectedLessonRev());
+        if (!lesson.date().equals(request.getSubstituteDate()))
+            throw new BadRequestException("선택한 수업 날짜가 일치하지 않습니다.");
+        return lesson;
     }
 
     private SubstituteResponse.WorkerAction parseTeacherAction(String action) {

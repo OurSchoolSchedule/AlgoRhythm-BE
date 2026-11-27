@@ -8,6 +8,8 @@ import java.util.List;
 
 public interface SubstituteRequestRepository extends JpaRepository<SubstituteRequest, Long> {
 
+    boolean existsByDatedLessonIdAndExpectedLessonRevAndStatus(Long datedLessonId, Long expectedLessonRev, SubstituteStatus status);
+
     List<SubstituteRequest> findBySchool_Id(Long schoolId);
 
     List<SubstituteRequest> findBySchool_IdAndStatus(Long schoolId, SubstituteStatus status);

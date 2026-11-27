@@ -2,6 +2,8 @@ package com.rssolplan.edu.domain.notification;
 
 import com.rssolplan.edu.domain.notification.dto.NotificationResponseDto;
 import com.rssolplan.edu.domain.schedule.substitute.SubstituteRequestRepository;
+import com.rssolplan.edu.domain.schedule.substitute.SubstituteResponseRepository;
+import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteResponse;
 import com.rssolplan.edu.domain.schedule.substitute.entity.SubstituteRequest;
 import com.rssolplan.edu.domain.schedule.shiftswap.TimetableSwapRequest;
 import com.rssolplan.edu.domain.schedule.shiftswap.TimetableSwapRequestRepository;
@@ -29,6 +31,7 @@ public class NotificationService {
     private final UserRepository userRepository;
     private final TimetableSwapRequestRepository timetableSwapRequestRepository;
     private final SubstituteRequestRepository substituteRequestRepository;
+    private final SubstituteResponseRepository substituteResponseRepository;
 
     @Transactional
     public void sendScheduleInputRequest(Long requesterId, Long schoolId, LocalDate startDate, LocalDate endDate) {
@@ -99,7 +102,12 @@ public class NotificationService {
         List<Notification> notifications = notificationRepository.findVisibleForUser(userId);
         List<NotificationResponseDto> dtos = new ArrayList<>();
 
+        var responseIds = notifications.stream().map(Notification::getSubstituteResponseId)
+                .filter(java.util.Objects::nonNull).distinct().toList();
+        var responses = substituteResponseRepository.findAllById(responseIds).stream()
+                .collect(java.util.stream.Collectors.toMap(SubstituteResponse::getId, r -> r));
         for (Notification n : notifications) {
+            var response = responses.get(n.getSubstituteResponseId());
             TimetableSwapRequest swapRequest = null;
             SubstituteRequest substituteRequest = null;
 
@@ -125,6 +133,8 @@ public class NotificationService {
                     .substituteResponseId(n.getSubstituteResponseId())
                     .timetableSwapStatus(swapRequest != null ? swapRequest.getStatus() : null)
                     .timetableSwapManagerApprovalStatus(swapRequest != null ? swapRequest.getManagerApprovalStatus() : null)
+                    .substituteWorkerAction(response == null ? null : response.getWorkerAction())
+                    .substituteManagerApproval(response == null ? null : response.getManagerApproval())
                     .substituteStatus(substituteRequest != null ? substituteRequest.getStatus() : null)
                     .isRead(n.isRead())
                     .build();

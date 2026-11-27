@@ -51,6 +51,12 @@ public class SubstituteController {
         return ResponseEntity.ok(substituteService.approve(userId, responseId, request, key));
     }
 
+    @OwnerOnly
+    @PostMapping("/requests/{requestId}/withdraw")
+    public SubstituteRequestDetail withdraw(@AuthenticationPrincipal Long userId, @PathVariable Long requestId) {
+        return substituteService.withdraw(userId, requestId);
+    }
+
     // 교사: 현재 학교의 보결 요청 목록 조회
     @GetMapping("/requests")
     public ResponseEntity<List<SubstituteRequestDetail>> getRequests(
