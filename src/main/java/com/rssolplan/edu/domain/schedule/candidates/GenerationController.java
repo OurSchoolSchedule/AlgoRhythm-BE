@@ -40,6 +40,12 @@ class GenerationController {
         return Map.of("termId", publications.term(user, request));
     }
 
+    @PatchMapping("/{term}")
+    PublicationService.TermSummary editTerm(@AuthenticationPrincipal Long user, @PathVariable long term,
+                                             @Valid @RequestBody PublicationService.CalendarEdit request) {
+        return publications.editTerm(user, term, request);
+    }
+
     @PostMapping("/{term}/generations")
     ResponseEntity<Accepted> start(
             @AuthenticationPrincipal Long user,

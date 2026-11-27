@@ -32,6 +32,13 @@ public class LegacyApprovalGuard {
         var w = t.timetable;
         if (t.date == null || t.date.getDayOfWeek().getValue() != w.getDayOfWeek().getValue())
             throw new BadRequestException("원본 수업의 요일과 신청 날짜를 확인하세요.");
+        boolean outsideCalendar = db.queryForObject("""
+                select exists(select 1 from timetable_set t where t.school_id=? and t.academic_year=? and t.semester=?
+                    and (? not between t.start_date and t.end_date or exists(select 1 from term_excluded_date x
+                        where x.term_id=t.id and x.excluded_date=?)))
+                """, Boolean.class, w.getSchool().getId(), w.getAcademicYear(), w.getSemester(), t.date, t.date);
+        if (outsideCalendar)
+            throw new ScheduleConflict("NON_TEACHING_DATE", null, "학기 기간과 정규수업 제외일을 확인하세요.");
         var terms =
                 db.queryForList(
                         """

@@ -21,6 +21,7 @@ spring:
         - classpath:db/migration/V20261127_42__lesson_change_notification_target.sql
         - classpath:db/migration/V20261127_43__term_class_teacher_role.sql
         - classpath:db/migration/V20261127_44__public_cover_recipients.sql
+        - classpath:db/migration/V20261127_45__term_excluded_date.sql
       data-locations: file:./demo/seed.sql
 springdoc:
   swagger-ui:

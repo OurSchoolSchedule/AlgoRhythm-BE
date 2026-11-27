@@ -99,7 +99,7 @@ class CandidateInputService {
         }
         Map<String, Set<Slot>> blocked = new HashMap<>();
         for (var row : unavailability.findBySchoolUser_School_Id(catalog.schoolId()))
-            blocked.computeIfAbsent(row.getSchoolUser().getId().toString(), k -> new HashSet<>())
+            blocked.computeIfAbsent(Long.toString(catalog.teachingId(row.getSchoolUser().getId())), k -> new HashSet<>())
                     .add(new Slot(row.getDayOfWeek(), row.getPeriodNumber()));
         Map<Integer, Bell> bells = new TreeMap<>();
         for (var p : setting.getPeriods())

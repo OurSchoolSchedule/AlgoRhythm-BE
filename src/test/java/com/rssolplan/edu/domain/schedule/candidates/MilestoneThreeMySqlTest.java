@@ -66,7 +66,8 @@ class MilestoneThreeMySqlTest {
                         new ClassPathResource("db/migration/V20261126_31__school_roster_names.sql"),
                         new ClassPathResource("db/migration/V20261127_41__roster_teaching_link.sql"),
                         new ClassPathResource("db/migration/V20261127_42__lesson_change_notification_target.sql"),
-                        new ClassPathResource("db/migration/V20261127_44__public_cover_recipients.sql"))
+                        new ClassPathResource("db/migration/V20261127_44__public_cover_recipients.sql"),
+                        new ClassPathResource("db/migration/V20261127_45__term_excluded_date.sql"))
                 .execute(source);
         db.update("insert into school(id,name) values(?,'fixture')", school);
         for (int i = 0; i < 7; i++) {
@@ -154,6 +155,79 @@ class MilestoneThreeMySqlTest {
         db.update("update users set active_school_id=? where id=?", emptySchool, school + 2);
         assertThat(publication.terms(school + 2)).isEmpty();
         assertThat(publication.terms(admin)).isEqualTo(expected);
+    }
+
+    @Test
+    void calendarEditsValidateAndDetectCompetingAdministratorsWithoutChangingOtherTerms() {
+        LocalDate end = monday.plusDays(8);
+        var state = new PublicationService.CalendarState(monday, end, List.of());
+        var first = new PublicationService.CalendarEdit(monday, end, List.of(monday.plusDays(2), monday), state);
+        assertThatThrownBy(() -> publication.editTerm(school + 2, term, first)).isInstanceOf(ForbiddenException.class);
+        assertThatThrownBy(() -> publication.editTerm(admin, term,
+                new PublicationService.CalendarEdit(monday, end, List.of(end.plusDays(1)))))
+                .isInstanceOf(com.rssolplan.edu.global.exception.BadRequestException.class);
+        assertThatThrownBy(() -> publication.editTerm(admin, term,
+                new PublicationService.CalendarEdit(monday, end, List.of(monday, monday))))
+                .isInstanceOf(com.rssolplan.edu.global.exception.BadRequestException.class);
+        var updated = publication.editTerm(admin, term, first);
+        assertThat(updated.excludedDates()).containsExactly(monday, monday.plusDays(2));
+        assertThat(publication.editTerm(other, term, first)).isEqualTo(updated);
+        assertThatThrownBy(() -> publication.editTerm(other, term,
+                new PublicationService.CalendarEdit(monday, end, List.of(end), state)))
+                .isInstanceOfSatisfying(ScheduleConflict.class, c -> assertThat(c.code).isEqualTo("TERM_CALENDAR_CHANGED"));
+        assertThat(publication.terms(school + 2)).containsExactly(updated);
+        var another = new PublicationService.NewTerm(2027, 1, end.plusDays(1), end.plusDays(14), List.of(end.plusDays(5)));
+        publication.term(admin, another);
+        assertThatThrownBy(() -> publication.editTerm(admin, term, new PublicationService.CalendarEdit(monday, end.plusDays(1), List.of())))
+                .isInstanceOfSatisfying(ScheduleConflict.class, c -> assertThat(c.code).isEqualTo("TERM_EXISTS"));
+    }
+
+    @Test
+    void examDatesOmitRegularOccurrencesWhileTheWeeklyTemplateAndProtectedRequestsSurvive() {
+        var start = LocalDate.now(ZoneId.of("Asia/Seoul")).plusWeeks(4)
+                .with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.MONDAY));
+        var exam = start.plusWeeks(1);
+        var end = exam.plusDays(1);
+        publication.editTerm(admin, term, new PublicationService.CalendarEdit(start, end, List.of(exam)));
+        var result = generate();
+        var selected = new PublicationService.Publish(result.jobId(), result.candidates().get(0).candidateId(), start,
+                result.expectedPublishRev());
+        assertThat(publication.publish(admin, term, selected).weeklyLessons()).isEqualTo(3);
+        var first = lessons.date(admin, term, start).get(0);
+        assertThat(lessons.date(admin, term, exam)).isEmpty();
+        assertThat(timetables.week(admin, false, 2026, 2, term, exam)).isEmpty();
+        assertThat(changes.candidates(first.actual().teacherId(), term, first.id(), first.rev(), ChangeService.Kind.SWAP, exam))
+                .isEmpty();
+        assertThat(db.queryForObject("""
+                select count(*) from dated_lesson d join weekly_lesson w on w.id=d.origin_id
+                where w.version_id=? and d.origin_date=?
+                """, Long.class, first.versionId(), exam)).isZero();
+        db.update("""
+                insert into timetable(id,school_id,academic_year,semester,school_class_id,period_setting_id,
+                        day_of_week,subject_id,teacher_id) values(?,?,2026,2,?,?,'MON',?,?)
+                """, school, school, school, first.actual().periodId(), school, first.actual().teacherId());
+        assertThatThrownBy(() -> legacy.create(admin, new SubstituteCreateRequest(school, exam, "시험일")))
+                .isInstanceOfSatisfying(ScheduleConflict.class, c -> assertThat(c.code).isEqualTo("NON_TEACHING_DATE"));
+
+        publication.editTerm(admin, term, new PublicationService.CalendarEdit(start, end, List.of()));
+        var restored = lessons.date(admin, term, exam);
+        assertThat(restored).hasSize(3);
+        publication.editTerm(admin, term, new PublicationService.CalendarEdit(start, end, List.of(exam)));
+        assertThat(lessons.date(admin, term, exam)).isEmpty();
+        publication.editTerm(admin, term, new PublicationService.CalendarEdit(start, end.plusWeeks(1), List.of()));
+        assertThat(lessons.date(admin, term, exam)).isEqualTo(restored);
+        assertThat(lessons.date(admin, term, exam.plusWeeks(1))).hasSize(3);
+        var covered = restored.get(0);
+        var invite = changes.createBatch(admin, term, new CoverBatch(covered.id(), covered.rev(), List.of(school + 5))).get(0);
+        assertThatThrownBy(() -> publication.editTerm(admin, term,
+                new PublicationService.CalendarEdit(start, end.plusWeeks(1), List.of(exam))))
+                .isInstanceOfSatisfying(ScheduleConflict.class, c -> assertThat(c.code).isEqualTo("DATED_CHANGES_EXIST"));
+        var acceptance = changes.respond(school + 5, term, invite.id(), true, 0);
+        approve(admin, acceptance, UUID.randomUUID());
+        assertThat(timetables.week(school + 5, true, 2026, 2, term, exam)).hasSize(1)
+                .allMatch(row -> row.getWeeklyLessonId() == covered.originId() && row.getTeacherId() == school + 5);
+        assertThat(timetables.week(covered.actual().teacherId(), true, 2026, 2, term, exam)).isEmpty();
+        assertThat(publication.publish(admin, term, selected).weeklyLessons()).isEqualTo(3);
     }
 
     @Test

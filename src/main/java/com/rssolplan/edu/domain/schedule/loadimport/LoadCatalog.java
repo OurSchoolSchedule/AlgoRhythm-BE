@@ -8,7 +8,12 @@ public record LoadCatalog(
         int academicYear,
         Names teachers,
         Names subjects,
-        Map<ClassKey, Long> classes) {
+        Map<ClassKey, Long> classes,
+        Map<Long, Long> teachingIdByLogin) {
+    public long teachingId(long schoolUserId) {
+        return teachingIdByLogin.getOrDefault(schoolUserId, schoolUserId);
+    }
+
     boolean hasTeacherAndSubject(LoadWorkbookParser.Demand row) {
         return teachers.knownIds.contains(Long.valueOf(row.teacherId()))
                 && subjects.knownIds.contains(Long.valueOf(row.subjectId()));

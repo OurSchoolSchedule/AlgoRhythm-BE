@@ -23,7 +23,7 @@ class LoadWorkbookParserTest {
                 new LoadCatalog.Names(List.of(new LoadCatalog.Name(10, "김교사"))),
                 new LoadCatalog.Names(
                         List.of(new LoadCatalog.Name(20, "공통수학I"), new LoadCatalog.Name(21, "국어"))),
-                Map.of(new LoadCatalog.ClassKey(1, 1), 31L, new LoadCatalog.ClassKey(1, 2), 32L));
+                Map.of(new LoadCatalog.ClassKey(1, 1), 31L, new LoadCatalog.ClassKey(1, 2), 32L), Map.of());
     }
 
     static void row(Sheet s, int r, String... cells) {
@@ -214,7 +214,7 @@ class LoadWorkbookParserTest {
                                         file(s -> {}),
                                         null,
                                         new LoadCatalog(
-                                                1L, 2026, names, c.subjects(), c.classes())));
+                                                1L, 2026, names, c.subjects(), c.classes(), Map.of())));
         assertThat(ex.fieldErrors)
                 .anyMatch(i -> i.code().equals("AMBIGUOUS_TEACHER") && i.cell().equals("A3"));
     }
