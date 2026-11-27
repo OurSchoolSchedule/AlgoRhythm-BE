@@ -26,6 +26,7 @@ class PublicationService {
     private final GenerationStore jobs;
     private final CandidateInputService inputs;
     private final ScheduleJson json;
+    private final TermCalendar calendar;
 
     record Publish(
             @NotNull UUID jobId,
@@ -35,58 +36,47 @@ class PublicationService {
 
     record Published(long versionId, long publishRev, int weeklyLessons) {}
 
-    record TermSummary(
-            long termId, int academicYear, int semester, LocalDate startDate, LocalDate endDate) {}
+    record TermSummary(long termId, int academicYear, int semester, LocalDate startDate, LocalDate endDate,
+                       List<LocalDate> excludedDates) {
+        TermSummary(long termId, int year, int semester, LocalDate start, LocalDate end) {
+            this(termId, year, semester, start, end, List.of());
+        }
+    }
 
     @Transactional(readOnly = true)
     public List<TermSummary> terms(long user) {
-        long school = access.member(user, false).getSchool().getId();
-        return db.query(
-                """
-                select id, academic_year, semester, start_date, end_date from timetable_set
-                where school_id=? order by start_date desc, id desc
-                """,
-                (row, index) ->
-                        new TermSummary(
-                                row.getLong("id"),
-                                row.getInt("academic_year"),
-                                row.getInt("semester"),
-                                row.getObject("start_date", LocalDate.class),
-                                row.getObject("end_date", LocalDate.class)),
-                school);
+        return calendar.terms(access.member(user, false).getSchool().getId());
     }
 
-    record NewTerm(
-            @Min(1900) @Max(9999) int academicYear,
-            @Min(1) @Max(2) int semester,
-            @NotNull LocalDate startDate,
-            @NotNull LocalDate endDate) {}
+    record NewTerm(@Min(1900) @Max(9999) int academicYear, @Min(1) @Max(2) int semester,
+                   @NotNull LocalDate startDate, @NotNull LocalDate endDate, List<@NotNull LocalDate> excludedDates) {
+        NewTerm(int year, int semester, LocalDate start, LocalDate end) {
+            this(year, semester, start, end, List.of());
+        }
+    }
+
+    record CalendarState(@NotNull LocalDate startDate, @NotNull LocalDate endDate,
+                         @NotNull List<@NotNull LocalDate> excludedDates) {}
+
+    record CalendarEdit(@NotNull LocalDate startDate, @NotNull LocalDate endDate,
+                        @NotNull List<@NotNull LocalDate> excludedDates, @jakarta.validation.Valid CalendarState expectedCalendar) {
+        CalendarEdit(LocalDate start, LocalDate end, List<LocalDate> excluded) {
+            this(start, end, excluded, null);
+        }
+    }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public long term(long user, NewTerm t) {
         long school = access.member(user, true).getSchool().getId();
         access.lockSchool(school);
-        if (t.endDate().isBefore(t.startDate()) || t.endDate().isAfter(t.startDate().plusYears(1)))
-            throw new BadRequestException("학기 시작일·종료일을 확인하세요.");
-        if (!db.queryForList(
-                        "select id from timetable_set where school_id=? and ((academic_year=? and"
-                            + " semester=?) or (start_date<=? and end_date>=?))",
-                        Long.class,
-                        school,
-                        t.academicYear(),
-                        t.semester(),
-                        t.endDate(),
-                        t.startDate())
-                .isEmpty()) throw new ScheduleConflict("TERM_EXISTS", null, "이미 등록된 학기 또는 기간입니다.");
-        db.update(
-                "insert into timetable_set(school_id,academic_year,semester,start_date,end_date)"
-                    + " values(?,?,?,?,?)",
-                school,
-                t.academicYear(),
-                t.semester(),
-                t.startDate(),
-                t.endDate());
-        return lastId();
+        return calendar.create(school, t);
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public TermSummary editTerm(long user, long term, CalendarEdit edit) {
+        long school = access.schoolOfTerm(user, term, true);
+        access.lockSchool(school);
+        return calendar.edit(school, term, edit);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -182,17 +172,9 @@ where v.term_id=? and d.rev>0 and (d.teaching_date>=? or d.origin_date>=?)
                     + " weekly_lesson(version_id,lesson_key,class_id,subject_id,teacher_id,weekday,period_id)"
                     + " values(?,?,?,?,?,?,?)",
                 rows);
+        var exclusions = calendar.exclusions(term);
         for (LocalDate date = from; !date.isAfter(end); date = date.plusDays(1)) {
-            db.update(
-                    """
-insert into dated_lesson(origin_id,origin_date,teaching_date,planned,actual)
-select id,?,?,json_object('teacherId',teacher_id,'periodId',period_id),json_object('teacherId',teacher_id,'periodId',period_id)
-from weekly_lesson where version_id=? and weekday=?
-""",
-                    date,
-                    date,
-                    version,
-                    date.getDayOfWeek().getValue());
+            if (!exclusions.contains(date)) calendar.materialize(version, date);
         }
         db.update(
                 "insert into publication_receipt(job_id,candidate_id,version_id) values(?,?,?)",

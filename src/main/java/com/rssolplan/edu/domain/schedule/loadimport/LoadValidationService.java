@@ -43,13 +43,14 @@ public class LoadValidationService {
                     org.springframework.http.HttpStatus.BAD_REQUEST,
                     "INVALID_YEAR",
                     "학교의 학년도를 지정하세요.");
-        var aliasIds = new HashSet<>(matches.directoryLinks(schoolId).values());
+        Map<Long, Long> teachingIdByLogin = new HashMap<>();
+        matches.directoryLinks(schoolId).forEach((teaching, login) -> teachingIdByLogin.put(login, teaching));
         var teachers =
                 members
                         .findBySchool_IdAndEmploymentStatus(
                                 schoolId, SchoolUser.EmploymentStatus.HIRED)
                         .stream()
-                        .filter(m -> !aliasIds.contains(m.getId()))
+                        .filter(m -> !teachingIdByLogin.containsKey(m.getId()))
                         .map(m -> new LoadCatalog.Name(m.getId(), m.getSchoolDisplayName()))
                         .toList();
         var schoolSubjects = subjects.findBySchool_Id(schoolId);
@@ -63,6 +64,7 @@ public class LoadValidationService {
         var classMap = new HashMap<LoadCatalog.ClassKey, Long>();
         for (SchoolClass sc : classes.findBySchool_IdAndAcademicYear(schoolId, year))
             classMap.put(new LoadCatalog.ClassKey(sc.getGrade(), sc.getClassNumber()), sc.getId());
-        return new LoadCatalog(schoolId, year, new LoadCatalog.Names(teachers), names, classMap);
+        return new LoadCatalog(schoolId, year, new LoadCatalog.Names(teachers), names, classMap,
+                Map.copyOf(teachingIdByLogin));
     }
 }

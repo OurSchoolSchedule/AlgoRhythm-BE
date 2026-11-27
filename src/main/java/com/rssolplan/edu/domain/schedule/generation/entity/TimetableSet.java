@@ -6,6 +6,8 @@ import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -37,6 +39,13 @@ public class TimetableSet {
 
     @Column(nullable = false)
     private LocalDate endDate;
+
+    @ElementCollection
+    @CollectionTable(name = "term_excluded_date", joinColumns = @JoinColumn(name = "term_id"))
+    @Column(name = "excluded_date", nullable = false)
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
+    @Builder.Default
+    private Set<LocalDate> excludedDates = new HashSet<>();
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

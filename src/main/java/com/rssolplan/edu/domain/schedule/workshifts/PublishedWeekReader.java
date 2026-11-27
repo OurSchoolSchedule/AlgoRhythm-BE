@@ -27,20 +27,36 @@ class PublishedWeekReader {
             from (select 1 day_no union all select 2 union all select 3 union all select 4
                   union all select 5 union all select 6 union all select 7) days
         ), effective as (
-            select t.id term_id, t.academic_year, t.semester, d.day_no,
+            select t.id term_id, t.academic_year, t.semester, d.day_no, d.lesson_date,
+                   not exists(select 1 from term_excluded_date x
+                              where x.term_id=t.id and x.excluded_date=d.lesson_date) as teaching_day,
                    d.lesson_date between t.start_date and t.end_date as in_term,
-                   exists (select 1 from schedule_version v where v.term_id=t.id) as published,
                    (select v.id from schedule_version v
                     where v.term_id=t.id and v.effective_from<=d.lesson_date
                     order by v.version_no desc limit 1) as version_id
             from timetable_set t cross join week_dates d
             where t.school_id=:school and (:year is null or t.academic_year=:year)
               and (:semester is null or t.semester=:semester) and (:term is null or t.id=:term)
+        ), occurrences as (
+            select w.id weekly_id,e.academic_year,e.semester,e.day_no,w.class_id,w.subject_id,
+                   cast(json_unquote(json_extract(o.actual,'$.teacherId')) as unsigned) teacher_id,
+                   cast(json_unquote(json_extract(o.actual,'$.periodId')) as unsigned) period_id
+            from effective e join dated_lesson o on o.teaching_date=e.lesson_date
+            join weekly_lesson w on w.id=o.origin_id
+            where e.in_term and e.teaching_day and w.version_id=(
+                select v.id from schedule_version v where v.term_id=e.term_id and v.effective_from<=o.origin_date
+                order by v.version_no desc limit 1)
+              and coalesce(json_unquote(json_extract(o.actual,'$.cancelled')),'false') not in ('true','1')
+              and not exists(select 1 from term_excluded_date x where x.term_id=e.term_id and x.excluded_date=o.origin_date)
         ), slots as (
-            select null as legacy_id, w.id as weekly_id, e.academic_year, e.semester, e.day_no,
-                   w.class_id, w.period_id, w.subject_id, w.teacher_id
+            select null as legacy_id, o.weekly_id,o.academic_year,o.semester,o.day_no,o.class_id,o.period_id,o.subject_id,o.teacher_id
+            from occurrences o where (:teacher is null or o.teacher_id=:teacher)
+            union all
+            select null, w.id, e.academic_year,e.semester,e.day_no,w.class_id,w.period_id,w.subject_id,w.teacher_id
             from effective e join weekly_lesson w on w.version_id=e.version_id and w.weekday=e.day_no
-            where e.in_term and (:teacher is null or w.teacher_id=:teacher)
+            where e.in_term and e.teaching_day and (:teacher is null or w.teacher_id=:teacher)
+              and not exists(select 1 from dated_lesson o where o.origin_id=w.id and o.origin_date=e.lesson_date)
+              and not exists(select 1 from publication_receipt p where p.version_id=w.version_id)
             union all
             select l.id, null, l.academic_year, l.semester, d.day_no,
                    l.school_class_id, l.period_setting_id, l.subject_id, l.teacher_id
@@ -51,7 +67,7 @@ class PublishedWeekReader {
             where l.school_id=:school and (:year is null or l.academic_year=:year)
               and (:semester is null or l.semester=:semester) and (:term is null or e.term_id=:term)
               and (:teacher is null or l.teacher_id=:teacher) and e.version_id is null
-              and (e.term_id is null or e.in_term or not e.published)
+              and (e.term_id is null or (e.in_term and e.teaching_day))
         )
         select s.*, c.grade, c.class_number, p.period_number, p.start_time, p.end_time,
                sub.name as subject_name, coalesce(r.display_name,u.username) as teacher_name

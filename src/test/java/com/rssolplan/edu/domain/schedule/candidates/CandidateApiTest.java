@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rssolplan.edu.domain.roster.RosterMatchingService;
 import com.rssolplan.edu.domain.schedule.DayOfWeek;
 import com.rssolplan.edu.domain.schedule.generation.TimetableSetRepository;
 import com.rssolplan.edu.domain.schedule.generation.entity.TimetableSet;
@@ -41,6 +42,7 @@ class CandidateApiTest {
     final SchoolUserRepository members = mock(SchoolUserRepository.class);
     final SchoolSettingRepository settings = mock(SchoolSettingRepository.class);
     final TeacherAvailabilityRepository blocks = mock(TeacherAvailabilityRepository.class);
+    final RosterMatchingService matches = mock(RosterMatchingService.class);
     final StringRedisTemplate redis = mock(StringRedisTemplate.class);
     final CandidateRunner runner = new CandidateRunner();
     final ObjectMapper json = new ObjectMapper();
@@ -62,8 +64,7 @@ class CandidateApiTest {
                 .when(values)
                 .set(anyString(), anyString(), eq(Duration.ofMinutes(30)));
         when(values.get(anyString())).thenAnswer(call -> cache.get((String) call.getArgument(0)));
-        var loads = new LoadValidationService(auth, terms, members, subjects, classes,
-                    mock(com.rssolplan.edu.domain.roster.RosterMatchingService.class));
+        var loads = new LoadValidationService(auth, terms, members, subjects, classes, matches);
         var round = org.mockito.Mockito.mock(DemoRound.class);
         org.mockito.Mockito.lenient().when(round.prefix()).thenReturn("");
         var previews = new LoadPreviewStore(redis, json, round);
@@ -192,6 +193,21 @@ class CandidateApiTest {
         }
         assertThat(cache).hasSize(1);
         verify(terms, never()).save(any());
+    }
+
+    @Test
+    void linkedLoginUnavailabilityBlocksTheTeacherFromTheUploadedRoster() throws Exception {
+        var login = SchoolUser.builder().id(90L).user(User.builder().username("로그인 교사").build()).build();
+        when(matches.directoryLinks(1L)).thenReturn(Map.of(10L, 90L));
+        when(blocks.findBySchoolUser_School_Id(1L)).thenReturn(List.of(
+                TeacherAvailability.builder().schoolUser(login).dayOfWeek(DayOfWeek.MON).periodNumber(1).build()));
+        String id = preview("/api/v2/terms/7/load-imports/validate");
+        var body = Map.of("validatedLoadId", id, "teachingSlots", List.of(
+                Map.of("day", "MON", "period", 1), Map.of("day", "TUE", "period", 1)));
+        api.perform(post("/api/v2/terms/7/schedule-candidates").contentType("application/json")
+                .content(json.writeValueAsBytes(body)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("INFEASIBLE"))
+                .andExpect(jsonPath("$.candidates").isEmpty());
     }
 
     @Test

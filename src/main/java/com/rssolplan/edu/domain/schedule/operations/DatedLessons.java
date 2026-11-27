@@ -45,7 +45,10 @@ public class DatedLessons {
             """
 select d.*,w.class_id,w.subject_id,w.version_id,v.term_id from dated_lesson d
 join weekly_lesson w on w.id=d.origin_id join schedule_version v on v.id=w.version_id
-where v.id=(select av.id from schedule_version av where av.term_id=v.term_id and av.effective_from<=d.origin_date
+join timetable_set t on t.id=v.term_id
+where d.teaching_date between t.start_date and t.end_date
+and not exists(select 1 from term_excluded_date x where x.term_id=t.id and x.excluded_date in (d.origin_date,d.teaching_date))
+and v.id=(select av.id from schedule_version av where av.term_id=v.term_id and av.effective_from<=d.origin_date
             order by av.version_no desc limit 1)
 """;
 
