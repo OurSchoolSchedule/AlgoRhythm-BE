@@ -406,6 +406,7 @@ class MilestoneThreeMySqlTest {
             Thread.sleep(80);
         }
         assertThat(poll.state()).isEqualTo("READY");
+        assertThat(poll.estimatedProgressPercent()).isEqualTo(100);
         assertThat(poll.objective()).isEqualTo(Objective.MIN_TEACHER_GAPS);
         assertThat(poll.teachingSlots()).isEqualTo(request.teachingSlots());
         assertThat(poll.result().candidates()).allSatisfy(c -> assertThat(c.score().teacherGapPeriods()).isZero());

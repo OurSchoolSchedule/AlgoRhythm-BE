@@ -51,6 +51,18 @@ class CandidateApiTest {
     SchoolUser teacher;
     GenerationJobs jobs;
 
+    @Test
+    void runningEstimateUsesTheSearchBudgetAndOnlyReadyIsComplete() {
+        assertThat(GenerationStore.estimatedProgressPercent("QUEUED", 39, 60)).isZero();
+        assertThat(GenerationStore.estimatedProgressPercent("RUNNING", 39, 60)).isEqualTo(65);
+        assertThat(GenerationStore.estimatedProgressPercent("RUNNING", 61, 60)).isEqualTo(99);
+        assertThat(GenerationStore.estimatedProgressPercent("RUNNING", 0, 0)).isEqualTo(99);
+        assertThat(GenerationStore.estimatedProgressPercent("READY", 3, 60)).isEqualTo(100);
+        for (String state : List.of("FAILED", "INFEASIBLE", "TIME_LIMIT_NO_SOLUTION")) {
+            assertThat(GenerationStore.estimatedProgressPercent(state, 60, 60)).isNull();
+        }
+    }
+
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setup() {
