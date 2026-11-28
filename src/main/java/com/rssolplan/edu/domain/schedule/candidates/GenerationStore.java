@@ -40,7 +40,20 @@ class GenerationStore {
             Objective objective,
             List<GradeLastPeriod> gradeLastPeriods,
             Map<String, Integer> classGrades,
-            List<Integer> registeredPeriods) {}
+            List<Integer> registeredPeriods,
+            Integer estimatedProgressPercent) {}
+
+    // The size of a backtracking search is unknown. Only the share of its time budget
+    // consumed is measurable while running. Reserve 100 for committed candidates.
+    static Integer estimatedProgressPercent(String state, long elapsedMicros, long budgetMicros) {
+        return switch (state) {
+            case "QUEUED" -> 0;
+            case "RUNNING" -> budgetMicros <= 0 ? 99
+                    : (int) Math.max(0, Math.min(99, Math.floor(100.0 * elapsedMicros / budgetMicros)));
+            case "READY" -> 100;
+            default -> null;
+        };
+    }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public Ticket insert(
@@ -184,7 +197,9 @@ where id=? and deadline>utc_timestamp(6) and (state='QUEUED' or (state='RUNNING'
                         select state,base_rev,result,json_extract(snapshot,'$.slots'),
                                json_unquote(json_extract(snapshot,'$.request.objective')),
                                json_extract(snapshot,'$.request.gradeLastPeriods'),
-                               json_extract(snapshot,'$.classGrades'), json_keys(snapshot,'$.bells')
+                               json_extract(snapshot,'$.classGrades'), json_keys(snapshot,'$.bells'),
+                               timestampdiff(microsecond,created_at,utc_timestamp(6)) as elapsed_micros,
+                               timestampdiff(microsecond,created_at,deadline) as budget_micros
                         from generation_job where id=? and term_id=? and school_id=?
                         """,
                         (r, n) ->
@@ -204,7 +219,9 @@ where id=? and deadline>utc_timestamp(6) and (state='QUEUED' or (state='RUNNING'
                                         r.getString(7) == null ? null : json.read(r.getString(7),
                                                 new com.fasterxml.jackson.core.type.TypeReference<Map<String, Integer>>() {}),
                                         Arrays.stream(json.read(r.getString(8), String[].class))
-                                                .map(Integer::valueOf).sorted().toList()),
+                                                .map(Integer::valueOf).sorted().toList(),
+                                        estimatedProgressPercent(r.getString("state"),
+                                                r.getLong("elapsed_micros"), r.getLong("budget_micros"))),
                         id.toString(),
                         term,
                         school)
