@@ -33,10 +33,6 @@ public class KakaoProvider {
 
     //  인가코드(code) -> Kakao AccessToken 교환
     public String getAccessTokenFromCode(String code) {
-        log.info(" [KakaoProvider] Authorization Code 수신: {}", code);
-        log.info(" [Check] client_id={}, redirect_uri={}, client_secret={}",
-                clientId, redirectUri, (clientSecret == null || clientSecret.isBlank()) ? "(없음)" : "(설정됨)");
-
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
@@ -49,18 +45,13 @@ public class KakaoProvider {
             params.add("client_secret", clientSecret);
         }
 
-        log.info(" [KakaoProvider] 카카오로 전송할 파라미터={}", params);
-
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(params, headers);
 
         try {
             ResponseEntity<String> response = restTemplate.postForEntity(TOKEN_URL, request, String.class);
-            log.debug(" [KakaoProvider] 토큰 응답 바디: {}", response.getBody());
-
             JsonNode root = objectMapper.readTree(response.getBody());
             JsonNode accessTokenNode = root.get("access_token");
             if (accessTokenNode == null) {
-                log.error(" [KakaoProvider] access_token 없음: {}", response.getBody());
                 throw new IllegalArgumentException("카카오 access_token 파싱 실패");
             }
             String accessToken = accessTokenNode.asText();
@@ -68,12 +59,11 @@ public class KakaoProvider {
             return accessToken;
 
         } catch (HttpClientErrorException e) {
-            log.error(" [KakaoProvider] 토큰 요청 4xx 에러: status={}, body={}",
-                    e.getStatusCode(), e.getResponseBodyAsString());
-            throw new IllegalArgumentException("카카오 토큰 요청 실패", e);
+            log.error(" [KakaoProvider] 토큰 요청 4xx 에러: status={}", e.getStatusCode());
+            throw new IllegalArgumentException("카카오 토큰 요청 실패");
         } catch (Exception e) {
             log.error(" [KakaoProvider] 토큰 요청 실패", e);
-            throw new IllegalArgumentException("카카오 토큰 요청 실패", e);
+            throw new IllegalArgumentException("카카오 토큰 요청 실패");
         }
     }
 
@@ -90,8 +80,6 @@ public class KakaoProvider {
         try {
             ResponseEntity<String> response = restTemplate.exchange(
                     PROFILE_URL, HttpMethod.GET, request, String.class);
-            log.debug(" [KakaoProvider] 프로필 응답 바디: {}", response.getBody());
-
             JsonNode root = objectMapper.readTree(response.getBody());
 
             String id = root.path("id").asText(); // 필수
@@ -116,18 +104,16 @@ public class KakaoProvider {
                     .profileImageUrl(profileImage == null ? "" : profileImage)
                     .build();
 
-            log.info(" [KakaoProvider] 프로필 파싱 성공: id={}, email={}, nickname={}", id, email, nickname);
             return profile;
 
         } catch (LoginEmail.Denied e) {
             throw e;
         } catch (HttpClientErrorException e) {
-            log.error(" [KakaoProvider] 프로필 요청 4xx 에러: status={}, body={}",
-                    e.getStatusCode(), e.getResponseBodyAsString());
-            throw new IllegalArgumentException("카카오 프로필 요청 실패", e);
+            log.error(" [KakaoProvider] 프로필 요청 4xx 에러: status={}", e.getStatusCode());
+            throw new IllegalArgumentException("카카오 프로필 요청 실패");
         } catch (Exception e) {
             log.error(" [KakaoProvider] 프로필 요청 실패", e);
-            throw new IllegalArgumentException("카카오 프로필 요청 실패", e);
+            throw new IllegalArgumentException("카카오 프로필 요청 실패");
         }
     }
 }

@@ -1,0 +1,25 @@
+-- Hibernate only validates JPA entities. Resolve JDBC-only feature tables and fields as well.
+SELECT id FROM load_import LIMIT 0;
+SELECT weekly_periods FROM load_demand LIMIT 0;
+SELECT id FROM schedule_version LIMIT 0;
+SELECT lesson_key FROM weekly_lesson LIMIT 0;
+SELECT rev FROM dated_lesson LIMIT 0;
+SELECT state, lease_until, result FROM generation_job LIMIT 0;
+SELECT candidate_id FROM publication_receipt LIMIT 0;
+SELECT rev FROM lesson_change LIMIT 0;
+SELECT changes_json FROM lesson_approval LIMIT 0;
+SELECT rev FROM legacy_lesson_rev LIMIT 0;
+SELECT expected_rev FROM legacy_approval_input LIMIT 0;
+SELECT auth_email FROM roster_verified_account LIMIT 0;
+SELECT base_name, confirmed_name FROM school_teacher_roster LIMIT 0;
+SELECT homeroom_class_id FROM roster_term LIMIT 0;
+SELECT subject_id FROM roster_term_subject LIMIT 0;
+SELECT revision FROM passkey_account LIMIT 0;
+SELECT signature_count FROM passkey_credential LIMIT 0;
+SELECT state_sha256 FROM roster_import_preview LIMIT 0;
+SELECT subject_hint FROM roster_join_details LIMIT 0;
+SELECT teacher_school_user_id FROM roster_teaching_link LIMIT 0;
+SELECT target_type FROM notifications LIMIT 0;
+SELECT role_name FROM term_class_teacher_role LIMIT 0;
+SELECT excluded_date FROM term_excluded_date LIMIT 0;
+SELECT receiver_user_ids, dated_term_id, dated_lesson_id, expected_lesson_rev, dated_period_number FROM substitute_requests LIMIT 0;

@@ -104,25 +104,13 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource(PasskeyRealm realm) {
         CorsConfiguration cfg = new CorsConfiguration();
 
-        // 허용할 프론트 개발 도메인
-        cfg.setAllowedOrigins(List.of(
-                "https://connecti.store",
-                "http://localhost:3000",
-                "http://localhost:5173",
-                "http://localhost:8080",
-                "https://rssolplan.com",
-                "https://www.rssolplan.com",
-                "https://edu.rssolplan.com",
-                "ourschoolschedule.vercel.app"
-        ));
-
-        cfg.setAllowedOriginPatterns(List.of("*"));
+        cfg.setAllowedOrigins(List.of(realm.origin()));
 
         // 허용 메서드
         cfg.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
 
         // 프론트가 보낼 헤더(현재 Authorization, Content-Type 정도)
-        cfg.setAllowedHeaders(List.of("Authorization","Content-Type"));
+        cfg.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key", "X-School42-Round"));
 
         // 응답에서 프론트가 읽을 수 있게 노출할 헤더(필요시 추가)
         // cfg.setExposedHeaders(List.of("Location"));
@@ -134,13 +122,6 @@ public class SecurityConfig {
         cfg.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        CorsConfiguration passkeys = new CorsConfiguration(cfg);
-        passkeys.setAllowedOriginPatterns(List.of());
-        passkeys.setAllowedOrigins(List.of(realm.origin()));
-        source.registerCorsConfiguration("/api/auth/passkeys/**", passkeys);
-        source.registerCorsConfiguration("/api/demo-reset", passkeys);
-        source.registerCorsConfiguration("/api/demo-reset/**", passkeys);
-        // 전체 경로 적용
         source.registerCorsConfiguration("/**", cfg);
         return source;
     }

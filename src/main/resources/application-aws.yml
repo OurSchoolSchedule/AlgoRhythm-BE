@@ -1,0 +1,32 @@
+# The EC2 runtime uses a pre-migrated MySQL schema and a private TLS Redis endpoint.
+spring:
+  datasource:
+    hikari:
+      data-source-properties:
+        sslMode: VERIFY_IDENTITY
+        trustCertificateKeyStoreUrl: file:/etc/algorhythm/rds-truststore.p12
+        trustCertificateKeyStoreType: PKCS12
+        trustCertificateKeyStorePassword: changeit # Public CA certificates only
+  data:
+    redis:
+      ssl:
+        enabled: true
+      connect-timeout: 5s
+      timeout: 5s
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/aws-schema-check.sql
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-components: never
+      show-details: never

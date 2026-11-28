@@ -1,114 +1,132 @@
-name: Deploy to EC2  # 이 워크플로우의 이름. GitHub Actions 탭에 표시됨
-
+name: Verify and deploy AWS backend
 on:
   push:
-    branches: [ "main" ]  # main 브랜치에 push될 때만 이 워크플로우가 실행됨
+    branches: [deploy/aws]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest  # GitHub Actions가 사용하는 가상 머신 환경 (우분투 최신 버전)
-    env:
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
+  verify:
+    if: github.ref == 'refs/heads/deploy/aws'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_RANDOM_ROOT_PASSWORD: 'yes'
+          MYSQL_DATABASE: algorhythm_test
+          MYSQL_USER: ci
+          MYSQL_PASSWORD: disposable-ci
+        ports: ['3306:3306']
+        options: --health-cmd="mysqladmin ping -h 127.0.0.1" --health-interval=5s --health-timeout=5s --health-retries=30
+      redis:
+        image: redis:7.4-alpine
+        ports: ['6379:6379']
+        options: --health-cmd="redis-cli ping" --health-interval=5s --health-timeout=3s --health-retries=20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4  # 현재 저장소의 코드를 가져옴 (필수 단계)
-
-      - name: Set up JDK
-        uses: actions/setup-java@v4  # Java 빌드 환경을 설정함
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          distribution: 'temurin'
-          java-version: '17'  # Java 17 버전을 사용함 (Dockerfile과 일치해야 함)
-          cache: 'gradle'
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x ./gradlew
-
-      - name: Build
-        run: ./gradlew clean build -x test  # Gradle로 프로젝트를 빌드함. 테스트는 제외 (-x test)
-
-      # GitHub Actions에서 ECR에 이미지를 푸시하기 위한 자격 증명 (기존 Access Key 유지)
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+          persist-credentials: false
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to ECR
-        uses: aws-actions/amazon-ecr-login@v2  # ECR에 로그인. 이후 Docker push를 하기 위함
-
-
-      - name: Build and Push Docker Image
+          distribution: temurin
+          java-version: '17'
+      - name: Test with disposable MySQL and Redis
+        env:
+          SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/algorhythm_test?allowPublicKeyRetrieval=true&sslMode=DISABLED
+          SPRING_DATASOURCE_USERNAME: ci
+          SPRING_DATASOURCE_PASSWORD: disposable-ci
+          REDISHOST: 127.0.0.1
+          REDISPORT: '6379'
+          REDISPASSWORD: ''
+          JWT_SECRET: disposable-ci-jwt-signing-key-at-least-32-bytes
+          RESEND_API_KEY: offline-ci
+          RESEND_FROM_EMAIL: ci@example.invalid
+          BE_A1_AUTH_TEST: '1'
+          BE_A2_DB_TEST: '1'
+          M3_MYSQL_TEST: '1'
+          R1_MYSQL_TEST: '1'
+          R2_MYSQL_TEST: '1'
+        run: ./gradlew --no-daemon clean test bootJar
+      - name: Build tested executable jar into AWS image
         run: |
-          IMAGE_TAG=${{ github.sha }}
-          IMAGE_URI=${{ secrets.ECR_REPOSITORY }}
-          docker build -t $IMAGE_URI:$IMAGE_TAG -t $IMAGE_URI:latest .
-          docker push $IMAGE_URI:$IMAGE_TAG
-          docker push $IMAGE_URI:latest
-
-      - name: SSH into EC2 and Deploy
-        uses: appleboy/ssh-action@v1.0.0
+          bash -n deploy/aws/ec2.sh
+          bash -n deploy/aws/release.sh
+          python3 -m unittest discover -s deploy/aws -p 'test_*.py'
+          mkdir -p "$RUNNER_TEMP/aws-context"
+          jars=(build/libs/*.jar)
+          test "${#jars[@]}" -eq 1
+          cp "${jars[0]}" "$RUNNER_TEMP/aws-context/app.jar"
+          docker build --pull --platform linux/amd64 -f deploy/aws/Dockerfile -t "algorhythm-aws:$GITHUB_SHA" "$RUNNER_TEMP/aws-context"
+      - name: Smoke test AWS image and schema checks with isolated services
+        env:
+          MYSQL_CONTAINER: ${{ job.services.mysql.id }}
+        run: |
+          for migration in src/main/resources/db/migration/V*.sql; do
+            docker exec -i -e MYSQL_PWD=disposable-ci "$MYSQL_CONTAINER" mysql -uci algorhythm_test < "$migration"
+          done
+          docker run -d --name aws-smoke --network host --read-only --tmpfs /tmp:mode=1777 \
+            -e SPRING_PROFILES_ACTIVE=aws -e PORT=18080 \
+            -e SPRING_DATASOURCE_URL='jdbc:mysql://127.0.0.1:3306/algorhythm_test?allowPublicKeyRetrieval=true' \
+            -e SPRING_DATASOURCE_USERNAME=ci -e SPRING_DATASOURCE_PASSWORD=disposable-ci \
+            -e SPRING_APPLICATION_JSON='{"spring":{"datasource":{"hikari":{"data-source-properties":{"sslMode":"DISABLED"}}},"data":{"redis":{"ssl":{"enabled":false}}}}}' \
+            -e REDISHOST=127.0.0.1 -e REDISPORT=6379 -e REDISPASSWORD='' \
+            -e JWT_SECRET=disposable-ci-jwt-signing-key-at-least-32-bytes \
+            -e RESEND_API_KEY=offline-ci -e RESEND_FROM_EMAIL=ci@example.invalid \
+            "algorhythm-aws:$GITHUB_SHA"
+          for attempt in {1..60}; do
+            if curl -fsS --max-time 5 http://127.0.0.1:18080/actuator/health 2>/dev/null | jq -e '. == {"status":"UP"}'; then exit 0; fi
+            sleep 2
+          done
+          docker logs aws-smoke
+          exit 1
+      - name: Export release image
+        if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'deploy:release-aws'
+        run: docker save --output "$RUNNER_TEMP/image.tar" "algorhythm-aws:$GITHUB_SHA"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'deploy:release-aws'
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            REGION="${{ secrets.AWS_REGION }}"
-            ACCOUNT_ID="${{ secrets.AWS_ACCOUNT_ID }}"
-            ECR_REPO="${{ secrets.ECR_REPOSITORY }}"
-            IMAGE_TAG="${{ github.sha }}"
+          name: aws-image
+          path: ${{ runner.temp }}/image.tar
+          if-no-files-found: error
+          retention-days: 1
 
-
-            aws ecr get-login-password --region $REGION | \
-            docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
-            
-            docker network create rssol-net || true
-            
-            docker stop redis || true 
-            docker rm redis || true
-            
-            docker run -d \
-              --name redis \
-              --network rssol-net \
-              redis:latest \
-            
-            
-            
-            echo "Waiting for Redis to start..."
-            counter=0
-            while ! docker exec redis redis-cli ping 2>/dev/null | grep -q PONG; do
-              sleep 1
-              counter=$((counter+1))
-              if [ $counter -ge 20 ]; then
-                echo "Redis failed to start after 20 seconds. Aborting."
-                docker logs redis
-                exit 1
-              fi
-            done
-            echo "Redis is up and running!"
-            
-            
-            docker stop app || true 
-            docker rm app || true
-            
-            docker image prune -a -f
-            
-            docker pull ${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
-            
-            docker run -d \
-              --name app \
-              --network rssol-net \
-              -p 8080:8080 \
-              -e "SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}" \
-              -e "SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}" \
-              -e "SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}" \
-              -e "JWT_SECRET=${{ secrets.JWT_SECRET }}" \
-              -e "KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID }}" \
-              -e "KAKAO_CLIENT_SECRET=${{ secrets.KAKAO_CLIENT_SECRET }}" \
-              -e "KAKAO_REDIRECT_URI=${{ secrets.KAKAO_REDIRECT_URI }}" \
-              -e "REDIS_HOST=${{ secrets.REDIS_HOST }}" \
-              -e "REDIS_PORT=${{ secrets.REDIS_PORT }}" \
-              ${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/deploy/aws' && (github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'deploy:release-aws')
+    runs-on: ubuntu-24.04
+    environment: aws-production
+    concurrency:
+      group: algorhythm-aws-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    timeout-minutes: 55
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      RUNTIME_SECRET_ARN: ${{ vars.RUNTIME_SECRET_ARN }}
+      TARGET_GROUP_ARN: ${{ vars.TARGET_GROUP_ARN }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: aws-image
+          path: ${{ runner.temp }}/aws-image
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-session-name: algorhythm-${{ github.run_id }}
+      - name: Publish image, replace container and verify through ALB
+        run: bash deploy/aws/release.sh
