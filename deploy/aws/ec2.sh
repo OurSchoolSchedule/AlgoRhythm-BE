@@ -64,7 +64,7 @@ docker create --name "$pending" --label "org.algorhythm.release=$release" \
   --tmpfs /tmp:rw,nosuid,nodev,mode=1777 --log-opt max-size=10m --log-opt max-file=3 \
   --mount "type=bind,source=$trust,target=$trust,readonly" --publish 8080:8080 \
   --env-file "$tmp/app.env" -e SPRING_PROFILES_ACTIVE=aws -e PASSKEY_ENVIRONMENT=production \
-  -e DEV_LOGIN_ENABLED=false -e PORT=8080 "$image" >/dev/null
+  -e DEV_LOGIN_ENABLED=false -e PORT=8080 -e "DEPLOY_RELEASE_ID=$release" "$image" >/dev/null
 
 if exists "$app"; then
   # Do not discard a known-good predecessor while the current container is unhealthy.

@@ -63,7 +63,8 @@ remote() {
 remote deploy
 # Route directly through the intended ALB, even while public DNS still points to Railway.
 if ! aws elbv2 wait target-in-service --target-group-arn "$TARGET_GROUP_ARN" --targets "Id=$EC2_INSTANCE_ID,Port=8080" ||
-   ! curl --fail --silent --show-error --max-time 20 --connect-to "$api_host:443:$alb:443" "https://$api_host/actuator/health" | jq -e '. == {"status":"UP"}' >/dev/null; then
+   ! curl --fail --silent --show-error --max-time 20 --dump-header "$RUNNER_TEMP/aws-health.headers" --connect-to "$api_host:443:$alb:443" "https://$api_host/actuator/health" | jq -e '. == {"status":"UP"}' >/dev/null ||
+   ! tr -d '\r' < "$RUNNER_TEMP/aws-health.headers" | grep -Fxi "X-Algorhythm-Release: $release" >/dev/null; then
   echo 'ALB or TLS check failed; rolling back'
   remote rollback
   exit 1

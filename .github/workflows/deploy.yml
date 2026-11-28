@@ -69,7 +69,7 @@ jobs:
             docker exec -i -e MYSQL_PWD=disposable-ci "$MYSQL_CONTAINER" mysql -uci algorhythm_test < "$migration"
           done
           docker run -d --name aws-smoke --network host --read-only --tmpfs /tmp:mode=1777 \
-            -e SPRING_PROFILES_ACTIVE=aws -e PORT=18080 \
+            -e SPRING_PROFILES_ACTIVE=aws -e PORT=18080 -e DEPLOY_RELEASE_ID=1-1 \
             -e SPRING_DATASOURCE_URL='jdbc:mysql://127.0.0.1:3306/algorhythm_test?allowPublicKeyRetrieval=true' \
             -e SPRING_DATASOURCE_USERNAME=ci -e SPRING_DATASOURCE_PASSWORD=disposable-ci \
             -e SPRING_APPLICATION_JSON='{"spring":{"datasource":{"hikari":{"data-source-properties":{"sslMode":"DISABLED"}}},"data":{"redis":{"ssl":{"enabled":false}}}}}' \
