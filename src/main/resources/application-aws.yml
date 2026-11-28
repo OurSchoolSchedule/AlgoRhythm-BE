@@ -21,6 +21,12 @@ spring:
       mode: always
       schema-locations: classpath:db/aws-schema-check.sql
 
+oauth:
+  kakao:
+    client-id: ${KAKAO_CLIENT_ID:}
+    client-secret: ${KAKAO_CLIENT_SECRET:}
+    redirect-uri: ${KAKAO_REDIRECT_URI:}
+
 management:
   endpoints:
     web:

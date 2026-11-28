@@ -47,6 +47,8 @@ def validate(config):
     for key in ("SCHOOL42_ADMIN_HASH", "SCHOOL42_TEACHER_HASH"):
         if key in config and not re.fullmatch(r"[0-9a-f]{64}", config[key]):
             raise ValueError(f"Expected a lowercase SHA-256 digest for {key}")
+    if "SCHOOL42_ADMIN_HASH" in config and config["SCHOOL42_ADMIN_HASH"] == config.get("SCHOOL42_TEACHER_HASH"):
+        raise ValueError("School42 admin and teacher credentials must differ")
     if not re.fullmatch(r"[A-Za-z0-9.-]+", config["REDISHOST"]) or not re.fullmatch(r"[0-9]{1,5}", config["REDISPORT"]) or not 1 <= int(config["REDISPORT"]) <= 65535:
         raise ValueError("Invalid Redis endpoint or port")
     if len(config["JWT_SECRET"].encode()) < 32:

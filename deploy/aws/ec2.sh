@@ -46,11 +46,6 @@ if [[ "$mode" == rollback ]]; then restore; exit; fi
 if ! exists "$app" && exists "$previous"; then
   docker rename "$previous" "$app"
   docker start "$app" >/dev/null
-  healthy
-fi
-if exists "$app" && [[ $(docker inspect --format '{{.State.Running}}' "$app") != true ]]; then
-  docker start "$app" >/dev/null
-  healthy
 fi
 
 aws secretsmanager get-secret-value --region "$region" --secret-id "$secret" \
@@ -67,14 +62,17 @@ docker create --name "$pending" --label "org.algorhythm.release=$release" \
   -e DEV_LOGIN_ENABLED=false -e PORT=8080 -e "DEPLOY_RELEASE_ID=$release" "$image" >/dev/null
 
 if exists "$app"; then
-  # Do not discard a known-good predecessor while the current container is unhealthy.
-  healthy
-  if exists "$previous"; then docker rm "$previous" >/dev/null; fi
-  docker rename "$app" "$previous"
-  if ! docker stop --time 25 "$previous" >/dev/null; then
-    docker rename "$previous" "$app"
-    docker start "$app" >/dev/null
-    exit 1
+  if exists "$previous" && ! healthy; then
+    # The last release may have been interrupted. Keep its predecessor for rollback.
+    docker rm -f "$app" >/dev/null
+  else
+    if exists "$previous"; then docker rm "$previous" >/dev/null; fi
+    docker rename "$app" "$previous"
+    if ! docker stop --time 25 "$previous" >/dev/null; then
+      docker rename "$previous" "$app"
+      docker start "$app" >/dev/null
+      exit 1
+    fi
   fi
 fi
 if ! docker rename "$pending" "$app" || ! docker start "$app" >/dev/null || ! healthy; then

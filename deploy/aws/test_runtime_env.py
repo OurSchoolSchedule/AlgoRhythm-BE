@@ -23,7 +23,8 @@ class RuntimeEnvTest(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 validate({k: v for k, v in self.config.items() if k != key})
         for change in ({"KAKAO_CLIENT_ID": "ci"}, {"DEMO_RESET_OPERATOR": "ci"},
-                       {"SCHOOL42_ADMIN_HASH": "not-a-digest"}, {"JWT_SECRET": "short"},
+                       {"SCHOOL42_ADMIN_HASH": "not-a-digest"},
+                       {"SCHOOL42_ADMIN_HASH": "a" * 64, "SCHOOL42_TEACHER_HASH": "a" * 64}, {"JWT_SECRET": "short"},
                        {"JAVA_TOOL_OPTIONS": "unused"}, {"REDISPORT": "65536"},
                        {"REDISHOST": "host\nOTHER=bad"},
                        {"SPRING_DATASOURCE_URL": self.config["SPRING_DATASOURCE_URL"] + "?sslMode=DISABLED"}):
